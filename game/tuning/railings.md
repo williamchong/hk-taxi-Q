@@ -1,84 +1,31 @@
 # railings.tres
 
-Rationale for `game/tuning/railings.tres`. Each heading is the line the block sat above; `Overview` is the
-file as a whole. Why it lives here and not in the file: `Q119`.
+Pedestrian railings (`P3-19`, `Q60`). `tools/generated_scene_import.gd` maps the ETL's `railings`
+material name to this file.
 
-## Overview
+The fence is split across two files. Mesh (height, station pitch, kerb outset, foot sink) is
+`pipeline/railings.py` from `hong_kong.yaml`'s `railings:` block. Mask (balusters, posts, rail
+bands) is here, drawn by `railings.gdshader`. Both are authored: nothing published gives a railing
+dimension (`Q60`).
 
-Pedestrian railings, drawn as their own geometry (`P3-19`, `Q60`).
+- `rail_colour = 0.569` grey: `hong_kong.yaml`'s `galvanised_steel` (`#919191`, 28% reflectance),
+  the lamp columns' colour (`Q215`). Copied, not read through `materials:` (`Q53`, in the shader),
+  so change both together. Dead neutral: Hong Kong's railings are galvanised grey, not green, and
+  the cool cast in shade is the ambient's (`clean_daylight.md`).
+- `rail_roughness = 0.55`.
+- `rail_metallic = 0.0`: metal reflects its environment and the mobile tier has only sky, so the
+  tram rails at 0.65 came out sky blue (`P3-14`). Painted steel is a dielectric anyway.
+- `sky_zenith`, `sky_horizon`, `ground_reflection`, `rail_reflect = 0.25`, `rail_face_on = 0.05`,
+  `fresnel_power = 5.0`: the car's painted-sky sheen (`Q168`), dimmed and warmed by the rig's
+  `sky_light`. Same values as `bollards.tres` and `barriers.tres`. On a fence it darkens by a few
+  codes: a vertical face's reflection lands half in `ground_reflection`, which is under the
+  albedo. Shipped on the user's call.
+- `baluster_pitch_m = 0.11`, `baluster_width_m = 0.035`, `post_pitch_m = 2.0`,
+  `post_width_m = 0.09`: the mask's members.
+- `top_rail_m = (0.95, 1.1)`, `bottom_rail_m = (0.08, 0.18)`: metres above the ribbon deck
+  (`UV.y`'s frame; 0 is the ground line, not the mesh bottom).
+- `skirt_top_m = 0.0`: below the deck the fence is solid, so no daylight shows under the sunk
+  foot.
 
-`tools/generated_scene_import.gd` maps the ETL's `railings` material name to
-this path and only this path, so this file is the switch: delete the entry
-there and the fences fall back to the `BaseMaterial3D` they imported with,
-which draws the right fences in whatever grey the importer picks.
-
-Here rather than as shader defaults because CLAUDE.md hard rule 4 makes tuning
-data, not constants — and beside `arrows.tres` and `boxjunctions.tres`, which
-is the whole point of the file.
-
-⚠️ **`rail_colour` is not a copy of anything, and that is the difference from
-its two neighbours.** The marking yellow and the marking white are each
-authored two and three times over, held together only by a mismatch being
-visible in one frame. A railing shares its colour with nothing in the bundle,
-so there is no copy to drift — but it also has no second reading to be checked
-against, which is worth knowing when judging it: the shade below is authored
-from the street, not derived from a survey, and nothing measures it.
-
-⚠️ **And nothing measuring it is how it has now been wrong twice.** `P3-19`
-authored 0.78/0.80/0.76 — pale, which is the right reading of the street — with
-no headroom left above it, so the sun took the fence to white and the shipped
-frames read as a concrete parapet. Taken down on the frames. It was then wrong
-a second way for two more revisions: a **green** bias, described as "a pale
-institutional grey-green", read off nothing and inherited by all three classes.
-Hong Kong's street railings are galvanised steel and they are grey. Corrected
-on the user's report — which, for this one value, is the instrument. Now dead
-neutral: `railings.gdshader` records why the cool cast is left to the sky
-rather than authored here.
-
-⚠️ **Since `Q215` it does have a second reading: 0.569 IS `hong_kong.yaml`'s
-`galvanised_steel`** (`#919191`, 28% reflectance, cited), the colour the lamp
-columns already stand in. It was 0.64 (37%), so the railing and the lamp post
-beside it were two greys of one metal. The value is copied rather than read
-through `materials:`, for `Q53`'s reason in `railings.gdshader`; a change to
-either is a change to both. The blue it still read in shade was the ambient's,
-not the albedo's — `clean_daylight.md`.
-
-⚠️ **`rail_metallic` stays 0.0**, and that is a measurement rather than taste.
-`P3-14` shipped the tram rails at 0.65 and they came out **sky blue** — metal
-reflects its environment, the only environment here is sky, and the mobile
-tier ships no reflection probes. Painted steel is a dielectric coat over
-metal, so 0.0 is the truthful value as well as the one that renders.
-
-⚠️ **The sheen is the car's painted sky, not metalness** (`Q168`): the three
-sky colours are the car's and the façades' noon sky, dimmed and warmed with the
-hour by the rig's `sky_light`. `rail_reflect` 0.25 at a grazing angle,
-`rail_face_on` 0.05 squarely, `fresnel_power` 5.0 between — the same three
-values in `bollards.tres` and `barriers.tres`. ⚠️ **On a fence it darkens, by a
-few codes at every hour**: a vertical face's reflected ray is near level, so
-half of it lands in `ground_reflection` (0.32), under this file's 0.569. Shipped
-on the user's call with that understood.
-
-⚠️ **The fence's shape is now split across two files, and the split is where
-the geometry ends.** Height, station pitch, how far it stands outside the kerb
-and how far its foot sinks are *mesh* — decided by `pipeline/railings.py` from
-`hong_kong.yaml`'s `railings:` block. Everything finer than a quad is *mask* —
-baluster pitch and width, post pitch and width, the two rail bands — and lives
-here, because it is expressed in the shader and hard rule 4 puts tuning in
-data. Both halves are authored for the same reason: no sheet in the bundle
-publishes a railing dimension at all (`Q60`, strengthened by the symbology
-correction). Neither half is read from anywhere.
-
-⚠️ **The rail bands are in metres above the ribbon deck**, which is `UV.y`'s
-own frame — `0.0` is the ground line, not the bottom of the mesh. So `(0.95,
-1.10)` is a top rail from 950 to 1100 mm up, and it means that on every fence
-in the region regardless of what the road is doing underneath.
-
-⚠️ **`ALPHA` here is coverage, not opacity.** There is no translucency dial in
-this file and there should not be: the steel is opaque and the gaps are gaps,
-so what reaches `ALPHA` is the fraction of a fragment the members cover,
-computed from the four dimensions below. An opacity uniform would be
-`marking_paint.gdshader`'s recorded misreading of `paint_opacity` repeated here.
-
-Judged at the `street` and `kerb` viewpoints per `ART_DESIGN.md`'s table: a
-railing is the nearest object to the camera on most of the region's streets,
-so it is judged against the kerb it stands on rather than from the air.
+`ALPHA` is coverage, not opacity: the fraction of a fragment the members cover. There is no
+opacity dial and there should not be one.

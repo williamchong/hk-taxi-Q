@@ -1,67 +1,22 @@
 # barriers.tres
 
-Rationale for `game/tuning/barriers.tres`. Each heading is the line the block sat above; `Overview` is the
-file as a whole. Why it lives here and not in the file: `Q119`.
+Rationale for `game/tuning/barriers.tres` (`Q119`).
 
-## Overview
+Vehicle restraint: the railing layer's `CBARRIER` and `CRASHGATE`, as their own class (`Q61`). Same
+shader as `railings.tres`; a class is a parameterisation, and the mask numbers are the whole
+difference: two horizontal rails on posts, no balusters.
 
-Vehicle restraint, drawn from the railing layer's `CBARRIER` and `CRASHGATE`
-(`Q61`).
+- `rail_colour`: authored. Bare galvanised grey is the conservative reading; the layer's `COLOR`
+  field has no coded-value table (`Q60`), so nothing says which barriers are painted.
+- `rail_roughness` 0.7: rougher than the pedestrian railing; galvanised steel weathers matte.
+- `rail_metallic` 0.0: the only environment is sky, so a metallic rail renders sky blue (`P3-14`).
+- `sky_zenith`, `sky_horizon`, `ground_reflection`, `rail_reflect`, `rail_face_on`,
+  `fresnel_power`: `railings.tres`'s sheen and values (`Q168`).
+- `baluster_width_m` 0.0: no balusters; zero width is the shader's "off". `skirt_top_m` 0.0: no
+  skirt.
+- `post_pitch_m` 3.0, `post_width_m` 0.14: heavier and further apart than a railing's posts.
+- `top_rail_m`, `bottom_rail_m`: two rails, metres above the deck, against the class's `height_m`
+  0.9 in `hong_kong.yaml`.
 
-`railings.tres`'s sibling, on the **same shader**. What tells a barrier from a
-fence is entirely the six mask numbers below: two horizontal rails on posts,
-and no balusters at all. Nothing branches in `railings.gdshader` — a class is
-a parameterisation, which keeps the difference in tuning data (CLAUDE.md hard
-rule 4) rather than in a second shader that would drift.
-
-⚠️ **`P3-19` refused these, and the refusal was right at the time.** They read
-as vehicle restraint rather than pedestrian railing, and drawing them as the
-same fence would have asserted a sameness no source states — `Q54`'s debit.
-They are in now as their **own class**, which is the form of claim the code
-strings support: not "these are railings" but "these are a different thing".
-
-⚠️ **The colour is the softest claim in this file.** Hong Kong runs both
-galvanised-steel and painted vehicle barriers, and nothing in the layer says
-which is where — `COLOR` is populated and separates the classes, but the fgdb
-spec gives it only "Color of Feature", Number, with no coded-value table
-anywhere in the document (`Q60`). So this is the conservative reading, bare
-galvanised, warmer and darker than the pedestrian railing beside it; a painted
-maroon would have been the more recognisable choice and a much larger claim.
-
-⚠️ **No collider in the asset, like every class in this layer** — the
-collision is the placer's since `Q159` (2026-10-07, the user's call): a box
-body under every panel, from `region.tscn`'s `Railings` node (`collides`).
-This is the class where its absence looked wrong first, because a crash
-barrier's whole real purpose is to stop a vehicle. Breakaway is still `B3`.
-
-Judged at the `street` and `kerb` viewpoints per `ART_DESIGN.md`'s table.
-
-## `shader_parameter/rail_roughness = 0.7`
-
-Rougher than the pedestrian railing: galvanised steel weathers matte where
-painted steel keeps a sheen.
-
-## `shader_parameter/rail_metallic = 0.0`
-
-0.0 for `railings.tres`'s measured reason: `P3-14` shipped the tram rails at
-0.65 and they rendered sky blue, because the only environment here is sky.
-Bare galvanised steel is the case that most tempts 0.65, and it is the case
-that measurement was taken on.
-
-## `shader_parameter/rail_reflect = 0.25`
-
-`railings.tres`'s sheen and values, with the three sky colours above it
-(`Q168`): the car's painted sky, scaled by the hour's `sky_light`.
-
-## `shader_parameter/baluster_pitch_m = 0.11`
-
-No balusters. A barrier is rails and posts; the gap between them is the point.
-
-## `shader_parameter/post_pitch_m = 3.0`
-
-Heavier and further apart than a railing's posts.
-
-## `shader_parameter/top_rail_m = Vector2(0.7, 0.9)`
-
-Two rails, in metres above the ribbon deck, against the class's authored
-height_m of 0.9 in `hong_kong.yaml`. The upper one sits at the top of the run.
+No collider in the asset: collision is the placer's (`Q159`, `region.tscn`'s `Railings` node,
+`collides`).

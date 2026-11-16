@@ -1,239 +1,93 @@
 # skills.tres
 
-Rationale for `game/tuning/skills.tres`. Each heading is the line the block sat above; `Overview` is the
-file as a whole. Why it lives here and not in the file: `Q119`.
+What a drift, a run at speed, a jump, a near miss and an early arrival pay into the tip, and what a
+hit docks (`P3-49`, `Q145`; air `Q147`; penalties `Q148`; near miss `Q161`; combo `Q205`). Each
+skill is a flat HK$ per event, paid when earned; a bail forfeits the lot. Prices and bars are
+first guesses ahead of the user's drive.
 
-## Overview
+The drift's angle is not here: `handling.tres`'s `drift_slip_threshold_deg` (14°) is the skidpad's
+target (`Q84`) and this table reads it.
 
-The skill bonuses' dwells, bars and prices (`P3-49`, `Q145`; air `P3-51`, `Q147`) — what a drift,
-a run at speed, a jump and an early arrival pay into the tip. Ours, like `fares.tres`, and every number below is a first guess
-ahead of the user's drive; what is not a guess is the shape: each skill is a flat HK$ per event
-(the user's call over `GAME_DESIGN.md`'s style chain), paid the moment it is earned, and a bail
-forfeits the lot.
+Every key is required: `skill_profile.gd` declares no defaults and `FareSystem` refuses a zero
+dwell, bar or price.
 
-The one number NOT here is the drift's angle: `HandlingProfile.drift_slip_threshold_deg` (14°)
-is the design target the skidpad grades dwell against (`Q84`), and this table reads it rather than
-restating it.
+## Drift
 
-⚠️ EVERY KEY BELOW IS REQUIRED. `skill_profile.gd` declares no defaults, so a missing key reads as
-zero, and `FareSystem` refuses to run on a zero dwell, bar or price rather than fall back to a
-literal.
+- `drift_min_s = 0.5`: a slide must hold over the threshold this long before it counts (`Q172`,
+  the user's call). At 2.0 the pace-2 car almost never paid: `hold` dwells 0.68 / 0.83 / 3.57 s at
+  42 / 63 / 86 kph. Seconds, not metres: `Q84` grades dwell, and speed is the speed skill's job.
+- `drift_s = 1.0`: a counted slide pays again each further second; releasing forfeits the unpaid
+  part. Also the sparks' cadence (`drift_sparks.md`).
+- `drift_hkd = 1.0`: the first award. Small, since every tap reaches it.
+- `drift_step_hkd = 1.0`: the n-th award pays `drift_hkd + (n − 1) × drift_step_hkd` (`Q172`), so
+  a slide banks HK$1 at 0.5 s, 3 at 1.5, 6 at 2.5, 10 at 3.5. A new slide starts again.
+- No cap (`Q179`): on open ground a slide holds 30 s (`ride` from 20 kph, 28.6 s, HK$435), but no
+  street allows past 1.5 s. Re-measure before any open space ships.
 
-## `drift_min_s = 0.5`
+## Speed
 
-A slide must hold at or over the threshold for half a second before it counts at all; a shorter
-one pays nothing (`Q172`, the user's call, 2026-10-28: lower the bar and scale the bonus to
-time). It was 2.0 (2026-09-25, over a first 1.0 that paid a flick through a junction), and on
-the shipped car at pace 2.0 that paid almost nothing: the skidpad's dwells at 42 / 63 / 86 kph
-(2026-10-28) are `tap` and `ride` 1.00 / 0.87 / 0.98 s and the countersteered `hold`
-0.68 / 0.83 / 3.57 s, so only a countersteered slide at 86 kph ever counted. At 0.5 every one of
-those rows counts. A flick still pays almost nothing, which is the step's job below, not the
-bar's. Seconds, not metres, because `Q84` grades the drift dial on dwell in seconds, and a
-distance bar would pay a fast slide over a slow one for the same control — which is the speed
-skill's job.
+- `speed_min_kph = 80.0`: meant to pay Gloucester Road and not Hennessy between the trams. Set on
+  an older car; at pace 2.0 the car reaches 80 in about 2.8 s and which street pays is not
+  re-measured. Left on the user's call (`Q152`).
+- `speed_hold_m = 200.0`: pays once per 200 m at or over the floor. `tariff.tres`'s `step_m`, so
+  it never ticks faster than the meter; `verify_fares` refuses a value under `step_m`. Distance,
+  so a faster run pays sooner.
+- `speed_hkd = 5.0`.
 
-## `drift_s = 1.0`
+## Air
 
-Once a slide has counted, it pays again each further second held. The first payment lands at
-`drift_min_s`, the second at `drift_min_s + drift_s`, and so on; releasing the slide forfeits the
-part not yet paid. Also the sparks' cadence (`drift_sparks.md`): blue at 0.5 s, orange at 1.5,
-purple at 2.5.
+- `air_min_s = 0.5`: all wheels off the ground this long, judged at the landing (`Q147`). A kerb
+  hop is 0.1–0.2 s, a drop off a flyover deck 0.8–1.2 s.
+- `air_s = 0.5`: each further half second pays again, all at the landing.
+- `air_hkd = 5.0`: paid only on an upright landing.
 
-## `drift_hkd = 1.0`
+## Early arrival
 
-The first award of a slide: what a flick that just reaches `drift_min_s` is worth, two seconds
-of the time tip. Small on purpose, since every tap on the pad reaches it.
+- `early_share = 0.5`: half the allowance left at the door. Par is 30 kph over the legal route
+  (`fares.md`), so this is a 60 kph average or a shortcut.
+- `early_hkd = 10.0`: twice a skill; the receipt's biggest line under the time itself.
 
-## `drift_step_hkd = 1.0`
+## Penalties (`P3-50`, `Q148`)
 
-How much more each further award of the same slide pays than the one before (`Q172`): the n-th
-pays `drift_hkd + (n − 1) × drift_step_hkd`, so at 1.0 / 1.0 a slide paid n times has banked
-n(n + 1) / 2 — HK$1 at 0.5 s, 3 at 1.5, 6 at 2.5, 10 at 3.5, 15 at 4.5. The flat table it
-replaced paid 5 at 2 s, 10 at 3, 20 at 5: the two cross at about three and a half seconds, so a
-slide through one corner pays what it did and a long one pays more. A new slide starts again at
-`drift_hkd`. Required like every key: a flat drift is the old shape, and is not this table.
+One number is read: the speed into the obstacle on the tick of the hit
+(`VehicleController.take_impact_mps`); on a moving car, the closing speed, only when the taxi is
+moving into it (`Q175`). Two bars make three tiers. The meter is never docked (`Q141`) and the tip
+floors at zero.
 
-⚠️ **No cap, measured (`Q179`, 2026-11-04).** On the pad a slide can last for 30 s: `ride` from
-20 kph holds 28.6 s and pays HK$435, and `hold` from 76–95 kph holds 29.6 s. The 3.57 s above was
-the tool's 4 s window, not the car. No street lets it: at six stands and the eight widest junctions
-no slide got past 1.5 s. Re-measure before any open space ships.
+- `bump_min_kph = 20.0`: under it a contact is a touch: free, but it ends a slide so a wall cannot
+  farm the drift. A 10° brush reads 11.6 / 15.4 / 18.6 / 22.6 kph from 63 / 86 / 105 / 130 kph
+  entries, so a brush at 130 is a collision. Left on the user's call.
+- `bump_hkd = 2.0`: a warning, less than one skill.
+- `crash_min_kph = 60.0`: must be over `bump_min_kph` (`FareSystem.setup`). A 30° clip reads
+  37.6 / 47.5 / 55.9 / 65.5 kph and a head-on 77.7 / 97.3 / 113.5 / 131.1, so 60 does not split
+  them at 130; a bar between 65.5 and 77.7 would. Left on the user's call.
+- `crash_hkd = 5.0`: one skill's worth.
+- `crash_cool_s = 1.0`: one wall is one dock; a hit reports 2 to 24 contact ticks inside a second.
 
-## `speed_min_kph = 80.0`
+Re-measure with `tools/skidpad.sh --only=wall`.
 
-Above the drift's fade (`drift_fade_from_kph` 65) and well under `max_speed_kph` 140: Gloucester
-Road pays it, Hennessy between the trams does not, which is the route choice `GAME_DESIGN.md`
-asks for.
+## Near miss (`P3-2a`, `Q161`)
 
-⚠️ Read off the car before `Q152` shipped (2026-10-03), which made 80 kph about 5.4 s and 66 m
-from rest. The tyre car makes it in about 2.4 s and 28 m, and is at about 117 kph where the old
-car was at 80 (the pad's `coast --run-up=` at 1–8 s, distances by trapezoid). Which street pays
-is not re-measured. Not moved: the user's call (`Q152`).
+- `near_miss_m = 0.9`: flank-to-corner clearance at or under which a pass is a near miss, the
+  least while alongside. The user's swerves read 0.69–0.85 m. A lane-centred pass of a bay-row car
+  is about 0.65 m, inside the band, so `near_miss_look_s` is the whole refusal of a lane pass.
+- `close_call_m = 0.25`: under it the pass pays `close_call_hkd` instead. Must be under
+  `near_miss_m`. The path rule does not apply inside this band (the user's call): that close at
+  speed is danger in any lane. A touch or a flight while alongside pays nothing.
+- `near_miss_min_kph = 40.0`: the highest speed while alongside, so braking into the pass does not
+  forfeit it.
+- `near_miss_look_s = 1.5`: a parked vehicle is in the path when part of it lies ahead within this
+  many seconds of travel and inside the car's own width (the user's call: no pay for passing cars
+  in the next lane). Floored at one car length. Not applied to an oncoming car (the user's call):
+  the closing speed is the danger, so an oncoming pass inside `near_miss_m` pays unaimed.
+- `near_miss_memory_s = 2.0`: how long a vehicle stays "was in the path" after leaving it. A touch
+  or a flight forgets every threat (`NearMiss.tick`).
+- `near_miss_hkd = 5.0`, `close_call_hkd = 10.0`.
 
-At pace 1.5 with no boost (`Q156`, 2026-10-06, provisional): 80 kph in about 4.0 s from rest,
-and 122 kph after 8 s. Still not moved, and still the user's call.
+## Combo (`P3-2b`, `Q205`)
 
-At pace 2.0 (the user's drive, 2026-10-07): 80 kph in about 2.8 s from rest, and 152 kph after
-8 s. Not moved.
-
-## `speed_hold_m = 200.0`
-
-The tariff's own unit (`tariff.tres` `step_m`): the speed skill pays once per 200 m driven at or
-over the floor, and again each further 200 m, so it can never tick more often than the meter
-does (2026-09-25, the user's call — the first table paid every 3 s, four times a meter tick at
-the floor). Distance, not time, so a faster run pays sooner over the same road, which is the
-skill. `verify_fares` refuses a value under `step_m`; raising it is a tuning pass, lowering it
-past the tariff is not. At 80 kph a unit is 9 s; a burst between two junctions does not pay,
-Gloucester Road held does.
-
-## `speed_hkd = 5.0`
-
-The drift's price: a second sideways past the qualifying two and 200 m flat out are the same
-money, so neither route is the only one worth driving.
-
-## `air_min_s = 0.5`
-
-Every wheel off the ground for half a second before the flight counts, judged at the landing. A
-kerb hop or a crest on Gloucester Road is a tenth or two; a drop off a flyover deck at street
-speed is 0.8–1.2 s (a 6 m deck falls in 1.1 s on its own), so the bar sits between the two. Seconds
-rather than metres, like the drift: the skill is the flight, and the speed skill already pays the
-speed. Judged at the landing rather than paid in the air (`Q147`) so a car falling off the world
-pays nothing and a roll — four wheels in the air, upside down — can be told apart.
-
-## `air_s = 0.5`
-
-Once a flight has counted, each further half second pays again, all at the landing: a jump off the
-interchange pays twice, a hop off a kerb ramp once. The same repeat shape as `drift_s`.
-
-## `air_hkd = 5.0`
-
-The drift's and the speed's price: a qualifying flight is worth a second sideways past the two, so
-the shortcut off a bridge pays for itself in the tip as well as on the clock. Paid only on an
-upright landing — a jump that lands on the roof pays nothing, which is the whole of the crash
-penalty's job until `P3-50` builds one.
-
-## `early_share = 0.5`
-
-Half the allowance left at the door. Par is 30 kph over the legal route (`fares.md`), so half the
-clock left is a 60 kph average or a shortcut — the two things the tip is for, paid once more at
-the end so the receipt has a line that says so.
-
-## `early_hkd = 10.0`
-
-Twice a skill: arriving well early is the trip's point, and the receipt should show it as the
-biggest single line under the time itself.
-
-## `bump_min_kph = 20.0`
-
-On a moving car the number is the closing speed, and only when the taxi is moving into it (`Q175`,
-`--only=traffic`): the bars are not re-read, since a static wall reads as it did.
-
-The penalties (`P3-50`, `Q148`) read ONE number off the car: the speed into the wall on the tick
-of the hit, `VehicleController.take_impact_mps`, the pre-step velocity's component along the
-contact normal. Two bars on it make three tiers. Under this one a contact is a touch — free, no
-flash, but it ends a slide so a car pinned sideways on a wall cannot farm the drift. The
-skidpad's wall rows (`tools/skidpad.sh --only=wall`) put a 10° brush at 11.2 / 15.2 / 18.4 kph
-into the wall from 63 / 86 / 105 kph entries, so 20 keeps every brush free at any speed the car
-reaches, and a 30° clip at 63 kph reads 34.1, well over.
-
-⚠️ On the tyre car (`Q152`, 2026-10-03) the brush reads 11.6 / 15.4 / 18.6 / 22.6 kph from
-63 / 86 / 105 / 130 kph entries: free to 105, a collision at 130, which the car now reaches in
-under 5 s of throttle. Not moved: the user's call.
-
-## `bump_hkd = 2.0`
-
-A collision — a 30° clip at any speed, 34.1 to 53.9 kph into the wall on the pad — docks less
-than one skill pays: a warning, not a wipe, since the design line says a hit costs speed and
-never control and the tip should read the same way.
-
-## `crash_min_kph = 60.0`
-
-A head-on reads 69.5 / 90.5 / 108.3 kph into the wall from the three entries, and the hardest
-30° clip 53.9, so 60 splits them at every speed measured. `FareSystem.setup` refuses a value at
-or under `bump_min_kph`.
-
-⚠️ On the tyre car (`Q152`, 2026-10-03) the 30° clip reads 37.6 / 47.5 / 55.9 / 65.5 kph and
-the head-on 77.7 / 97.3 / 113.5 / 131.1 from 63 / 86 / 105 / 130 kph entries, so 60 no longer
-splits them at 130; a bar between 65.5 and 77.7 does at every speed measured. Not moved: the
-user's call.
-
-## `crash_hkd = 5.0`
-
-One skill's worth: a heavy crash wipes the drift or the 200 m that paid before it, which is what
-makes the wall matter without making the meter a punishment — the meter is never docked (`Q141`)
-and the tip floors at zero.
-
-## `crash_cool_s = 1.0`
-
-One wall is one dock. The pad shows a head-on reporting two contact ticks and a brush eighteen to
-twenty-four, all inside a second; a rebound off the same wall inside the window is the same
-event. A second wall a second later is a second dock.
-
-## `near_miss_m = 0.9`
-
-The across-clearance at or under which a pass is a near miss (`P3-2a`, `Q161`, the user's ask
-2026-10-11), flank to the parked vehicle's nearer corner, the least of it while the car is
-alongside. 0.6 → 0.9 on the user's logged drive (2026-11-05): three swerves round a car the taxi was
-heading at read 0.69 / 0.80 / 0.85 m and paid nothing; the log's 13 passes past 0.9 m include
-no swerve. A Crown Comfort dead-centre in a 3.0 m lane passes a bay-row car
-at about 0.65 m, now INSIDE this band — so the band alone no longer refuses a lane pass, and
-the path rule below (`near_miss_look_s`) is the whole of that refusal for a near miss.
-
-## `close_call_m = 0.25`
-
-A hand's width. Under it the pass is a close call and pays `close_call_hkd` instead; at 0 the
-car touched, and a touch pays nothing (`NearMiss._judge` refuses a negative clearance, and the
-penalty block docks the hit). Must be under `near_miss_m`; `NearMiss` refuses the folded pair.
-🔴 **Inside this band the path rule does not apply** (the user's call, 2026-11-05): a pass this
-close at speed is danger in any lane, and the user's drive passed a car at 0.24 m at 130 kph for
-nothing because it was never in the path. A touch or a flight while alongside still pays
-nothing.
-
-## `near_miss_min_kph = 40.0`
-
-Half the drift's fade and under the speed skill's 80: Hennessy between the trams reaches it,
-a crawl along a bay row does not. Read as the highest speed while alongside, so braking into
-the pass does not forfeit it.
-
-## `near_miss_look_s = 1.5`
-
-🔴 **The rule that keeps a lane pass from paying a near miss** (the user's call: "should not trigger if we
-are just passing cars in nearby lane without real danger"). A parked vehicle is IN THE PATH when
-some part of it lies ahead within this many seconds of travel AND inside the car's own width
-along that travel — the car would hit it going straight. A car in the next lane is never inside
-the width; a car the player swerves round was, a moment before the swerve. Floored at one car
-length so a standing start can still be aimed.
-⚠️ **Not for a car coming the other way** (the user's call, 2026-11-13: "passing opposite traffic
-with bare miss should definitely be close call or near miss"): the closing speed is the danger,
-so an oncoming pass inside `near_miss_m` pays unaimed. Two lane-centred cars on a two-way street
-read `width_m / lanes` apart, which leaves a car inside 0.9 m on 2.4% of the two-way length, a
-minibus 7.7%, a bus 11.6% (`roadgraph.json`, both regions, 2026-11-13).
-
-## `near_miss_memory_s = 2.0`
-
-How long a vehicle stays "was in the path" once it leaves it. The swerve takes well under a
-second at 40 kph; two seconds covers a lazy one and forgets a vehicle the car lined up on a
-block ago. A touch or a flight forgets every threat at once (`NearMiss.tick`).
-
-## `near_miss_hkd = 5.0`
-
-A drift's price: a pass threaded at speed is worth the same as two seconds sideways.
-
-## `close_call_hkd = 10.0`
-
-Twice the near miss, the early arrival's price: the one pass a player will remember.
-
-## `combo_gap_s = 2.5`
-
-The style combo's gap (`P3-2b`, `Q205`, the user's design 2026-11-13): after a skill pays, this
-many seconds of doing nothing end the combo. A first guess ahead of the user's drive. 🔴 **The
-clock does not run while a skill is in progress** — sliding over the threshold, at or over
-`speed_min_kph`, or in the air (`SkillTracker.holding`) — because the speed run pays every
-`speed_hold_m`, 9 s apart at 80 kph, and a gap that short would end every speed run at ×1. So the
-gap is the time between skills, not between payments: a corner's exit to the next near miss, a
-landing to the next slide. Long enough for one, short enough that cruising ends it.
-
-## `combo_show_min = 2`
-
-The smallest total whose end is called out (the user's call, `Q205`): a lone near miss is a
-skill, and "×1" at its end is noise. The records keep every combo; this is the callout's bar
-alone. An int, refused at 0 like every key.
+- `combo_gap_s = 2.5`: seconds of doing nothing after a skill pays before the combo ends. The
+  clock does not run while a skill is in progress (`SkillTracker.holding`), because a speed run
+  pays 9 s apart at 80 kph.
+- `combo_show_min = 2`: the smallest total whose end is called out; "×1" is noise. Records keep
+  every combo.

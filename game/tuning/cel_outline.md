@@ -1,62 +1,35 @@
 # cel_outline.tres
 
-Rationale for `game/tuning/cel_outline.tres`. Each heading is the line the block sat above; `Overview` is the
-file as a whole. Why it lives here and not in the file: `Q119`.
+Rationale for `game/tuning/cel_outline.tres` (`Q119`).
 
-## Overview
+The ink line round the city (`P3-64`, `Q158`), drawn by `cel_outline.gdshader` on the `CelOutline`
+quad in both rig scenes. The shader's header says how it works and why it reads depth alone.
 
-The ink line round the city (`P3-64`, `Q158`, the user's ask, 2026-10-06), drawn by
-`cel_outline.gdshader` on the `CelOutline` quad in both rig scenes, and shipped 2026-10-07 on the
-user's pick from rendered frames: each edge in its own surface's hue at half its value, 1.0 px.
+- `ink_from_surface` 1.0, `surface_darkness` 0.5: the user's pick. Each edge is the frame's own
+  colour on its nearer side, halved in linear light. `ink_colour` is the ink at
+  `ink_from_surface` 0.
+- `ink_strength` 1.0: the hue already softens the line.
+- `line_width_px` 1.5 at rest (the shader's default is 1.0). The drawn line is about twice the
+  sample step.
+- `speed_thin_px` 0.5, `speed_fade` 0.2 (`P3-65`): at `car_outline.tres`'s `full_speed_kph` the
+  line is 1.0 px at 80% strength. Thinner and fainter with speed, never bolder. The shader floors
+  the width at 1.0 px. Read through the `outline_speed` global; a scene with no car keeps the
+  resting line.
+- `edge_start` 0.004, `edge_full` 0.03: ratios of the Laplacian of inverse depth to the centre's
+  own. A crease reads in the thousandths, a silhouette in the tenths.
+- `edge_distance_m` 40: lifts both bars by one more of themselves every 40 m. At 0 the harbour, a
+  plane seen grazing, draws rows of ink stripes from depth rounding.
+- `fade_start_m` 120, `fade_end_m` 240: the line is gone before the 250 m LOD1 switch
+  (`streaming.tres`).
+- `night_colour` `(0.6, 0.66, 0.8)`, `night_glow` 0.45 (`Q160`): as the rig's `night_lights` rises
+  the colour blends, on the square, to a pale moonlit rim. `night_width_px` 0.0 and `night_reach`
+  1.0 are no-ops. The shader's own defaults are the cyan, wider line the user refused as "too
+  scifi"; do not let a key fall back to them.
 
-What the shader does and why it reads depth alone is in its header. The numbers:
+Thin things ink solid: a pole narrower than about two line widths is outlined from both sides. No
+`edge_*` value changes that.
 
-- `ink_from_surface` 1.0 and `surface_darkness` 0.5 are the user's pick (2026-10-07) over black ink
-  and over ×0.20 and ×0.35: the line is the frame's own colour on the nearer side of the edge, halved
-  in linear light. ×0.20 read as ink, ×0.35 as coloured pencil, ×0.50 as a fine crease line.
-- `line_width_px` 1.5 at rest. The user first took 1.0 ("outline thin", 2026-10-07) over the 1.5
-  the hue variants were shown at, then asked for it bolder at rest "so that we can have thinner
-  outline on speed" the same day. The drawn line is about twice the sample step, because both sides
-  of a break test positive.
-- `speed_thin_px` 0.5 / `speed_fade` 0.2 (`P3-65`, the user's ask, "all
-  outline sensitive to speed"): at `car_outline.tres`'s `full_speed_kph` the line is 1.0 px and 80%
-  strength. Thinner and fainter, never bolder — the user's own logic: speed smears edges, and a
-  louder city at speed fights the road. The shader floors the width at 1.0 px, where it breaks into
-  dots; the fade covers what width cannot. A first cut bolded with speed (1.0 → 2.0 px) and was
-  turned round. An edge-weighted fade (0.3, plus 0.6 toward the corners) was rendered and
-  not taken; its dial was dropped rather than shipped at zero. Read through the `outline_speed` global, which the car writes; a
-  scene with no car keeps the resting line.
-- `ink_strength` 1.0: the hue already softens the line, so it is laid at full strength.
-- `edge_start` 0.004 / `edge_full` 0.03 are ratios of the Laplacian of inverse depth to the centre's
-  own. A crease between two walls reads in the thousandths, a silhouette in the tenths.
-- `edge_distance_m` 40 lifts both bars by one more of themselves every 40 m. ⚠️ At 0 the harbour,
-  a plane seen grazing at 100 m and more, drew rows of ink stripes: the depth buffer's rounding read
-  as a Laplacian. 40 cleared them on the `taxi` viewpoint while keeping the building creases on
-  `street`.
-- `fade_start_m` 120 / `fade_end_m` 240: the line is gone before the 250 m LOD1 switch
-  (`tuning/streaming.tres`), so it never traces geometry about to change.
-
-⚠️ **Thin things ink solid.** A lamp post or a sign pole narrower than about two line widths is
-outlined from both sides and draws in its own darkened colour. That is the depth outline's nature, not a threshold: no
-`edge_*` value outlines a pole without filling it.
-
-Measured on the drive's `taxi` recipe: +1 draw call and +2 primitives, at every second of it.
-
-⚠️ **Not measured: the pass break.** A visible depth-texture reader makes the Mobile renderer resolve
-the 4x MSAA depth and copy it mid-frame, and the hue's `hint_screen_texture` is a second full-frame
-copy; on a phone's tile GPU both are likely dearer than the taps (`Q158`). Owed to the `P3-9`
-handset round; the cheap retreats are `ink_from_surface` 0 (drops the colour copy) or the rig's
-`visible` off.
-
-## `shader_parameter/night_colour`, `night_glow = 0.45`, `night_width_px = 0.0`, `night_reach = 1.0`
-
-The line answers the sun (`Q160`, the user's ask: "should outline color and thickness changes
-according to sun?"). By day it is the ink above. As the rig's `night_lights` rises the colour
-blends — on the square, so it holds its ink through dusk — toward `night_colour` at `night_glow`:
-a pale moonlit rim, `(0.6, 0.66, 0.8)` at 0.45, which keeps an unlit block's edge readable against
-a dark sky.
-
-🔴 **The first table was a cyan line at 1.6, half a pixel wider and reaching 2.5 times as far, and
-the user refused it**: "the pitch dark version with neon light blue outline is too scifi". The
-width and the reach are still dials — 0.0 and 1.0 are their no-ops — and that frame is one edit
-away for anyone who wants to see why it went.
+Cost on the desktop: +1 draw call, +2 primitives. Owed to the `P3-9` handset round: the pass break.
+A depth-texture reader makes the Mobile renderer resolve the 4x MSAA depth mid-frame, and
+`hint_screen_texture` is a second full-frame copy. The retreats are `ink_from_surface` 0 or the
+quad's `visible` off.

@@ -1,159 +1,77 @@
 # taxi_audio.tres
 
-Rationale for `game/tuning/taxi_audio.tres`. Each heading is the line the block sat above; `Overview` is the
-file as a whole. Why it lives here and not in the file: `Q119`.
+How the taxi's sounds are played (`P3-79`, `Q185`): `TaxiAudio` off the car, `TaxiHire` off the
+fare. The files are `tools/make_vehicle_sounds.py`'s.
 
-## Overview
+Every key `TaxiAudioProfile.usable` names is required (no defaults; the taxi stays silent on a
+zero). The decibel levels and `hybrid` are not guarded, since 0 dB and off are real choices; the
+writer drops them at those values (`hybrid` and `impact_db` are absent: off and 0 dB).
 
-The taxi's own sounds (`P3-79`, `Q185`): what `TaxiAudio` plays off the car and what `TaxiHire` plays
-off the fare. The files are `tools/make_vehicle_sounds.py`'s; this table is how they are played.
+No level is graded by a number; all are owed the user's ear. One rule holds (the user's call):
+loops that run the whole drive (engine, EV whine, wind) sit 10–20 dB under the one-shots, and the
+squeal a little under them. Raise a loop only against a drive.
 
-⚠️ EVERY KEY THAT `TaxiAudioProfile.usable` NAMES IS REQUIRED: the profile declares no defaults, a
-missing key reads as zero, and the taxi stays silent on one rather than run on a literal. The decibel
-levels and `hybrid` are not guarded: 0 dB and off are real choices, so Godot's writer drops them
-(`impact_db = 0.0` is absent for that reason).
+## Engine and gearbox
 
-None of it is graded by a number. Every level is a first pass by reasoning, owed the user's ear.
+- `hybrid` (absent, off): the Crown Comfort LPG's four through a 4-speed automatic, matching
+  `crown_comfort.tres`. On is the Comfort Hybrid: EV whine and a CVT drone.
+- `loop_rpms = (1050, 2520, 5040)`: mirrors `make_vehicle_sounds.ENGINE_RPMS`. Each is an rpm at
+  which an engine cycle is a whole number of samples at 22,050 Hz. Crossfaded between neighbours.
+- `idle_rpm = 800`, `redline_rpm = 6000`: a 1TR-FPE's.
+- `rpm_per_kph = (103, 55, 37, 27)`: typical Toyota 4-speed ratios (2.8 / 1.5 / 1.0 / 0.73) and a
+  4.3 final drive on 0.31 m wheels. Top gear at 140 kph is about 3,800 rpm.
+- `upshift_rpm = 4000`, `upshift_light_share = 0.6`, `downshift_rpm = 1200`: a pedal-down change
+  at 4,000 and a light-pedal one at 2,400; at 5,000 the user heard "a ferrari more than a taxi".
+  The downshift must sit under the light change's landing rpm in the next gear or the box hunts:
+  the lowest landing is 2,400 × 55 / 103 = 1,282. A share under 0.59 hunts; `verify_vehicle`
+  sweeps it.
+- `stall_rpm = 1800`: the torque converter lets the engine run this far over idle at rest with the
+  pedal down.
+- `rpm_slew = 6000`: the heard rpm follows the box at this rate per second, so an upshift is a
+  drop over about a sixth of a second, not a cut.
+- `engine_db = -18`: lowered twice on the user's "need less engine noise".
+- `off_throttle_cut_db = 6`, `pedal_up = 0.05`, `off_throttle_ease_db_s = 40`: under 5% pedal the
+  engine drops 6 dB, eased over 0.15 s so a keyboard's all-or-nothing pedal does not step the
+  level.
+- `park_fade_s = 0.6`: parked (menu showroom, HOME, REPORT) the loops fade to silence and pause
+  (the user's call). One-shots already playing finish.
 
-🔴 **What is always there sits under what happens** (the user's call, 2026-11-06: "make the noise that
-consistently appear less distracting compared to event based one"). The loops that run the whole
-drive — the engine, the EV whine, the wind — are 10–20 dB under the one-shots, and the squeal a little
-under them too; a horn, a crash or the flag is what the ear should catch. Raise a loop only against a
-drive, never on its own.
+## Hybrid only
 
-## `hybrid` (absent: off)
+- `ev_ref_kph = 50` (mirrors `EV_REF_KPH`), `ev_db = -20`, `ev_pitch_min = 0.05`,
+  `ev_pitch_max = 2.0`: the whine's pitch is speed over `ev_ref_kph`, clamped.
+- `engine_on_kph = 45`, `engine_on_throttle = 0.6`, `cvt_low_rpm = 1200`, `cvt_high_rpm = 4800`:
+  when the engine starts, and the CVT's rpm band, held by the pedal.
 
-Off is the Crown Comfort LPG's four through its 4-speed automatic, the car `crown_comfort.tres`
-describes, so the engine is the car's own. On is the Comfort Hybrid's: the EV whine, the engine
-cutting in on a CVT drone. The user's call between the two was left open on 2026-11-05; the car
-decided the default.
+## Tyres and wind
 
-## `loop_rpms = (1050, 2520, 5040)`
+- `skid_full_slip = 2.0`, `skid_db = -10`, `skid_pitch_rise = 0.15`: the squeal starts at
+  `skid_marks.tres`'s `mark_from_slip` (read from that file, so sound and marks start together)
+  and is full at twice the tyre's peak, 15% higher in pitch.
+- `skid_full_kph = 60`, `skid_slow_share = 0.3`, `skid_speed_pitch = 0.2`: the squeal follows
+  speed too (the user's ask): 30% of the level at a crawl, full by 60 kph, pitch ±10%.
+- `wind_from_kph = 30`, `wind_full_kph = 140`, `wind_db = -22`, `wind_pitch_still = 0.8`,
+  `wind_pitch_rise = 0.4`: nothing under 30, full at top speed. The quietest loop.
 
-Mirrors `make_vehicle_sounds.ENGINE_RPMS`. Each is an rpm at which an engine cycle (two crank turns)
-is a whole number of samples at 22,050 Hz, so a loop of whole cycles joins itself. Crossfaded between
-neighbours (`loop_mix`), so no loop plays far from its own rpm: 0.76× at idle, 1.19× at the redline.
+## Impacts
 
-## `idle_rpm = 800.0`, `redline_rpm = 6000.0`
+- `tap_min_mps = 1.5`, `impact_cool_s = 0.25`: under 5.4 kph a contact is silent. The tiers above
+  are `skills.tres`'s bump and crash bars, so the crash heard is the one docked. A second hit
+  inside a quarter second is the same impact.
+- `materials`: what a struck body is, by a piece of its node's name (the traffic's `car_<id>`,
+  `tram_<n>`, the parked library's `<kind>_col_<n>`, the trees' `<mesh>_trunks_<x>_<z>`, the
+  fence's `barrier_col_<n>`). First match wins; no match is a wall.
+- `scrape_from_mps = 1.0`, `scrape_full_mps = 10.0`, `scrape_db = -6`: the grind along a wall, by
+  sliding speed.
+- `land_min_air_s = 0.3`: a kerb hop is not a landing. A little under `skills.tres`'s `air_min_s`.
 
-A 1TR-FPE's: idle around 750–800, red line at 6,000 (`rev_limiter.tres` holds the wheels, not this).
+## Cabin
 
-## `rpm_per_kph = (103, 55, 37, 27)`
-
-`crown_comfort.tres`' own derivation: the Toyota 4-speed's ratios (≈2.8 / 1.5 / 1.0 / 0.73) and the
-final drive (≈4.3) on 0.31 m wheels — 8.56 wheel rpm per kph. Typical figures, not the car's
-published ones, as the car's own table says. Top gear at 140 kph is about 3,800 rpm.
-
-## `upshift_rpm = 4000.0`, `upshift_light_share = 0.6`, `downshift_rpm = 1200.0`
-
-A pedal-down change at 4,000 (1st to 39 kph, 2nd to 73, 3rd to 108); a light pedal changes at 2,400.
-A taxi is driven for fuel, not for the redline: at 5,000 the user heard "a ferrari more than a taxi"
-(2026-11-06). ⚠️ The downshift must sit under the light change's landing rpm in the next gear, or the
-box hunts: the lowest landing is 1→2 at 2,400 × 55 / 103 = 1,282, so 1,200 leaves 82 rpm. A lighter
-`upshift_light_share` than 0.59 hunts; `verify_vehicle` sweeps it.
-
-## `stall_rpm = 1800.0`
-
-The torque converter lets the engine run to idle + 1,800 with the pedal down at rest, as an automatic
-does off the line, before the wheels' speed takes it.
-
-## `rpm_slew = 6000.0`
-
-The heard rpm follows the box's at this rate, so a change up is a drop over about a sixth of a
-second, which is what makes it read as a gear change and not a cut.
-
-## `engine_db = -18.0`, `off_throttle_cut_db = 6.0`
-
-The engine sits well under the horns and impacts: -4, then -12 on the user's call above, then -18 on
-"need less engine noise" (2026-11-06). Lifting off drops it 6 dB, the cheapest way to hear
-load without a second set of loops.
-
-## `pedal_up = 0.05`, `off_throttle_ease_db_s = 40.0`
-
-Under 5% of pedal the engine is off load and takes `off_throttle_cut_db`. The cut eases at
-40 dB/s, 0.15 s for the 6 dB, so a keyboard's pedal — all or nothing — no longer steps the level
-from one tick to the next; the rpm was already slewed and the level was not (the review,
-2026-11-06). A first guess, owed the user's ears. `pedal_up` was the code's `PEDAL_UP` until then.
-
-## `park_fade_s = 0.6`
-
-Parked — the menu's showroom, HOME, REPORT — the taxi is silent, as its horn
-already was (the user's call, 2026-11-06): the idle under the menu at `engine_db` read as a car
-left running. The loops fall from where they stand to silence over this long and then pause,
-so a shift ending into REPORT does not cut the engine mid-cycle; the one-shots already playing,
-the payout's coins among them, finish. Back on the road the loops come up on the next tick.
-
-## `ev_ref_kph = 50.0`, `ev_db = -20.0`, `engine_on_kph = 45.0`, `engine_on_throttle = 0.6`, `cvt_low_rpm = 1200.0`, `cvt_high_rpm = 4800.0`
-
-The hybrid alone. Mirrors `EV_REF_KPH`. The engine starts over 45 kph or past 60% pedal, roughly
-where a Toyota hybrid's does, and the CVT holds it by the pedal rather than by the speed: the drone.
-
-## `ev_pitch_min = 0.05`, `ev_pitch_max = 2.0`
-
-The EV whine's pitch is the speed over `ev_ref_kph`, held at twice the loop's at the most and
-never quite stopped. Were the code's own constants until the review of 2026-11-06.
-
-## `skid_full_slip = 2.0`, `skid_db = -10.0`, `skid_pitch_rise = 0.15`
-
-The squeal starts at `skid_marks.tres`' `mark_from_slip`, read from that file so the sound and the
-marks start on the same tick, and is full at twice the tyre's peak. It rises 15% in pitch as it does.
-
-## `skid_full_kph = 60.0`, `skid_slow_share = 0.3`, `skid_speed_pitch = 0.2`
-
-The user's ask (2026-11-06): the squeal follows the speed as well as the angle. A slide at a crawl
-keeps 30% of the level (a wheelspin still squeals) and is full by 60 kph; the pitch moves ±10% about
-the slip's own pitch from a crawl to 60 kph. The angle is the slip: a car sideways slips more.
-
-## `wind_from_kph = 30.0`, `wind_full_kph = 140.0`, `wind_db = -22.0`
-
-Nothing under 30; full at the car's top speed. The quietest loop: at speed it never stops, and its file
-is dark (nothing over 1 kHz) for the same reason.
-
-## `wind_pitch_still = 0.8`, `wind_pitch_rise = 0.4`
-
-The wind's pitch at `wind_from_kph`, rising by 0.4 to `wind_full_kph`. Were the code's own
-constants until the review of 2026-11-06.
-
-## `tap_min_mps = 1.5`, `impact_cool_s = 0.25`
-
-Under 5.4 kph into a contact is a nudge and silent. The tiers above it are `skills.tres`' bump and
-crash bars (20 and 60 kph), the award's own, so the crash you hear is the one you are docked for. A
-second hit inside a quarter second is the same impact rattling.
-
-## `materials`
-
-What a struck body is, by a piece of its node's name: the traffic's `car_<id>`, the trams'
-`tram_<n>`, the parked library's `<kind>_col_<n>`, the trees' `<mesh>_trunks_<x>_<z>`, the fence's
-`barrier_col_<n>`. First match wins; a body matching none is a wall, the dead thud alone. A name is
-the cheapest tag every layer already writes; a metadata key would need every layer to set one.
-
-## `scrape_from_mps = 1.0`, `scrape_full_mps = 10.0`, `scrape_db = -6.0`
-
-The grind along a wall, by how fast the car slides along it.
-
-## `land_min_air_s = 0.3`
-
-A kerb hop is not a landing. `skills.tres`' `air_min_s` (0.5) pays; this sounds a little under it.
-
-## `cabin_db = -2.0`
-
-The cabin's sounds (the flag, the payout and the indicator relay) play at this, not positioned.
-
-## `relay_off_pitch = 0.8`, `shot_pitch_jitter = 0.06`
-
-The indicator relay ticks pulling in at 1.0 and tocks letting go at 0.8. Every one-shot's pitch
-is scattered ±6% so a repeat is not the same sample twice. Were the code's own constants until the
-review of 2026-11-06.
-
-The relay sounds for an indicator and for the hazards alike: it follows `VehicleLamps.indicator_lit`,
-the one flasher both run on. Its level is the file's, not a dial here. The first tick was 10 ms of
-click at a quarter of full scale, its loudest 20 ms 11 dB under the card reader's beep at the same
-`cabin_db`, and the user did not hear it at all (2026-11-17). It is now the contact's click and the
-can ringing on for 0.11 s at 0.6 of full scale, its loudest 20 ms −15.7 dB against the flag's −15.3
-and the reader's −13.5; `test_the_indicator_relay_is_heard_beside_the_cabin_s_other_sounds` holds it
-within 4 dB of both.
-
-## `coin_hkd = 2.0`, `coin_max = 15`, `coin_gap_s = 0.07`, `coin_after_s = 0.35`
-
-At the delivery a coin per HK$2 of tip, after the card reader's beep: a HK$22.50 tip is eleven coins
-in under a second. Capped so the longest payout stays about 1.4 s.
+- `cabin_db = -2`: the flag, the payout and the indicator relay, not positioned.
+- `relay_off_pitch = 0.8`: the relay ticks at 1.0 and tocks at 0.8. It follows
+  `VehicleLamps.indicator_lit`, so indicators and hazards alike. Its level is the file's:
+  `test_the_indicator_relay_is_heard_beside_the_cabin_s_other_sounds` holds it within 4 dB of the
+  flag and the card reader.
+- `shot_pitch_jitter = 0.06`: every one-shot's pitch is scattered ±6%.
+- `coin_hkd = 2.0`, `coin_max = 15`, `coin_gap_s = 0.07`, `coin_after_s = 0.35`: at delivery, a
+  coin per HK$2 of tip after the reader's beep, capped so the longest payout is about 1.4 s.

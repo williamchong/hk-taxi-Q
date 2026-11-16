@@ -1,59 +1,19 @@
 # tramway.tres
 
-Rationale for `game/tuning/tramway.tres`. Each heading is the line the block sat above; `Overview` is the
-file as a whole. Why it lives here and not in the file: `Q119`.
+The tramway's rail heads and track bed (`P3-14`, `Q58`). `tools/generated_scene_import.gd` maps
+the ETL's `tramway` material name to this file. One resource for the region.
 
-## Overview
+No colour here: both albedos are `hong_kong.yaml`'s `materials:` (`steel_rail` 35%,
+`concrete_sooty` 22%), per `Q33`. This file is how the two catch light. Judge on Hennessy and
+Johnston at a low sun; at noon a rail and a painted line look the same.
 
-The tramway — rail heads and track bed (`P3-14`, `Q58`).
-
-`tools/generated_scene_import.gd` maps the ETL's `tramway` material name to
-this path and only this path, so this file is the switch: delete the entry
-there and the tramway falls back to the `BaseMaterial3D` it imported with,
-which draws the right geometry with none of the specular that makes a rail
-read as metal.
-
-Here rather than as shader defaults because CLAUDE.md hard rule 4 makes tuning
-data, not constants — and beside `road_markings.tres` and `golden_hour.tres`,
-because the low sun these are judged under is tuned in the same directory.
-Loaded as one resource for the whole region: the tramway is a single primitive.
-
-⚠️ **Nothing here is a colour, and that is deliberate.** Both albedos live in
-`hong_kong.yaml`'s `materials:` table — `steel_rail` at 35% and
-`concrete_sooty` at 22% — because `Q33`'s palette rule is only total while
-that table is the one place a colour is written, and `Q34` made the loop
-depend on exactly that. What is tuned here is how the two catch light, which
-is not a colour and has no published albedo to answer to.
-
-⚠️ **`rail_roughness` is the value that does the work, not the albedo.** A
-rail is recognisable because it is a polished strip in a matte street: at the
-low sun `golden_hour.tres` sets, the highlight running along the head is the
-entire cue, and the same geometry at `road_roughness` 0.95 is a grey line. It
-ships at 0.28 against the bed's 0.9 — the widest separation in the city, and
-the one thing to reach for first if the tramway reads as painted rather than
-as laid.
-
-⚠️ **`rail_metallic` is deliberately low, and 0.65 was measured wrong.** A
-metallic surface reflects its environment and the only environment here is the
-sky, so at 0.65 the rails rendered **sky blue** — two painted lines down the
-reserve rather than steel. It is the one value in this file that was set by
-looking at a frame rather than by argument, and the frame is in
-`build/driver/tram_fixed`.
-
-⚠️ **The sheen the rail head lacked comes from the car's painted sky, not from
-`rail_metallic`** (`Q168`): `sky_zenith`, `sky_horizon` and `ground_reflection`
-are the car's and the façades' noon sky, and the rig's `sky_light` global dims
-and warms them with the hour, so a rail at dusk catches a dusk sky and goes dark
-at night. `rail_reflect` 0.5 is how much a head takes at a grazing angle,
-`rail_face_on` 0.05 faced squarely, `fresnel_power` 5.0 the fall between; the
-flank and the bed take none. Chosen at 0.5 over 1.0 by the user, from
-`build/driver/tram_3.png`.
-
-⚠️ **`flank_darkening` shades the rail only.** The bed is a plain surface, and
-darkening its edges would draw two soft lines down the reserve that no source
-puts there — `Q54`'s invented marking in a place it would be much harder to
-notice than a kerbside yellow.
-
-Judged at the `street` and `kerb` viewpoints per `ART_DESIGN.md`'s table, on
-**Hennessy and Johnston**, and at a low sun rather than at noon: at noon a rail
-and a painted line are nearly the same object.
+- `rail_roughness = 0.28`, `bed_roughness = 0.9`: the value that does the work. A rail reads as a
+  polished strip in a matte street. Reach for this first if the tramway reads as painted.
+- `rail_metallic = 0.0`: at 0.65 the rails rendered sky blue, because metal reflects its
+  environment and the only one here is sky.
+- `sky_zenith`, `sky_horizon`, `ground_reflection`, `rail_reflect = 0.5`, `rail_face_on = 0.05`,
+  `fresnel_power = 5.0`: the head's sheen is the car's painted sky (`Q168`), dimmed and warmed by
+  the rig's `sky_light`. 0.5 at grazing is the user's pick over 1.0. Flank and bed take none.
+- `rail_head_fraction = 0.55`: the share of the rail's width that is polished head.
+- `flank_darkening = 0.35`: shades the rail only. Darkening the bed's edges would draw two lines
+  no source puts there (`Q54`).

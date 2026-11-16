@@ -1,462 +1,161 @@
 # traffic.tres
 
-Rationale for `game/tuning/traffic.tres`. Each heading is the line the block sat above; `Overview` is the
-file as a whole. Why it lives here and not in the file: `Q119`.
-
-## Overview
-
-How the moving traffic drives and where it lives (`P3-3c`, `Q173`). Every value is AUTHORED but
-two: the cars are a backdrop to the taxi, not a model of the city's traffic. The two are `kinds`
-and `fleet_by_hour`, the mix and the fleet by clock hour, which are TD's census and detectors on these streets
-(`Q186`). `traffic_system.gd` says what each rule does; this says why each number.
-
-⚠️ EVERY KEY BELOW IS REQUIRED. `traffic_profile.gd` declares no defaults, so a missing key reads
-as zero, and `TrafficSystem` refuses to run on a zero. Three are held as DIFFERENCES — `spawn_max_m`
-over `spawn_min_m`, `retire_m` over `spawn_max_m`, `brake_max_mps2` over `brake_mps2` — so a table
-that inverts one is refused too, and an hourly table of any length but 24. `verify_traffic.gd` drives this file, three seeds × 90 s round the signals and one on the back
-streets, with each region's parked roster resident.
-
-## `cars = 60`
-
-The fleet alive at once in the busiest hour, the evening rush (`Q219`, 2026-11-15, the user's
-"we need more car for fun factor sooner or later"; 40 since `Q198`, 24 before). 60 is the largest
-of 40 / 60 / 80 that holds every `verify_traffic` gate in both regions: at 80 Causeway Bay's
-back-street drive has two cars meet in a signalled junction (2 car-ticks) and its routed drive
-has no vehicle reach a stop and stand — the answer to that is a lower `cars`, never a shorter `give_way_look_m`. Paid for
-by `thin_every` and the cars' index: `tools/bench_traffic.gd --view=on` reads 1.67 ms a tick at
-60 against 2.53 at 40 before either; in the game (desk, `--perf-log`) the tick's p50 is 2.59 ms.
-Throttle route (2026-11-15, desk): `phys` 3.9–4.5 ms against 2.9–3.1 with `--traffic=off`,
-`draws` 140–146 against 138–142. **The user's pick** (2026-11-15, over 40 and 80); the mobile
-tier (`P0-3b`) must re-take it.
-
-At 40 (`Q198`, the user's call 2026-11-11: "we need more cars on street esp rush hours"). Measured
-on the throttle route (2026-11-11, desktop, two runs each): `phys` 4.0–4.5 ms a tick against 3.3–4.3 at 24 and
-1.4–2.0 with `--traffic=off`; `draws` 111–117 against 109–116 at 24 and 106–110 off. The mobile
-tier (`P0-3b`) must re-take it; the per-car cost is the car-ahead search, which is every pair.
-⚠️ Every staged case in `verify_traffic` moved with it: seed 4's routed drive found a bus placed
-mid-dwell in front of a car at cruise, and `_room_behind` answers it.
-
-## `spawn_min_m = 60.0`
-
-Far enough that a car rarely appears in the chase camera's near field.
-
-## `spawn_max_m = 220.0`
-
-The ring cars appear in. With 24 cars over the streets inside 220 m, a busy road shows a car or
-two at a time, not a jam.
-
-## `retire_m = 260.0`
-
-40 m past the ring, so a car placed at its edge does not vanish on its first tick away.
-
-## `spawn_clear_m = 12.0`
-
-No car is placed nearer another than about two car lengths, and no car is placed on an edge
-shorter than this.
-
-## `spawn_main_weight = 1.0`
-
-A spawn tries a road by its lane-metres — its length by its lanes each way by the ways traffic
-drives it — and a main road's count this many times (`Q219`). The pick was even by edge, so a
-short back street was tried as often as a long trunk road and a minor lane-metre drew about twice
-a main one's tries. At 1.0 the fleet is spread evenly over the lanes: Wan Chai's main roads are
-41.2% of the placeable edges and 53.3% of the lane-metres (`verify_traffic`'s `spawn:` line),
-Causeway Bay's 22.8% and 35.5%. Above 1 the main streets fill first — **1.0 is the user's pick** (2026-11-15, over
-1.5 and 2); every seeded drive moves with it. Still one roll of the traffic's `_rng` a try.
-
-## `spawn_seen_min_m = 180.0`
-
-The camera's rule (`Q214`, the user's ask 2026-11-14: "no cars should just suddenly show up in
-front of user"). A place the camera can see — inside its frustum, its roof in sight past every
-building and road deck — takes a car only this far from the camera, and the car fades in there
-(`fade_in_s`). Nearer, a car is placed only out of view: behind the camera, round a corner, behind
-a block. 180 m is past the beams' `draw_m` (140 m), so a faded car never throws a whole beam, and
-inside the ring's 220 m, so a straight road ahead still fills. At 180 m the day's fog is 4%, so the
-fade does the hiding, not the fog. Held as a difference over `spawn_min_m`.
-
-## `retire_unseen_s = 1.0`
-
-How long a car past `retire_m` must be out of view before it is taken away (`Q214`). The look-back
-button and a hard turn swing the frustum off a car for a moment; a second lets a glance back find
-the street as it was.
-
-## `retire_far_margin_m = 30.0`
-
-A car the camera can see is not taken away at `retire_m` (`Q214`, the user's ask: "chasing a car
-just passed us should be possible"): it is kept until it is within this of the camera's `far` (400 m, `city_drive.tscn`), and then fades out (`fade_out_s`). 370 m is 9%
-day fog, 17% at night: the fade finishes where the far plane would have cut it anyway.
-
-## `fade_in_s = 0.8`
-
-The dither's run in (`vehicle_body.gdshader`, seven steps): under a second, so a car at 180 m is
-whole before the taxi has closed 20 m on it at 90 kph, and long enough that no single frame shows
-a car where none was.
-
-## `fade_out_s = 0.8`
-
-The same run out, for a car leaving in view near the camera's `far`.
-
-## `thin_every = 4`
-
-How often a far car out of view reads its rules (`Q219`): the light, the cars and the tram ahead,
-the junction's give-way, the parked vehicles, its stop. On the three ticks between it drives on
-the speed they last gave it, still moving and still an obstacle to every other car. Four ticks is
-67 ms, a third of a driver's quickest reaction, and the rules plan a stop at `brake_mps2` (3.0)
-while a car may brake at `brake_max_mps2` (8.0), so a late reading is made up inside the margin
-the rules already keep. `verify_traffic`'s last drive runs under a camera and holds the thinned
-cars to every gate; a far car that never read its rules again runs a red there by name.
-`tools/bench_traffic.gd --view=on` (Wan Chai, 2026-11-15, even spawn): 1.04 ms a tick at 40 cars
-against 2.51 with no camera, 5.64 against 13.50 at 160; with the weighted spawn 1.67 against 3.58
-at 60. **1 reads every car's every tick** — the off switch.
-The car's own timers (a dwell, a kerbside stop, the horn's wait) count the ticks it skipped.
-
-## `thin_beyond_m = 60.0`
-
-A car is thinned only past this from the camera, in plan metres, AND out of its frustum (`Q219`):
-anything the player can see, and anything near enough to reach the taxi before its next reading,
-reads every tick. 60 m is `spawn_min_m`, the nearest a car is ever placed, and under the horns'
-`horn_range_m`: a thinned car's horn is at most three ticks late.
-
-## `cruise_of_limit = 0.8`
-
-40 kph on a 50 kph street: a car that keeps to its limit, under it, so the taxi passes traffic.
-
-## `turn_mps = 7.0`
-
-25 kph through a junction's curve.
-
-## `accel_mps2 = 2.0`
-
-A gentle pull-away; 0 to 40 kph in about 5.5 s.
-
-## `brake_mps2 = 3.0`
-
-The planned stop, for a light or a car ahead: comfortable.
-
-## `brake_max_mps2 = 8.0`
-
-The hardest a car brakes on a tick: near a dry tyre's limit, for a car cut up. ⚠️ The AMBER
-judgement is made at this rate, not the planned one — see `traffic_system.gd`; at the planned rate
-a car rode the line of its own judgement and crossed into the red.
-
-## `gap_m = 2.0`
-
-Bumper to bumper behind a stopped car.
-
-## `look_m = 45.0`
-
-How far a car looks for one to follow: further than its stopping distance from cruise at the planned
-rate (40 kph → 21 m).
-
-## `follow_heading_deg = 45.0`
-
-Past this a car ahead is crossing, not queueing, and is not followed in the plan cone. The car's own
-path (its edge and the edge it turns into) is read first and has no angle bar.
-
-## `turn_span_m = 6.0`
-
-The fallback only, since city schema 41: a turn runs from the junction mouth the bundle publishes
-(`trim_m`, where the stop line stands) to the next road's, and this reaches either side of a node
-whose ribbon met no cap. 40% of a short edge, and never short of the stop point.
-
-## `lane_change_m = 25.0`
-
-Travel to move one lane over, a three-second change at 30 kph. A car moves toward its turn's lane
-from the moment it joins the road and only while the lane beside it is clear for both cars' lengths
-and `gap_m`; one that never got across turns from where it is. Shorter reads as a swerve.
-
-## `wink_hold_m = 5.0`
-
-How far the car's tail runs past the mouth it joined by before the indicator of the turn it finished
-goes off — a driver's stalk cancels as the wheel comes straight, not as the nose meets the new road.
-Off at the join, the wink stopped while the car still sat across the junction (the user's report,
-2026-10-30). The next turn's approach takes the indicator over; a lane change waits for it.
-
-## `straight_deg = 30.0`
-
-Under this between the way in and the way out a move is straight on and keeps its lane; over it a
-left turn is taken from the nearside lane into the nearside, a right from the offside into the
-offside (the user's drive, 2026-10-29: cars turned right from the left lane). A staggered crossroad's
-dog-leg reads straight at 30°.
-
-## `pass_look_m = 40.0`
-
-How far ahead a parked vehicle in a car's lane makes it move out to pass (`P3-3f`, the user's drive
-2026-10-29: cars drove through parked ones). The roster puts most of its vehicles IN lane 0 — a bay
-or a fill car at the kerb takes the nearside lane, which is Hong Kong's kerbside, and
-`verify_traffic`'s `parked:` table counts it (Wan Chai + Causeway Bay, 2026-10-29: of the 1,081
-placements on roads traffic drives, 759 stand in lane 0 and 247 in a lane past it only). 40 m at 30 kph is five seconds: room for a `lane_change_m` change
-before the car meets it, and short enough that a car does not leave the nearside for a van a block
-away.
-
-## `side_clear_m = 0.3`
-
-The room a moving car keeps from a parked vehicle's flank: closer, the vehicle is in its lane. Kept
-from the vehicle only — a car edging out may run its flank to the far kerb, because the published
-width is kerb to kerb and a back street is "parked on one side and passed in the lane left"
-(`parked.py`). It decides which pinches are passable: a minibus behind a bus at its stop on a 4.6 m
-one-way street (edge 349) has 2.32 m beside the bus and needs 2.38 (its 2.08 m and this), so it waits — that wait is the
-`parked:` "longest stand" line, and lowering this to clear it would put a car's mirror on a bus.
-
-## `give_way_look_m = 30.0`
-
-How far short of its line a car starts giving way (`Q173`, the user's drive 2026-11-04: cars drove
-through each other at junctions without lights), and how near its own line a car coming must be
-to be given way to. 30 m is the planned stop from 40 kph (21 m at `brake_mps2`) with room: a car
-nearer its line than it can stop for at `brake_max_mps2` is in the junction and is given way to
-whatever this says. Longer holds a side-road car for a main-road car still half a block off; shorter
-than the planned stop and a car brakes hard for every crossing. The rule's angle bar is
-`straight_deg` (two paths under it run side by side or head to head) and its clearance
-`side_clear_m` (bodies apart by it, as a flank from a parked vehicle) — not values of their own.
-
-## `horn_voices = 6`, `horn_range_m = 110.0`, `horn_repeat_s = 4.0`
-
-The range and the repeat are the tram bell's numbers (`trams.md`), for the same reasons: four seconds is
-impatient without being a car alarm. The voices were the bell's three until `P3-79`: a honk is now a
-pattern that holds its voice up to about 3.5 s (a temper-full `hit`), where the old press was 0.42 s, so
-three would be stolen mid-pattern at any busy junction. A seventh caller takes the voice nearest done. ⚠️ `horn_range_m` is only the fade: a car sees the taxi
-within `look_m`, so no horn sounds from past about 46 m, where this leaves it at around 0.6.
-
-## `horn_after_s = 2.0`
-
-Hong Kong patience behind a taxi that has stopped in the lane. A red does not count: the wait starts
-when nothing but the taxi holds the car, so the queue at a light stays quiet until it goes green.
-
-## `horn_cut_mps = 3.0`
-
-About 11 kph over the speed the car could still stop from. A car closing on the taxi normally rides
-that speed down at `brake_mps2`, so it reads near nothing; being cut up or met head-on reads far past
-this on the tick it happens. This is the horn a moving taxi hears: it rarely stands in front of anyone.
-
-## `horn_pitch_spread = 0.08`
-
-A semitone or so either side, so that two cars do not sound like one car twice. Fixed per car.
-
-## `horn_count`, `horn_press_s`, `horn_gap_s`
-
-A honk is a pattern (`P3-79`, the user's ask 2026-11-05: "randomised the length, interval and
-times"): presses, each press's length and the gap between, drawn per honk from these ranges by why
-the car honks. Each kind sounds its own file (`horn_<kind>.wav`, `tools/make_vehicle_sounds.py`), a
-loop held for the press, so one file gives any length.
-
-- `stood` — 1–2 presses of 0.08–0.2 s, 0.1–0.25 s apart: the polite tap of a car whose driver has
-  noticed the taxi is not going anywhere.
-- `cut` — 1–2 of 0.4–1.2 s: being cut up or met head-on is a real blast.
-- `hit` — 1–2 of 0.6–1.6 s, close together: leaning on it after the taxi hit it or the car ahead.
-- `close_call` — 2–4 of 0.1–0.3 s, 0.08–0.15 s apart: the angry beep-beep-beep after a scrape past.
-
-All authored by ear-sense, none measured: no Hong Kong source counts honks. The draws are on their
-own RNG off the traffic seed, so a pattern never moves a car (`Q178`'s pitch rule, for the same reason).
-
-## `horn_temper_step = 0.3`, `horn_temper_max = 0.8`, `horn_temper_s = 20.0`
-
-Escalation: each honk at the taxi raises the car's temper 0.3, which pushes its next count and press
-lengths toward the top of their ranges (never past them); the gaps stay random. Held at 0.8 so even
-the angriest car's draws still vary, and falling a whole share over 20 s, so a car the taxi left alone
-for half a minute is calm again. The first honk is a tap, the third a long blast.
-
-## `kinds = {car_a, car_b, minibus, taxi, van}`, each by clock hour
-
-The parked library's road vehicles, each weighted by the clock hour (`Q186`, the user's ask
-2026-11-06: "can road car type and density change according to time of day? … fetch the TD census
-first"). 24 entries a kind, hour 0 first; a wandering car's kind is drawn on its hour's weights at
-every spawn. No coach (too long for the turn curve the cars take) and no motorcycle (a box under it
-would read as a car). ⚠️ The 12 m bus does take that curve since `P3-78`, on its routes only;
-`verify_traffic`'s routed drive holds it to every rule a car is held to.
-
-**Every number is TD's**, printed by `tools/traffic_census.py` — do not edit it by hand; rerun the
-tool. Source: *The Annual Traffic Census 2025*, read through the census's interactive site
-(`atc.td.gov.hk`, the AADT Analysis page's `api/analysis`): the vehicle classification surveys at
-the three counting stations inside the two regions that have one — 1002 Victoria Park Road,
-2214 Causeway Road and 1107 Tung Lo Wan Road — **pooled by vehicles counted** each hour (about
-3,000–5,000 an hour; Tung Lo Wan Road's ~20 an hour barely moves it). Of the census's ten classes
-four are drawn: private car → `car_a` + `car_b`, taxi → `taxi`, public light bus → `minibus`, light
-goods → `van`; the rest (motorcycles, heavy goods, coaches, private light buses, franchised buses —
-which run on their routes) are left out and the four renormalised to 100.
-
-| hour | car_a + car_b | taxi | minibus | van |
-|---|---|---|---|---|
-| 07 | 48.5 | 39.9 | 1.8 | 9.8 |
-| 10 | 50.2 | 31.5 | 0.3 | 17.9 |
-| 12 | 54.5 | 35.1 | 0.0 | 10.4 |
-| 16 | 63.0 | 23.9 | 0.4 | 12.7 |
-| 18 | 72.6 | 23.4 | 0.0 | 4.0 |
-| 20 | 54.8 | 42.4 | 0.3 | 2.5 |
-
-- **The taxis**: about a third of what these roads carry, 24–42% by hour, most at 20:00 — well over
-  the 16.8% (`Q183`) the roster drew before, which was the CROSS-HARBOUR share (§5.4 of the 2023
-  report), the nearest the PDF printed; the stations' own surveys were not in it. 🔴 Not tuned for
-  the look: the user asked for the census, and this is the census on these streets.
-- **The vans** — light goods — work the day: 10–18% from 09:00 to 15:00, under 4% after 18:00.
-- **The red minibus all but vanishes** (0–2%): the public light buses these three stations counted
-  were few. The green ones keep to their routes (`buses`, `P3-78`) and are not drawn here.
-- ⚠️ **`car_a` : `car_b` is 4 : 3, AUTHORED** (`CAR_SPLIT` in the tool): the census has one class for
-  private cars, and this is the split the roster drew them at before.
-- ⚠️ **The survey covers 07:00–23:00**: hours outside it hold the nearest surveyed one (00–06 the
-  07:00 mix, 23 the 22:00). The shift runs 07:00–21:00, so only free mode past its clock could read
-  one, and the clock holds at 21:00 there.
-- ⚠️ **One weekday's survey per station**: the census surveys each station once, on a weekday;
-  the API answers the same row whatever day is asked.
-
-## `fleet_by_hour`, 24 entries
-
-The share of `cars` alive at each clock hour (`Q186`): a car that leaves the ring is not placed
-again while the wandering fleet stands at or over `round(cars × share)`, so the fleet thins as cars
-drive off and fills as the ring places them, never popping in view. **TD's too**, by the same tool,
-and since `Q198` it is the cars ON THE STREET, which is flow over speed:
-
-- the **flow** is the weekday (`M-F`) hourly variation — each hour's share of the day — at the seven
-  counting stations inside the two regions (1002, 1020 Lockhart Road, 1024 Tai Hang Road, 1028
-  Gloucester Road, 1029 Hennessy Road, 1107, 2214), averaged with each station counted ONCE. A mean
-  of shapes, not of flows: Gloucester Road's 104,000 a day would otherwise drown the side streets.
-- the **speed** is TD's eight traffic detectors inside the regions (Canal Road Flyover ×4,
-  Gloucester Road ×4), off DATA.GOV.HK's archive on 18 weekdays, six minutes an hour: each hour's
-  space-mean speed over the fastest hour's.
-
-A flow saturates in a jam while the street fills, so the flow alone read 08:00–19:00 within 7% of
-noon and the rush as no busier than lunch. The detectors' own occupancy, an independent reading of
-density, puts the peak at the same 18:00 (`traffic_census.py` prints it beside the fleet).
-
-| hour | 04 | 07 | 08 | 09 | 12 | 15 | 18 | 20 | 21 | 22 |
-|---|---|---|---|---|---|---|---|---|---|---|
-| speed kph | 60.5 | 48.2 | 39.4 | 37.0 | 37.1 | 33.0 | 29.0 | 45.6 | 49.9 | 49.9 |
-| share | 0.07 | 0.47 | 0.72 | 0.76 | 0.79 | 0.86 | 1.00 | 0.51 | 0.44 | 0.40 |
-| cars of 60 | 4 | 28 | 43 | 46 | 47 | 52 | 60 | 30 | 26 | 24 |
-
-⚠️ The speed is the trunk roads' — TD publishes no detector on a side street here — applied to every
-station's flow. The morning rush is milder than the evening's on these roads (09:00 0.76).
-
-⚠️ **Daytime Wan Chai is flat**: from 08:00 to 19:00 every hour is within 7% of the busiest, so the
-shift opens at three-quarters of the fleet, fills by 08:00 and thins from 20:00. `cars` is the
-busiest hour's fleet and the ceiling: no hour runs more than the 24 the cost was measured at.
-
-## `taxi_kind = "taxi"`
-
-The kind that wears a licence (`Q183`): at each spawn a taxi takes the mesh its road's region draws
-from `city.json`'s `taxi_licences` (TD's stands, read by `parked.py`), so a green New Territories
-taxi runs only where the stands say green taxis are. Off the car's id and its spawn count, never
-the seeded RNG: one more roll would move every later car.
-
-## `taxi_for_hire = 0.5`
-
-The share of the moving taxis whose roof sign is lit at each spawn (the user's call 2026-11-05:
-"random roof sign"), at the player's own `sign_lit` (`vehicle_lamps.tres`). Not measured: TD
-publishes no vacancy rate for the street. A half, so that both read.
-
-## Knocked by the taxi (`Q180`, the user's calls, 2026-11-04)
-
-A car the taxi hits takes the impulse its mass gives (`parked.tres` `masses_kg`,
-`handling.tres` `collision_restitution`) and leaves its lane. It slides on its tyres: across them
-at the road tyre's grip times the world's gravity (`tyre.tres` `mu` × `pace.tres`' scale — the
-taxi's own, never a second grip), along them coasting until its driver reacts, then braking at
-`brake_max_mps2`; its spin dies on the same grip over its box. It stands on its hazards, the
-traffic stops for it and, once it has settled, passes it as a parked car. Then it tries to drive
-on; where it cannot, it stays until the ring takes it away. A car is not damaged yet, so every
-knocked car tries.
-
-## `react_s = 0.9`
-
-TD's own thinking time: the Road Users' Code, chapter 5, "Stopping Distance", draws 10 / 15 / 20 m
-of thinking distance at 40 / 60 / 80 km/h — 0.90 s at every speed, for "an alert driver" on a dry
-road, the shortest it gives. A driver who has just been hit is no quicker. Over it the car loses
-almost nothing: rolling resistance takes about 0.1 m/s in 0.9 s, so it is not modelled.
-
-## `recover_after_s = 2.0`
-
-The pause a driver takes before pulling away again, and the wait between tries when the way back
-is not clear. Authored; nothing publishes it.
-
-## `recover_radius_m = 6.0`
-
-About a lane and a half from the centreline it rejoins: a car shoved onto the footway or into a
-side street's mouth drives back; one put further off — over a central reserve, into a building's
-recess — stands. Authored.
-
-## `recover_heading_deg = 45.0`
-
-A knocked car does not reverse. Facing within 45° of a way it may drive, it turns back into the
-lane in one curve, as a turn does; turned further round — across the road, or backwards on a
-one-way street — it stands until the ring takes it. Authored.
-
-## `recover_ahead_m = 12.0`
-
-Where it rejoins its nearside lane, down the road from where it stands: a little under three car
-lengths, so the curve back is a lane change, not a turn on the spot.
-
-## `recover_clear_m = 15.0`
-
-It looks first: no other car under way within this of where it rejoins or the middle of its way
-there. A car standing is not looked for — one queued behind the wreck waiting for it to move would
-hold it for ever — but the way back is swept against every body, so one standing in it still stops
-it. Over
-a lane change's own `lane_change_m` this is a gap a car coming at 50 km/h closes in about a second;
-a car that cannot see one waits `recover_after_s` and looks again.
-
-## The routed fleet (`P3-78`, `Q182`, the user's asks, 2026-11-04)
-
-Buses and green minibuses on the routes TD publishes (`bus_routes.json`): `buses` more slots
-than `cars`, each placed at a stop in the ring, mid-dwell, on a route drawn by its departures in
-the game hour (TD's GTFS headways), and driven stop to stop on the legal router's own arcs.
-
-## `buses = 6`
-
-Not TD's count. 464 route directions stop in Wan Chai, and those routes publish 1,099 departures
-in the 07:00 hour alone (`busroutes.json`, 2026-11-05), so a share of the published service would
-bury the street. Six beside 24 cars is a bus or two on a main road at a time. The headways choose
-WHICH route a bus is on, not how many there are. The draw-call cost is one more `MultiMesh`
-(the bus); the green minibus shares the wandering minibus's.
-
-## `dwell_s = 12.0`
-
-How long a bus stands at its pole: an authored figure for a few passengers boarding by
-Octopus at the front door. TD publishes no dwell time. A vehicle placed at a stop is found part
-way through its dwell.
-
-## `placed_dwell_left = 0.2`
-
-How much of its dwell a routed vehicle placed at a stop has left: between 20% and the whole of
-`dwell_s`, so a ring of buses placed together does not pull out together.
-Was the code's `0.2`–`1.0` until the review of 2026-11-06 moved it here; the draw is unchanged.
-
-## `dwell_reach_m = 1.5`
-
-A stopped routed vehicle whose front is within this of its pole is at its stop and dwells.
-Further back it is queued behind another bus at the same stop, and waits to move up. A vehicle
-carried more than this past its pole has missed the stop and goes on to the next, which the
-verify tool counts.
-
-## `pull_out_m = 15.0`
-
-How far a routed vehicle drives on from its stop with its right indicator on (the user's call,
-2026-11-06: "just like the real life protocol of bus/minibus driver"). It winks left over the last
-`lane_change_m` to its pole and while it stands there with its brake lamps lit, and right as it pulls
-back out. Fifteen metres is a bus's length and a little more: its tail is clear of the pole and it is
-back in the lane. A turn's indicator takes over inside it. Authored; TD publishes no such figure.
-
-## `kerb_stop_kinds = [minibus, taxi]`, `kerb_stop_every_m = 500.0`, `kerb_dwell_s = 8.0`
-
-The user's call, 2026-11-06: "minibus can stop and onboarding or alight passenger in arbitary road
-that is not double yellow/no stopping area ... similar for stop logic for taxi". On joining a road a
-minibus or a taxi pulls up at its nearside kerb at a chance of the road's usable length over
-`kerb_stop_every_m`, on `_kerb_rng` so the wandering fleet's own draw is untouched. Never on a
-published restriction run (`RoadGraph.no_stopping`: both the double and the single yellow line,
-since a run's hours are not carried to the graph), beside a parked vehicle, within `lane_change_m`
-of either mouth, off level 0, or before a turn taken from the offside lane. It winks left on the
-approach and while it stands with its brake lamps lit, and right for `pull_out_m` as it leaves.
-Five hundred metres is a stop every minute or so at 30 kph; eight seconds is a passenger in or out
-and the fare paid. Authored, TD publishes neither. A car turning right from the offside lane makes
-no stop on that road; any other moves over to the nearside lane for it.
-
-## `kerb_unlawful_kinds = [minibus, taxi]`, `kerb_unlawful_share = 0.25`
-
-The user's call, 2026-11-06: "for red minibus and all kinds of taxi, give a random chance that they
-will disobey traffic rule and stop arbitarily in double yellow". A quarter of their kerbside stops
-ignore the restriction run. Only a wandering vehicle: a routed minibus is a green one, which keeps
-the rule, and every taxi licence is the one kind `taxi`. Authored.
-
-## `wander_liveries = {minibus: red}`, `route_liveries = {minibus: green}`
-
-The colour IS the licence (`Q167`): a green minibus runs a fixed route and a red one does not,
-so a minibus with no route is red, and one on a route green. Both colours are the parked roster's
-own `minibus` entries (`parked.tres` `liveries`). A kind named in neither wears the parked
-palette, and the bus wears none: its livery would be its operator's, which `Q167` keeps off.
+How the moving traffic drives and where it lives (`P3-3c`, `Q173`). The cars are a backdrop to the
+taxi, so every value is authored except `kinds` and `fleet_by_hour`, which are TD's (`Q186`).
+`traffic_system.gd` says what each rule does.
+
+Every key is required: `traffic_profile.gd` declares no defaults and `TrafficSystem` refuses a
+zero. Also refused: `spawn_max_m` not over `spawn_min_m`, `retire_m` not over `spawn_max_m`,
+`brake_max_mps2` not over `brake_mps2`, `spawn_seen_min_m` not over `spawn_min_m`, and an hourly
+table not 24 long. `verify_traffic.gd` drives this file in both regions with the parked roster
+resident.
+
+## Fleet and ring
+
+- `cars = 60` (`Q219`, the user's pick over 40 and 80): the fleet alive in the busiest hour. The
+  largest of the three that holds every `verify_traffic` gate: at 80, Causeway Bay has two cars
+  meet in a signalled junction and no routed vehicle reaches a stop. The answer to that is fewer
+  cars, never a shorter `give_way_look_m`. The mobile tier (`P0-3b`) must re-take the cost.
+- `spawn_min_m = 60.0`, `spawn_max_m = 220.0`: the ring cars appear in; the near edge keeps them
+  out of the chase camera's near field.
+- `retire_m = 260.0`: 40 m past the ring, so an edge-placed car does not vanish on its first tick.
+- `spawn_clear_m = 12.0`: no car is placed nearer another, or on an edge shorter than this.
+- `spawn_main_weight = 1.0` (`Q219`, the user's pick over 1.5 and 2): a spawn picks a road by its
+  lane-metres, a main road's counted this many times. 1.0 spreads the fleet evenly over the lanes.
+  Every seeded drive moves with it.
+- `spawn_seen_min_m = 180.0` (`Q214`): a place the camera can see takes a car only this far away,
+  and the car fades in. Nearer, a car is placed only out of view. Past the beams' `draw_m` (140)
+  and inside the ring.
+- `retire_unseen_s = 1.0` (`Q214`): how long a car past `retire_m` must be out of view before it
+  goes, so a look back finds the street as it was.
+- `retire_far_margin_m = 30.0` (`Q214`): a car in view is kept until this close to the camera's
+  `far` (400 m, `city_drive.tscn`), then fades out, so a car that passed can be chased.
+- `fade_in_s = 0.8`, `fade_out_s = 0.8`: the dither's run (`vehicle_body.gdshader`).
+- `thin_every = 4` (`Q219`): a far car out of view reads its rules every fourth tick and drives on
+  its last speed between. 67 ms late is inside the margin between `brake_mps2` and
+  `brake_max_mps2`. 1 is the off switch. Bench: `tools/bench_traffic.gd --view=on`
+  (1.67 ms a tick at 60 against 3.58 unthinned).
+- `thin_beyond_m = 60.0`: thinned only past this from the camera and out of its frustum.
+  `spawn_min_m`'s value and under `horn_range_m`.
+
+## Driving
+
+- `cruise_of_limit = 0.8`: 40 kph on a 50 kph street, so the taxi passes traffic.
+- `turn_mps = 7.0`: 25 kph through a junction's curve.
+- `accel_mps2 = 2.0`: a gentle pull-away.
+- `brake_mps2 = 3.0`: the planned, comfortable stop.
+- `brake_max_mps2 = 8.0`: the hardest a car brakes. The amber judgement is made at this rate; at
+  the planned rate a car crossed into the red.
+- `gap_m = 2.0`: bumper to bumper behind a stopped car.
+- `look_m = 45.0`: how far a car looks for one to follow; over the planned stop from cruise (21 m).
+- `follow_heading_deg = 45.0`: past this a car ahead is crossing, not queueing. The car's own path
+  is read first and has no angle bar.
+- `turn_span_m = 6.0`: fallback only. A turn runs between the junction mouths the bundle publishes
+  (`trim_m`); this serves a node whose ribbon met no cap.
+- `lane_change_m = 25.0`: travel to move one lane over. A car moves toward its turn's lane only
+  while the lane beside is clear; one that never got across turns from where it is.
+- `wink_hold_m = 5.0`: how far the tail runs past the mouth before a finished turn's indicator
+  goes off. At the join, it stopped while the car still sat across the junction.
+- `straight_deg = 30.0`: under this a move is straight on and keeps its lane. Over it a left turn
+  goes nearside to nearside, a right offside to offside. Also `give_way`'s angle bar.
+- `pass_look_m = 40.0` (`P3-3f`): how far ahead a parked vehicle in the lane makes a car move out.
+  Most roster vehicles stand in lane 0.
+- `side_clear_m = 0.3`: the room a moving car keeps from a parked vehicle's flank. It decides
+  which pinches are passable: a minibus behind a bus on a 4.6 m one-way street (edge 349) has
+  2.32 m and needs 2.38, so it waits. Lowering it puts a mirror on a bus.
+- `give_way_look_m = 30.0` (`Q173`): how far short of its line a car starts giving way at an
+  unsignalled junction, and how near its line a crossing car must be to be given way to. The
+  planned stop from 40 kph with room. Longer holds side roads for a car half a block off; shorter
+  makes cars brake hard at every crossing.
+
+## Horns (`P3-79`)
+
+- `horn_voices = 6`: a honk pattern holds its voice up to about 3.5 s; a seventh caller takes the
+  voice nearest done.
+- `horn_range_m = 110.0`, `horn_repeat_s = 4.0`: the tram bell's numbers (`trams.md`). The range
+  is only the fade: a car sees the taxi within `look_m`, so no horn sounds from past about 46 m.
+- `horn_after_s = 2.0`: the wait behind a taxi stopped in the lane. A red does not count.
+- `horn_cut_mps = 3.0`: closing this much over the speed the car could still stop from is being
+  cut up or met head-on. The horn a moving taxi hears.
+- `horn_pitch_spread = 0.08`: about a semitone either side, fixed per car.
+- `horn_count`, `horn_press_s`, `horn_gap_s`: per honk, the presses, press length and gap are
+  drawn from these ranges by reason: `stood` (a polite tap), `cut` (a blast), `hit` (leaning on
+  it), `close_call` (beep-beep-beep). Authored. Drawn on their own RNG off the traffic seed, so a
+  pattern never moves a car (`Q178`). Files: `horn_<kind>.wav`.
+- `horn_temper_step = 0.3`, `horn_temper_max = 0.8`, `horn_temper_s = 20.0`: each honk at the taxi
+  raises the car's temper, pushing its next draws toward the top of their ranges; it decays over
+  20 s.
+
+## `kinds` and `fleet_by_hour` (`Q186`, `Q198`)
+
+TD's numbers, printed by `tools/traffic_census.py`. Do not edit by hand; rerun the tool. 24
+entries each, hour 0 first.
+
+- `kinds`: each wandering kind's weight by clock hour, drawn at every spawn. Source: *The Annual
+  Traffic Census 2025* via `atc.td.gov.hk`, the vehicle classification surveys at stations 1002
+  Victoria Park Road, 2214 Causeway Road and 1107 Tung Lo Wan Road, pooled by vehicles counted.
+  Private car → `car_a` + `car_b`, taxi → `taxi`, public light bus → `minibus`, light goods →
+  `van`, renormalised to 100; other classes are left out.
+  - Taxis are 24–42% by hour. Not tuned for the look: it is the census on these streets.
+  - `car_a` : `car_b` is 4 : 3, authored (`CAR_SPLIT` in the tool); the census has one class.
+  - The survey covers 07:00–23:00 on one weekday per station; hours outside hold the nearest
+    surveyed one.
+  - No coach (too long for the turn curve) and no motorcycle. The bus runs on its routes only.
+- `fleet_by_hour`: the share of `cars` alive at each hour. A car leaving the ring is not replaced
+  while the wandering fleet is at or over `round(cars × share)`, so the fleet thins and fills out
+  of view. It is flow over speed (`Q198`), because flow alone saturates in a jam:
+  - flow: the weekday hourly variation at seven stations (1002, 1020 Lockhart Road, 1024 Tai Hang
+    Road, 1028 Gloucester Road, 1029 Hennessy Road, 1107, 2214), each station counted once;
+  - speed: TD's eight detectors in the regions (Canal Road Flyover ×4, Gloucester Road ×4), from
+    DATA.GOV.HK's archive over 18 weekdays. Trunk roads only; TD has no side-street detector.
+  - Peak is 18:00 (1.00); 08:00–19:00 is 0.65–1.00; 04:00 is 0.07.
+
+## Taxis
+
+- `taxi_kind = "taxi"` (`Q183`): the kind that wears a licence. At spawn a taxi takes the mesh its
+  road's region draws from `city.json`'s `taxi_licences`. Chosen off the car's id and spawn count,
+  never the seeded RNG.
+- `taxi_for_hire = 0.5`: the share of moving taxis with the roof sign lit (the user's "random roof
+  sign"). TD publishes no vacancy rate.
+
+## Knocked by the taxi (`Q180`)
+
+A hit car takes the impulse its mass gives (`parked.tres` `masses_kg`, `handling.tres`
+`collision_restitution`), slides on the taxi's own tyre grip (`tyre.tres` `mu` × the pace), stands
+on its hazards while traffic passes it, then tries to drive on.
+
+- `react_s = 0.9`: TD's thinking time (Road Users' Code ch. 5: 10 / 15 / 20 m at 40 / 60 / 80
+  km/h).
+- `recover_after_s = 2.0`: the pause before pulling away, and between tries.
+- `recover_radius_m = 6.0`: a car within this of the centreline drives back; one further off
+  stands until the ring takes it.
+- `recover_heading_deg = 45.0`: a knocked car does not reverse. Facing within this of a legal way
+  it curves back; otherwise it stands.
+- `recover_ahead_m = 12.0`: where it rejoins the nearside lane, so the curve is a lane change.
+- `recover_clear_m = 15.0`: no car under way within this of the rejoin point or the way there. A
+  standing car is not looked for (a queue behind the wreck would hold it for ever), but the path
+  is swept against every body.
+
+## The routed fleet (`P3-78`, `Q182`)
+
+Buses and green minibuses on TD's published routes (`bus_routes.json`), placed at a stop in the
+ring mid-dwell and driven stop to stop on the legal router's arcs.
+
+- `buses = 6`: slots on top of `cars`. Not TD's count: the published service would bury the
+  street. The headways choose which route, not how many.
+- `dwell_s = 12.0`: authored; TD publishes no dwell time.
+- `placed_dwell_left = 0.2`: a vehicle placed at a stop has between this share and all of its
+  dwell left, so a ring of buses does not pull out together.
+- `dwell_reach_m = 1.5`: a stopped vehicle with its front within this of the pole dwells. Further
+  back it is queued; carried further past, it missed the stop (counted by the verify tool).
+- `pull_out_m = 15.0`: how far it drives from its stop with the right indicator on (the user's
+  call). It winks left on the approach and while standing.
+- `kerb_stop_kinds = [minibus, taxi]`, `kerb_stop_every_m = 500.0`, `kerb_dwell_s = 8.0` (the
+  user's call): on joining a road these kinds pull up at the nearside kerb at a chance of the
+  road's usable length over `kerb_stop_every_m`, on `_kerb_rng`. Never on a restriction run
+  (`RoadGraph.no_stopping`, double and single yellow alike), beside a parked vehicle, within
+  `lane_change_m` of a mouth, off level 0, or before an offside turn.
+- `kerb_unlawful_kinds = [minibus, taxi]`, `kerb_unlawful_share = 0.25` (the user's call): a
+  quarter of those stops ignore the restriction. Wandering vehicles only.
+- `wander_liveries = {minibus: red}`, `route_liveries = {minibus: green}`: the colour is the
+  licence (`Q167`). `parked.tres`'s own two `minibus` colours. The bus wears none.

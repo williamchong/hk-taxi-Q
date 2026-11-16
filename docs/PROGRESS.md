@@ -1,7 +1,6 @@
 # Progress
 
-Live state only: what is in flight, what is measured, what is at risk. Update it when a task
-changes status, a number is re-measured, or a question opens or closes.
+Live state only: what is in flight, what is owed, what is at risk, what was last measured.
 
 - Task definitions and acceptance → `PLAN.md`.
 - Why something is the way it is → `DECISIONS.md`, keyed by the `Q` or task ID.
@@ -13,741 +12,312 @@ Keep rows to one line. A row that needs a paragraph belongs in `DECISIONS.md`.
 
 ## Current status
 
-- **Phase 0, Phase 1:** complete.
-- **Phase 2:** two items from its gate, both blocked on hardware, not software — `P2-4`
-  (`InputRouter`, built, needs a handset review) and `P2-6` (perf pass). Both wait on `P0-3b`
-  (signing identity + the two floor handsets).
-- **Phase 3** runs `B2` → `B1` → `B3` → `B4`.
-  - `B2` ("it reads as HK") is shipped. `P3-9a` ran: three HK drivers recognised Wan Chai from
-    geometry alone, and stopped because the bridges were blocked (`Q19`). `Q19` has since been
-    carved and fenced (`P3-28`, `P3-29`), and level 1 is open to driving (`P4-1`, `Q111`).
-  - The level-0 road is drawn as the carriageway region (`P3-33a`–`c`, `Q129`) and graded
-    (`P3-33e`): the player is unharmed, and the one-lane bar now costs traffic 3,989 ordered pairs
-    (`P3-3`'s question). `P3-33f` (the user's drive) is open.
-  - `P3-34` (TD's longitudinal lines) and `P3-35` (ETL refactor, crossings, hatching, lane
-    centre) are built; `P3-35g4` was measured and refused. `P3-35h`'s user drive is outstanding.
-  - `P3-36` stands the arrows where TD surveyed them and `P3-37` paints the decks (`Q134`); the
-    user's drive of both is owed.
-  - `B1` ("one fare") is built: HUD chassis, wrong-way warning, the router (`P3-43`), the fare
-    loop (`P3-1a`, `Q141`) and the minimal fare HUD (`P3-5a`, `Q142`); the user's drive of one
-    fare, start to finish, is `B1`'s review and is owed.
-  - The car runs a per-wheel tyre model on a spec sheet (`Q152`, `Q153`, `Q156`; pace 2.0), and
-    the day runs to night as game time (`P3-69`, `Q160`): lit lanterns, floodlit blocks, the
-    car's lamps. One head-up display over drive and menu (`Q163`). The user's drives owed.
-  - `B3`: the streets stand parked vehicles from published data in place of moving traffic
-    (`P3-71`–`P3-73`, `P3-75`, `Q161`, `Q166`, `Q167`), with the near miss paid against them
-    (`P3-2a`). Moving traffic started 2026-10-29 with its signals (`Q173`): the
-    signalled junctions, a checked controller and the cars are built (`P3-3a`–`P3-3c`), and the
-    cars pass the parked ones (`P3-3f1`), and a hit or a near miss reads them (`Q175`); the player's red is counted (`P3-3d`), the heads stand lit
-    by it (`P3-3e`), and the cars' indicators and hazards follow (`P3-3f`). The trams run (`P3-4`, `Q176`, owed the
-    user's drive); neon (`P3-8`) not started.
-  - `B4` built ahead of the chain: skills and the receipt (`P3-49`), penalties (`P3-50`), air
-    (`P3-51`), the 成績表 and lifetime record (`P3-76`), and the two modes behind PLAY — 特更's shift with a report and a best, 兜風 free
-    (`P3-74`, `Q162`). The style combo (`P3-2b`, `Q205`) is built and owed a drive; long haul
-    and the layout pass (`P3-1b`, `P3-5b`) and `P3-9` not started.
-- **Phase 6:** pulled forward on the user's ask — `P6-1`, the start menu (start, the language
-  option, the credits and licences that discharge hard rule 6 in the build), built 2026-09-26
-  (`Q146`); since then a camera shot per page (`Q164`) and the pause (`Q165`). The user's look
-  and drive owed.
-- **Phase 4:** `P4-1` built and reviewed; `P4-2`–`P4-5` not started. The 15 tunnels stay shut.
-- **Phase 5:** `P5-1`–`P5-7`, `P5-9a`–`g`, `P5-10`–`P5-13`, `P5-15`–`P5-28` built. The runtime
-  holds `wan_chai` + `causeway_bay` across a seam; `mong_kok` and `sha_tin` are built for
-  measurement only. `P5-8` (content) is outline; `P5-14` not started.
-- **Knowingly missing:** no neon (`P3-8`); signal heads at 16 of Wan
-  Chai's 72 staged junctions and 7 of Causeway Bay's 21 do not show every stage (`P3-3e`).
+- **Phases 0–1:** complete.
+- **Phase 2:** the gate waits on hardware, not software. `P2-4` (touch) and `P2-6` (perf) need
+  `P0-3b`'s floor handsets (A13, Adreno 618). A signed build runs on an iPhone Air and 1.0.0 (1) is
+  on TestFlight (`tools/ios.sh`; store listing in `fastlane/`). Android is unbuilt.
+- **Phase 3:** all four builds are built ahead of their reviews.
+  - `B2` (reads as Hong Kong) shipped; `P3-9a` recognised Wan Chai from geometry alone.
+  - `B1` (one fare): router, TD's tariff, fare HUD, street hails, minimap with route line.
+  - `B3` (streets alive): parked roster, signals, 60 AI cars by the hour, routed buses and
+    minibuses, trams, horns, push on impact.
+  - `B4` (a game): skills, penalties, air, the style combo, 特更 / 兜風 modes, the 成績表 and record.
+  - The car is a per-wheel tyre model on a spec sheet at pace 2.0 (`Q152`, `Q153`, `Q156`). The day
+    runs to night and round again (`Q160`, `Q222`, `Q225`), a clock minute a second (`Q233`).
+- **Phase 6:** `P6-1` (menu, options, credits and licences, pause, RESET CAR) built early.
+- **Phase 4:** `P4-1` done; the 15 tunnels stay shut. **Phase 5:** all built but `P5-8` (content)
+  and `P5-14`. The runtime holds `wan_chai` + `causeway_bay` across a seam; `mong_kok` and
+  `sha_tin` are built for measurement only.
 
-**Driver artefact.** Host: <https://williamchong.itch.io/hong-kong-taxi-q> (public page). The
-last cut is `r5` (`build/hk-taxi-q-p39a-r5-itch.zip`, 55,511,080 B); it predates `P3-26` onward,
-and the `P3-9a` round cannot be tied to a commit (`P3-9a′`).
+**Owed next**
 
-Standing rules for any cut (`DECISIONS.md` `P3-9a`, `Q77`):
+- The user's drive of nearly every 🟡 row below; the largest are one fare start to finish (`B1`), a
+  whole shift to 交更 (`P3-74`), a night drive (`P3-69`), and the touch scheme on a handset (`Q238`,
+  `Q239`, `Q230`, `Q241`).
+- `P0-3b`: FPS on an A13, an Android build, then `P2-6` and the handset re-take of `traffic.tres`
+  `cars`.
+- `P3-9` (authenticity round 1, the Phase 3 gate): different drivers from `P3-9a`, on a handset.
+- Not started: `P3-1b`, the one-handed layout (`P3-5b`), `P4-2`–`P4-5`, `P5-8`, `P5-14`.
+- Known gaps: signal heads at 16 of Wan Chai's 72 staged junctions and 7 of Causeway Bay's 21 do
+  not show every stage (`P3-3e`); a new driver cut (below).
 
-- One new name per cut, never an overwrite; check the name, not the mtime.
+**Driver artefact.** Host: <https://williamchong.itch.io/hong-kong-taxi-q>. The last named cut is
+`r5` (`build/hk-taxi-q-p39a-r5-itch.zip`); it predates `P3-26` onward. Rules for any cut
+(`DECISIONS.md` `P3-9a`, `Q77`):
+
+- One new name per cut, never an overwrite.
+- Re-export before packing (`tools/export.sh web`); never pack what a measurement left in
+  `build/web/`. Nothing in the repo builds the itch zip.
 - Re-check "0 console errors" on every cut; `check.sh` cannot see that class.
-- Re-export before packing; never pack what a measurement left in `build/web/`.
-- Nothing in the repo builds the itch zip — re-pack by hand. The embed needs itch.io's
-  "SharedArrayBuffer support" toggle; a missing one fails as `SharedArrayBuffer is not defined`.
+- The embed needs itch.io's "SharedArrayBuffer support" toggle.
 - The console's `signs:` count minus `signs.json.triangles` must equal `text_plates × 2`.
 
 ### Task board
 
-Legend: ⬜ not started · 🟡 in progress / awaiting review · ✅ done · 🟢 closed by verdict ·
-🚫 built, not shipped · ❌ no-go
+⬜ not started · 🟡 built, the user's drive / look / review owed · ✅ done · 🟢 closed by verdict ·
+🚫 built, withdrawn · ❌ no-go. A clause names only what is owed beyond the drive, or the blocker.
 
 Phase 0–2
 
-- `P0-1` ✅ Source data granularity — closed `Q2`, `Q3`, `Q5`.
-- `P0-2` ✅ Z-value spike — no Z; `ELEVATION` encodes the level (`Q1`).
-- `P0-3` ✅ Godot scaffold — macOS / web / Android export verified.
-- `P0-3b` 🟡 Mobile device build — needs two floor handsets; blocks `P2-4`, `P2-6`. 2026-11-13: a signed debug build ran on the user's iPhone Air (an exported Xcode project, `xcodebuild` with the team on the command line); the bundle identifier is `cloud.williamchong.hktaxiq`. The iOS preset now bakes its shaders (`Q207`): a fresh install's first frame at ~12 s, where the unbaked build drew none in 260 s; a relaunch ~4 s, then 60 fps. ⚠️ The iOS simulator cannot run it: the 4.7.2 template's simulator slice is x86_64 only and the iOS 27 simulator runs arm64 only. 2026-11-15: `tools/ios.sh` is the device and TestFlight build; 1.0.0 (1) is on TestFlight, and the App Store listing is `fastlane/` (text in `en-US` and `zh-Hant`, screenshots from `tools/store_screenshots.sh`). Owed: FPS on an A13, and Android.
-- `P0-4` ✅ ETL scaffold — found the ~304 m datum trap.
-- `P0-5` ✅ Grey-box fun test — verdict closed by `Q8`.
-- `P0-5a` ✅ Vehicle controller — raycast then; `VehicleBody3D` since `Q50` (`Q84`).
-- `P0-5b/c/d` ✅ Circuit, camera, drive test.
-- `P1-1` ✅ Source fetching — idempotent, sheets derived from the published index.
-- `P1-2` ✅ Building meshes — tiles at two LOD tiers.
-- `P1-2t` Superseded by `P3-10`.
-- `P1-3` ✅ Road graph (`Q9`, `Q11`, `Q12`).
-- `P1-4` ✅ Road surface mesh — opened `Q13`.
-- `P1-5` ✅ Fare nodes — opened `Q14`, `Q15`.
-- `P1-6` ✅ Export and manifest — byte-reproducible.
-- `P1-7` ✅ Godot import — Phase 1 gate passed.
-- `P2-1` ✅ `CityStreamer` — reviewed (`Q16`).
-- `P2-2` ✅ `RoadGraph` + overlay — reviewed; p99 45 µs against 1 ms.
-- `P2-3` ✅ Vehicle on real geometry — reviewed; spawn clearance guard (`Q52`).
-- `P2-4` 🟡 `InputRouter` — built; touch is three of five actions (`Q97`); `drift` and `look_back`
-  have no touch home (`Q83`); every `touch.tres` value is a first guess. Review needs `P0-3b`. 2026-11-13 (`Q204`): the zones reach into the notch strips, the touch table scales 1.25 with larger thumb rests, and the thumbs are drawn as the taxi's wheel and pedals; still relative.
-- `P2-5` ✅ Chase camera — reviewed; yaw law corrected, dials in `camera.tres` (`Q98`).
-- `P2-6` 🟡 Performance pass — Phase 2 gate; needs `P0-3b`. 2026-11-13: the instrument is built — `--perf-log=<s>` writes a row per frame to `user://perf.csv` with a p50/p95/p99 summary, in a release build too (`perf_recorder.gd`, `verify_perf_recorder`, 4 mutations caught); a release iOS build is on the iPhone Air. 2026-11-17 (`Q236`): the phone's app draws the 3D scene at 0.75 — the iPhone Air 358.9 → 270.4 MB of video memory, a standing lap's frames over 16.7 ms 26% → 1% and none over 33.3; a phone's browser stays at 1.0; MSAA 2x in the app, 235.9 MB. Owed: the user's look at the railings in motion, the A13 floor, Android.
-- `P2-7` ✅ Off-grade carriageway on its structure — deck |error| p90 0.095 m (`Q20`, `Q23`).
+- ✅ `P0-1`, `P0-2`, `P0-3`, `P0-4`, `P0-5` (`a`–`d`), `P1-1`–`P1-7`, `P2-1`–`P2-3`, `P2-5`, `P2-7`.
+  `P1-2t` superseded by `P3-10`.
+- `P0-3b` 🟡 Mobile device build — owed: FPS on an A13, Android. The iOS simulator cannot run it
+  (the 4.7.2 template's simulator slice is x86_64 only).
+- `P2-4` 🟡 `InputRouter` — touch drives three of five actions (`Q97`); every `touch.tres` value is
+  a desk pick; needs `P0-3b`.
+- `P2-6` 🟡 Performance pass — `--perf-log=<s>` built; the phone's app at 0.75 scale and MSAA 2x
+  (`Q236`); owed: the A13 floor, Android, the railings in motion.
 
-Phase 3 — Build `B2`
+Phase 3 — `B2` and the road
 
-- `P3-11` ✅ Player taxi — reviewed; `tools/make_vehicle.py`, 1,180 triangles (1,948 since `Q190`).
-- `P3-11c` 🟡 Body shader — awaiting review; look is a render + `grep -i "shader error"`.
-- `P3-11d` ✅ Lamp circuits — reviewed; circuits are `instance uniform`; `lamp_emission` 1.6.
-- `P3-11e` 🟡 Front lamps — awaiting review; the night path first ran under `Q160`'s cycle (2026-10-07), with tail lamps added.
-- `P3-11f` 🟡 Roof sign — awaiting review; level 0.45, not a daylight dimmer.
-- `P3-48` 🟡 Hire state on the car — sign dark with a passenger aboard; rear kerbside door swings at the hail and the drop. The user's drive owed.
-- `P3-49` 🟡 The passenger's face — grins out of the back seat on every skill, rages out of it at a bail (`tools/make_emote.py`, 160 + 212 triangles, unshaded). The user's drive owed.
-- `P3-10` 🟡 Ground surface — awaiting review; buries the carriageway on hill streets (`Q24`).
-- `P3-7` 🟡 Window-band shader — awaiting review; draws through `city_facade_clean`.
-- `P3-7a` 🚫 Withdrawn (`Q102`) — `W1` (`Q44`) and `W2` (`Q45`) still ship; `W3` gone.
-- `P3-6` 🟡 Hero buildings — HKCEC reviewed; Central Plaza unjudged; Hopewell, Times Square and
-  the government slabs not built.
-- `P3-12` 🟡 Road markings on the ribbon — awaiting review (`Q53`); shader lines now off (`Q132`).
-- `P3-13` ✅ Kerbside no-stopping from `NSR` (`Q54`, `Q56`).
-- `P3-14` 🟡 Tramway as geometry — awaiting review (`Q58`).
-- `P3-15` 🟡 Turn arrows — awaiting review (`Q59`, `Q93`).
-- `P3-16` ✅ Traffic signs (`Q64`).
-- `P3-17` 🚫 Signal heads — built, dropped (`Q77`); layer removed by `P3-35a`.
-- `P3-18` ✅ Yellow box junctions (`Q92`).
-- `P3-19` ✅ Pedestrian railings — a panel library since `P5-5` (`Q60`, `Q61`, `Q112`). 🐛 2026-10-07: the shader flipped the back-face normal the engine had already flipped, so the far face seen through the gaps took the other side's light; line removed (`Q61`).
-- `P3-20` ✅ Sign faces as a texture atlas — `signs_text.png` (`Q68`, `Q70`).
-- `P3-21` ❌ Road lettering — no-go under `Q65`; data findings kept in `PLAN.md`.
-- `P3-22` ✅ Direction signs (`Q66`, `Q67`).
-- `P3-23` ✅ Stop and give-way lines (`Q69`, `Q73`).
-- `P3-26` ✅ Lamp posts from iB1000 (`Q82`); a deck's columns on the deck, shorter ones under it, none through a deck or roof (`Q199`, 2026-11-11, the user's look owed).
-- `P3-9a` 🟢 Recognition round 0 — run and closed; recognised, blocked by bridges (`P3-9a′`).
-- `P3-28` ✅ `Q19` carve — 8 edges cut, `e99` at an authored width.
-- `P3-29` ✅ `Q19` fence, dressed — car bar 1.695 m since 2026-10-05 (a Crown Comfort's width; 1.80 m before, which fenced Causeway Bay's `e123`); the vertical term refuted.
-- `P3-29a` ✅ Region-edge closure (`Q143`) — 67 / 19 streets cut by the rectangle closed on the
-  line, the neighbour's way in never; the set re-derived in `verify_fence`, 3 mutations caught.
-  The user's drive owed.
-- `P3-30` ✅ Box-junction extent grader — `tools/box_extent.py` (`Q104`).
-- `P3-31` ✅ Median void closed — stub clusters and through corridors (`Q104`). Open: lamps,
-  signs and railings do not refuse a foot standing under a level-0 cap.
-- `P3-32` 🟡 Paint arm done; carve-wall arm open (wall 1.52–4.32 m inside the carriageway on
-  the eight carved edges). Never answered by widening the carve prism.
-- `P3-33` 🟡 Level-0 road as the carriageway region (`Q129`) — `a`–`c`, `e` built; `d` superseded by
-  `P3-35e`; `f` (user's drive) open.
-- `P3-34` ✅ Longitudinal lines from TD's survey (`Q132`), schema 33. Open: no `RM1002`/`RM1003`
-  side checked against Street View; zigzags unbuilt.
-- `P3-35` ✅ ETL after the region (`Q133`) — `a` signals removed; `b` `tools/battery.py`; `c`
-  region-path fixture; `d` `pipeline/drawnroad.py` (signs, lamps, fence, railings on the running
-  kerb line; the per-vertex `corridor_*` kerb built and withdrawn); `e` flanks deleted; `f`
-  `drawnsurface.py`, `tools/_lib/`, `config_blocks/`; `g1` off-grade slide onto the deck; `g2`
-  `crossings.glb` (schema 35); `g3` hatching (`oblique`); `h` `RoadGraph.lane_centre` about the
-  drawn road — user's drive outstanding.
-- `P3-36` ✅ Arrows stand where TD surveyed them (`Q134`) — `placed_by_slot` 16 / 6; user's drive owed.
-- `P3-37` ✅ TD's paint on the decks (`Q134`) — lines 100 of 105 / 4 of 4, arrows 18 of 20 / 4 of 4; user's drive owed.
-- `P3-38` ✅ Road paint casts no shadow (`Q135`) — `prims` −191,903, `draws` −10 on the throttle route.
-- `P3-39` ✅ Street arrows' heights off the drawn road (`Q135`) — deep burials 31 → 9 / 36 → 21.
-- `P3-40` ✅ `roadmarks.glb` in 300 m cells (`Q135`) — 72,356 a pass → 13–17k, +3 to +7 draws.
-- `P3-42` ✅ `boxjunctions.glb` / `crossings.glb` in 300 m cells (`Q135`) — start line 20,642 a pass → 9,849, `f_045` 7,469 → 496; +1 / +0 draws. Boxes 9,411 against an 8k bar.
-- `P3-66` ✅ A sign's post casts a shadow, its plates and lettering do not (`Q135`, 2026-10-07) — start line 107 → 87 `draws`, `f_045` 139 → 121; 288 px of one audit frame in three move.
-- `P3-67` 🟡 The lamps as a `MultiMesh` per 300 m cell, hidden past 400 m (`Q135`, 2026-10-07) — start line `prims` −118,880 of the lamps' 129,240, `f_045` −154,720 of 172,920; +2 to +4 `draws`; 1 px of five audit frames moves. Owed: the user's drive, for a cell letting go.
-- `P3-68` 🟡 Fences and railings collide as a box per prop (`Q159`, the user's ask, 2026-10-07) — the closure barrier's `-col` trimesh → a 2.00 x 1.40 x 0.14 m box; railings a box per panel through `layer_preview.gd`'s `collides` (5,535 / 2,158 bodies), 0 panels across a road centreline. Owed: the user's drive.
-- `P3-69` 🟡 The day runs to night as game time (`Q160`, the user's asks, 2026-10-07) — built: blending rig + `DayClock` (240 s to night, on by default, `--day-cycle=off` in `drive.sh`), lit lanterns with road pools, floodlit blocks, lit paint, tail lamps; daylight `street` frame within 2 codes on 1.9% of pixels, +2 `draws` by day. Owed: the user's night drive, the handset's frame time.
-- `P3-70` 🟡 The light tail (`Q158` reversed on the user's ask, 2026-10-07) — built: once a slide has paid (from its first award, `LightTail.PAID_TIER`; until 2026-10-28 from the threshold, the user's call to sync it with the bonus, `Q172`), each brake lens — found in the body mesh by the import's lamp marker and brake circuit, the high-level lamp on the centreline left out — lays a piece of streak a physics tick from where it was to where it is, a cross of two quads the lens's own width and height, each corner stamped with the clock and faded by `light_tail.gdshader` over `life_s` 0.4 s, linear, in the lens's lit red at every tier; one ring mesh sized to a life of both lamps at the physics rate, uploaded in place, one draw while a piece is alive, hidden after. The HKCEC drift (the skill's recipe) shows both streaks arcing behind the car by day and at night (`--time-of-day=0.9`), no shader error. `verify_vehicle` drives the trail without a car (the piece from last to now, the stamps, the break on a jump and on a stop, the wrap, the capacity, the colours, the two lenses one each side on the tail and narrower than a quarter of the car), six mutations each caught — a seventh did not compile and the tool exited 0 on it, the known `--script` trap. ⚠️ The replay frame is not a measurement: two identical runs shift the whole frame (the chase camera's placement differs run to run), so the tail's determinism rests on its physics clock. Owed: the user's look call from `build/driver/tail_sheet/sheet.png` (life 0.2 / 0.4 / 0.8 s, `fade_power` 2.5, the sparks' tier colours, `blend_add`), the user's drive.
-- `P3-74` 🟡 Two modes behind PLAY (`Q162`, the user's asks, 2026-10-11) — built: 特更 / THE SHIFT runs 07:00 → 21:00 over 840 s of driving, a clock minute a second (`Q233`; was 300 s) with the day always on, a HUD clock showing the hour over 交更's, no new fare at 21:00 and the one aboard the last, then a report (total, delivered, walked, best, AGAIN); 兜風 / FREE MODE is the drive with no end, daylight by default. The best shift on HOME. The cycle retimed 240 → 300 s (dusk 18:00, night 20:00), the parked roster's clock moved to the shift's 7–21. `check.sh` green; the default drive identical before and after. Owed: a full shift and the click-through by the user.
-- `P3-71` / `P3-72` / `P3-73` / `P3-2a` 🟡 The parked roster and the near miss (`Q161`, the user's asks, 2026-10-11) — built: `pipeline/parked.py` → `parked_placements.json` (schema 38 names it) over the committed `parked.glb` (nine kinds, 256–636 triangles each, `tools/make_parked.py`); Wan Chai 863 of 3,699 candidates placed (500 car, 177 motorcycle, 77 van, 49 bus, 36 minibus, 15 tram, 6 taxi, 3 coach; 83 from the 607 published bays after 266 overlaps in the bay rows, 27 at stops, 367 fill, 23 frontage), Causeway Bay 366; `ParkedLayer` stands a `MultiMesh` per kind per 300 m cell with a box body each, by the rig's hour (`parked.tres`: noon to midnight), re-stood only while hidden; `NearMiss` pays a pass inside 0.9 m (0.6 until 2026-11-05) at ≥ 40 kph only when the vehicle was in the car's path within 2 s of coming alongside — the same clearance unaimed pays nothing, held in `verify_fares` — and a close call (≤ 0.25 m) aimed or not since 2026-11-05 (`Q161`); `verify_parked` holds the library, the join one way and the roster's windows; `P3-3` deferred. Cost, throttle route (`--debug-view=off --hud=off`, the document set aside for the before side): `draws` 93 → 99, `prims` 768,857 → 787,505 at t=1, car positions identical to the centimetre; `phys` within the ±0.5 ms spread. Owed: the user's drive by day and at `--time-of-day=0.9`, the handset's frame time.
-- `P3-75` 🟡 The parked roster, detailed (`Q166`, the user's ask, 2026-10-13) — built: arches and wells, the bonnet capped (it was open: the road showed through every car's), bumpers, plates, grille, folded mirrors, pillars and each kind's marks off reference photographs; 444–636 → 672–932 triangles a lofted kind (a flank wheel's inner face dropped: it faces its well; the tram 406, boxy over a skirt that hides its trucks, nine windows a deck over a tall panel and one lamp on the dash, against Commons photographs, on the user's look, and 8.89 m long, the fleet's, where it was 8.6: the trams stand where they stood, one refused stand changes its reason), the bike 256 → 372; the coach's and tram's belt band shows for the first time; every footprint unchanged but the tram's length, and every placement where it stood. Throttle route (before the tram's rework), two runs a side, the car's path identical: `prims` 777,737 → 783,769 at t=1–4 (+0.8%), `draws` 97 → 97. Lineup sheets in `build/driver/p375_before`, `p375_after2`, `p375_close`; the street by day and night in `p375_street`. Owed: the user's look and drive. Candidate: hazard lamps on a stopping car (`Q166`). Liveries (`Q167`): each kind's colour drawn per placement from `parked.tres`, the taxi, bus and tram left in theirs; throttle route `draws` 97 unchanged.
-- `P3-76` 🟡 The 黃紙's names, a 成績表 and a record (`Q169`, the user's asks, 2026-10-26) — part 1 built: `tuning/exam_sheet.json` names the penalties off the driving test's fault sheet (碰及物體（輕微／嚴重）) and the bonuses as exam-register feats with no fault word (貼身而過, 險過剃頭, 高速行駛, 凌空飛躍, 走得快好世界; 甩尾 kept, 2026-10-28), `FareFace.skill_name` reads it, the tick set in the Kai and widened to 800 px; `verify_hud` holds the names and their glyphs, mutation-checked. Frames `build/driver/q169_*`. Parts 2 and 3 built 2026-11-01: the 成績表 as a driver's account sheet, two tables, on REPORT and free mode's PAUSE (`SessionTally`, `LedgerCard`; the page closes on `earned_hkd`, eleven mutations caught), and the lifetime record under `[records]`, a 紀錄 / RECORD page off HOME. No red-light row until `P3-3d`. Owed: the user's look and a whole shift to 交更.
-- `P3-77` ✅ Trees from HyD's and LCSD's inventories (`Q171`, the user's calls, 2026-10-27): `pipeline/trees.py` → a four-kind library, a `MultiMesh` per kind per prop cell, a trunk collider per tree in a body per kind and cell. Wan Chai 1,061 drawn (35 refused in the carriageway, 16 no ground, 11 under structure), Causeway Bay 2,375 (4 / 6 / 28); `min_kerb_clearance_m` 0.3562 / 0.5006; +4 draws on the throttle route; web PCK +869,616 B (+0.97%). Victoria Park and the streets bare (no survey). Owed: the user's look and drive.
-- `P3-41` ✅ Deck paint in `mong_kok` / `sha_tin` (`Q135`) — Sha Tin 33 markings / 324 m where two decks cross, counted, not moved.
-- `P3-35g4` 🚫 Lane count hosted on the drawn ribbon — refused: 82% / 75% agreement against a
-  high-80s bar, for ten edges. Instrument stays in `width_evidence.py` §2a.
-- `P3-27` 🟡 Crossing paint built as `P3-35g2`; footway extent and the look-right / look-left
-  glyphs still candidates (`Q101`).
+- ✅ `P3-11`, `P3-11d`, `P3-13`, `P3-16`, `P3-18`–`P3-20`, `P3-22`, `P3-23`, `P3-26`, `P3-28`–`P3-31`
+  (`P3-29a` included), `P3-34`, `P3-36`–`P3-42`, `P3-66`, `P3-77`.
+- `P3-9a` 🟢 Recognition round 0 — recognised; stopped by the blocked bridges (`P3-9a′`).
+- `P3-6` 🟡 Hero buildings — HKCEC reviewed; Central Plaza unjudged; three not built.
+- `P3-7` 🟡 Window-band shader. `P3-10` 🟡 Ground surface — buries the carriageway on hill streets
+  (`Q24`).
+- `P3-11c` 🟡 Body shader. `P3-11e` 🟡 Front lamps. `P3-11f` 🟡 Roof sign. `P3-48` 🟡 Hire state on
+  the car.
+- `P3-12` 🟡 Road markings on the ribbon — the shader's lines are off (`Q132`).
+- `P3-14` 🟡 Tramway as geometry. `P3-15` 🟡 Turn arrows.
+- `P3-27` 🟡 Crossing paint shipped as `P3-35g2`; footway extent and look-right glyphs are
+  candidates (`Q101`).
+- `P3-31` open item: lamps, signs and railings do not refuse a foot under a level-0 cap.
+- `P3-32` ✅ Paint arm; the carve-wall arm is not taken (`Q104`) — never by widening the carve
+  prism.
+- `P3-33` 🟡 Level-0 road as the carriageway region — `a`–`c`, `e` built, `d` superseded by
+  `P3-35e`; `f` (the user's drive) open.
+- `P3-34` open items: no `RM1002`/`RM1003` side checked against Street View; zigzags unbuilt.
+- `P3-35` ✅ `a`–`g3`, `h` built — `h`'s drive owed. `P3-35g4` 🚫 lane count hosted on the drawn
+  ribbon: 82% / 75% agreement against a high-80s bar.
+- `P3-67` 🟡 Lamps as a `MultiMesh` per 300 m cell. `P3-68` 🟡 Fences and railings collide.
+- `P3-69` 🟡 Day to night — owed: the handset's frame time.
+- `P3-70` 🟡 Light tail — owed: the look pick from `build/driver/tail_sheet/sheet.png`.
+- `P3-82` 🟡 Taxi at a die-cast's detail — owed: the headlamp spots sit 16 cm above the moved
+  lenses.
+- `P3-83` 🟡 Posts collide — owed: `phys` on the throttle route.
+- `P3-84` 🟡 Detail lines on vehicles — owed: the weight pick (1.2 / 2 / 3 cm), a night frame.
+- `P3-85` 🟡 Roster at die-cast detail — owed: the box lorry's share of moving traffic (parked only).
+- `P3-87` 🟡 Pressed panels. `P3-88` 🟡 Tram doors and lamps.
+- 🚫 `P3-7a` (withdrawn, `Q102`), `P3-17` (returned as `P3-3e`, `Q173`). ❌ `P3-21` (`Q65`).
 
-Phase 3 — Builds `B1`, `B3`, `B4`
+Phase 3 — `B1`, `B3`, `B4`
 
-- `P3-24` ✅ HUD chassis — reviewed (`Q79`, `Q80`). A clean art frame needs both
-  `--debug-view=off` and `--hud=off`.
-- `P3-25` ✅ Wrong-way warning — reviewed (`Q81`).
-- `P3-43` ✅ `RoadRouter` (`Q137`) — agrees with `reachability.py` on every pair, worst 0.000000 m
-  (194,774 / 13,718 control pairs, 334,767 across the join); `prepare` max 0.70 / 0.13 ms
-  legal, 1.86 / 0.59 ms player; prepared `route()` p99 8 / 7 µs; 8 mutations caught. Consumed
-  by `P3-1a`.
-- `P3-1a` ✅ `FareSystem` (`Q141`) — TD's tariff on the metres driven, the seconds left as a tip;
-  Wan Chai 16 pickups (3 stranded: `f_017`, `f_018`, `f_020`) reach 23 destinations, least 16,
-  reach table 14.0 ms; Causeway Bay alone 0 pickups (`f_001`, `f_002` stranded), SKIP; merged
-  runtime 17 pickups (4 stranded — the join un-strands `f_002`), 25 destinations, 18.1 ms; seed-7
-  fare par 1,575 m / 189 s banks HK$122.88; 7 mutations caught; driven from the Expo Drive stand,
-  aboard by 0.8 s, `build/driver/fare/`. The user's drive under `--debug-view=full` owed. The
-  stranded four are one-way exits off the map, closed as the data's (`Q141`, 2026-10-15).
-- `P3-5a` ✅ Minimal fare HUD (`Q142`) — the LED meter, the tip clock, the callout naming the destination once hailed as its building over its road (iB1000 `BUILDINGNAME` joined in the ETL: Wan Chai 47 of 48 nodes placed, furthest 24.6 m; Causeway Bay 4 of 7), the pool's pips and the destination pip on the minimap, a crow-flies guide in the world that grows and turns green as the target nears with a pulsing ring on the road at it; the callout in one language (`--lang=`) with a caption and the road distance left, the countdown bare and centred with every meter tick flashed under it, a pin on the map and a ring on the road at every pending customer while no one is aboard and at the destination once hailed, the arrow on the closest pending customer while idle; `face:` / `map:` / `digits:` / `guide:` assertions in `verify_hud`, 7 mutations caught; whole HUD +31 `draws` (was +15) at 103 → 134 on the boot stand. Frames in `build/driver/fare_hud/`. Fourth round: `99 秒` on one row, no pending mark at a drop-off the loop is disarmed on (`withheld_pickups`), and the game starts 20 m short of `f_004` so pulling forward starts it. The user's drive owed.
-- `P3-3a` / `P3-3b` 🟡 Signalled junctions and the phase controller (`Q173`, the user's call,
-  2026-10-29) — `pipeline/signals.py` → `signals_plan.json` (city schema 40): a junction is
-  `surface.py`'s stub cluster (now published as `roadsurface.json`'s `junctions`) or a lone node
-  that an `RM1011` or (since 2026-10-30) a published signal head is hosted at; its approaches every
-  level-0 edge entering it, stopped at its own painted bar or crossing where one is in reach
-  (since 2026-10-30: Wan Chai 33 + 27 of 178, Causeway Bay 5 of 41), else at the drawn mouth;
-  stages by travel axis within 30° (authored).
-  Wan Chai 120 stop lines + 514 head posts → 73 junctions (3 by a stop line alone, 32 by heads
-  alone, 38 both), 72 staged (36 clusters, 1 at the seam), 178 approaches; Causeway Bay 15 + 89 →
-  22, 21 staged, 41. Before the heads: 41 / 40 / 98 and 8 / 16 — TD's `RM1011` survey is about
-  half its light estate (`Q173`). `SignalController` runs them off `signal_plan.tres` (red-and-amber 2,
-  green 15, amber 3, all red 2, crossing 10 s); `verify_signals` walks every cycle — no crossing
-  axes lit together, a green each cycle, the British sequence, every approach on its edge and
-  heading — with the checker graded on a junction built to fail it; two mutations caught. Roads
-  meshes byte-identical across the surface change. Owed: `P3-3c`–`P3-3e`.
-- `P3-3c` 🟡 The AI cars (`Q173`, 2026-10-29) — `TrafficSystem` in `city_drive.tscn`: 24 cars
-  (`traffic.tres`) round the player in a 60–220 m ring, retired past 260 m, drawn from `parked.glb`
-  (one `MultiMesh` per kind, a livery each off `parked.tres`'s palettes) with an `AnimatableBody3D`
-  box apiece; every move one of `RoadRouter.moves_from` under `Profile.legal()`, the nearside lane
-  by the new `RoadGraph.lane_at` (`Hit.lane_centre`'s own expression, agreeing to 0.3 mm on 1,150
-  ways), a quadratic curve through each node, the car ahead read on its own path, at a merge and in
-  a plan cone, red and red-and-amber stopping it at the approach's stop point and amber judged at
-  the HARD rate to the line. `verify_traffic`: three seeds × 90 s round the signalled junctions —
-  ~60 stop crossings each, 0 on red, every move legal, no car inside the one ahead; it found three
-  faults on the way (a turn's control point solved with the wrong sign, a braking car riding its
-  own amber judgement into the red, a car crawling at its aim behind a slow leader meeting the red
-  a hair short — seed 4), each mutation-checked. 300 s headless: 17–23 of 24 moving at every 20 s
-  sample, longest standstill 27.4 s (a signal wait). Throttle route: +7 `draws`, `phys` ~2.8 against
-  ~1.8 ms with `--traffic=off`. Cars give way at their lines since 2026-11-04 (`Q173`: keep clear, the
-  car in the junction first, then straight / left / right), and are not near-missed. **After the user's first look**: a turn runs mouth to mouth
-  (`trim_m`, city schema 41) across a junction's stub edges in one curve, from the turn's own lane
-  (left nearside, right offside; `straight_deg` 30) with a lane change that looks first
-  (`lane_change_m` 25); moving cars lit (head lamps by day, tails at night, brakes), parked ones
-  dark. `verify_traffic` adds no car on a stub (0) and lane-aware following; 0 on red on all
-  three seeds. Owed: the user's drive, `P3-3f` (indicators, hazards; the parked cars built as `P3-3f1`).
-  **2026-11-14 (`Q214`)**: placed and retired out of the camera's sight — in view only past 180 m,
-  fading in; kept in view until near the camera's `far` — with every seeded drive byte-identical
-  (no camera headless) and a staged `view:` block, 5 mutations caught. Throttle route `draws`
-  116–122 against 118–127, `phys` unmoved.
-  **2026-11-15 (`Q219`)**: the cars indexed by place, a far car out of view reading its rules
-  every 4th tick, the spawn by lane-metres, and `cars` 40 → 60. `bench_traffic` 1.67 ms a tick at
-  60 under a camera against 2.53 at 40 before; in the game 2.59 ms p50. Two following rules fixed
-  on the way (along-road gap, a lane change's closing room). Every gate holds at 60 in both
-  regions; 80 fails two in Causeway Bay. The user picked 60 and 1.0 (2026-11-15). Owed: the handset
-  re-take (deferred, `P0-3b`).
-- `P3-3g` 🟡 The traffic by the hour (`Q186`, the user's ask 2026-11-06) — built 2026-11-06: `traffic.tres` `kinds` by clock hour and `fleet_by_hour`, both TD's *Annual Traffic Census 2025* through `atc.td.gov.hk`'s JSON (`tools/traffic_census.py`): taxis 24–42% (was a flat 16.8%), vans 2–18%, the fleet 19 of 24 at 07:00, 24 from 08:00 to 19:00, 18 at 21:00. A respawn's kind off its id and lives, never `_rng`; the fleet thins only by the ring. `verify_traffic` `hours:`, 5 mutations caught. Throttle route at 07:00 (19 cars), two runs each: `draws` 115–119 and `phys` 7.1–8.4 ms against HEAD's 115–117 and 7.0–8.0 with the same traffic on — no change; traffic off 109–114 and 4.3–5.4 ms (this machine reads about 1.8× the `Q183` runs today). **2026-11-11 (`Q198`, the user's ask "more cars … esp rush hours")**: the fleet is flow over TD's detector speed (8 detectors × 18 weekdays, DATA.GOV.HK archive), peaking at 18:00 — 19 / 29 / 32 / 40 / 20 cars at 07 / 08 / 12 / 18 / 20:00 of `cars` 40 (was 19 / 23 / 24 / 24 / 19 of 24); `PEAK_HOUR` 18:00; `_room_behind` on both spawns (seed 4 routed: 476 → 0 car-ticks inside, mutation caught). Throttle route `phys` 4.0–4.5 ms against 3.3–4.3 at 24. Owed: the user's drive at the rush, and `P0-3b`'s re-take of `cars`.
-- `P3-3f` 🟡 The cars see the parked ones (`Q173`, the user's drive 2026-10-29: "moving car crash
-  into parked car without collision") — `P3-3f1` built 2026-10-30. `TrafficSystem` reads every
-  region's `ParkedLayer` into footprints by the edge they were published on (16 a tick, the roster
-  in about a second; whole, it was a 43 ms hitch), each corner read across the lanes at its own
-  station and widened by the road's bend under a car's length. A standing vehicle in a car's lane is
-  a car ahead that never moves; within `pass_look_m` (40) the car moves a lane over to pass it, and
-  with no whole lane clear edges out to the nearest position `side_clear_m` (0.3) off every flank —
-  between two rows, against a kerb, or over a two-way back street's centre line only while nothing
-  comes the other way, a car coming stopping for one already out. A join blocked at the mouth is
-  re-picked, and a straight-on car changes lane before it. `verify_traffic`'s `parked:` table
-  (both regions): of 1,081 placements on roads traffic drives, 759 stand in lane 0 and 247 in a
-  lane past it only. Four drives (three seeds at the signals, one on the back streets) — 0 car-ticks
-  inside a parked box (tolerance 0.15 m: a car's heading snaps at a right-angle vertex at one junction mouth, and its box swings 0.086 / 0.13 m into a parked one there), 0 head on,
-  12,420 car-ticks over the centre line; `give way:` stages the rule both ways. Mutations: no parked
-  read 2,429–4,811 car-ticks inside; no give-way and no stop-for-it each fail `give way:` by name.
-  Longest stand behind one 71–88 s: pinches the roster makes — a minibus behind a bus at its stop
-  on a 4.6 m one-way street (2.32 m left, 2.38 needed), a published bay across from an invented
-  fill car on a back street — the fill's lane-room bar does not count a bay on the far kerb
-  (`parked.py`), a finding for `P3-71`. Throttle route, two runs each: `phys` 2.6–3.2 ms against
-  1.6–1.8 with `--traffic=off` (P3-3c's own +1 ms and the parked reads), `draws` unchanged (+6).
-  A turning car now also reads the next road's stop line through the curve: a minibus turning onto
-  edge 203, whose line stands 7 m past the join, met the red there at 3.7 m/s. **`P3-3f2` indicators** (2026-10-30): the library's indicator
-  lenses are on the taxi's `CIRCUIT_INDICATOR_L/R` (`make_parked.py`), `INSTANCE_CUSTOM.a` carries
-  8 left / 16 right, and `vehicle_body.gdshader` flashes them at `vehicle_lamps.tres`' beat
-  (`VehicleLampsProfile.wire_blink`, no second copy), each car on a phase off its MultiMesh slot. A car winks
-  its turn's side from `lane_change_m` before the mouth through the turn and on until its tail is
-  `wink_hold_m` past the mouth it joined by, else the side it is changing lane to. `verify_traffic`'s `wink:` — 84 / 93 / 89 / 65 turns winked on the last tick
-  before the turn, 0 wrong; flipping the side and winking straight on each fail it by name. The second `wink:` line, still winking as a turn joins: Wan Chai 76 / 75 / 88 / 95 held, Causeway Bay 58 / 54 / 47 / 41, 0 dropped; a car that drops it at the join fails it by name. Day and
-  night frames, 0 shader errors. **`P3-3f3` hazards** (2026-10-30): `parked.tres`'
-  `hazard_sources` (`layby`, `frontage`) stand on both indicators, the batch writing custom data for
-  any kind that carries one; a bay, the fill, a stop and a rank stay switched off. Wan Chai 55 of
-  754 placements. The beat is wired by the parked layer too (`VehicleLampsProfile.wire_blink`), so
-  it flashes under `--traffic=off`. A dusk frame of a frontage van on its hazards, lens lit at 0.9 s
-  and dark at 1.2 s; 0 shader errors. Owed: the user's drive.
-  **Review 2026-11-06** (`Q184`): the batched body material wires its own beat and roof sign (`wire_material`), so a batch built before `wire_blink` no longer winks at 0 Hz; `verify_vehicle` checks it.
-- `P3-3d` 🟡 The player at a red (`Q173`, 2026-10-29) — `SignalController` now `city_drive.tscn`'s
-  own `Signals` node (the traffic reads it, so the count holds under `--traffic=off`); each
-  approach's stop line is the street's published width across its stop point, and the taxi's middle
-  crossing one its way at red or red-and-amber is `ran_red_count` and the `ran_red` signal —
-  neither paid nor docked. `verify_signals` `watch:` crosses a synthetic line both ways, off the
-  street and a level above, and the first real approach at red / red-and-amber / green (1 / 1 / 0);
-  two mutations caught. `drive.sh` prints `red:` lines: 3 of 4 throttle starts ran one. Owed: the
-  user's call, bonus or penalty.
-- `P3-3e` ✅ The heads, lit (`Q173`, 2026-10-30): 368 + 64 published posts bound to the approach
-  they show and stood from the committed `heads.glb` (city schema 42); `signal_head.gdshader`
-  lights each lens off `SignalController.light_at`, by day and brighter at night, on both
-  renderers (the circuit on `UV.x` — vertex alpha reads 0 on Compatibility). `verify_signals`
-  `heads:` holds every datum to its approach over the longest cycle; 4 + 3 mutations caught.
-  +2 `draws`, `phys` in the noise, +123.5 KB web PCK. Owed: the user's look and drive.
-  `lamps.py`'s alpha lantern marker (`Q160`) checked on Compatibility the same day: it survives,
-  and the lanterns alone light at night.
-- `P3-2a` moving cars (`Q175`, 2026-10-30) — the near miss looks at them on the closing speed, and a hit reads the closing speed: a 5 kph tap on a slower car read 100+ kph and stopped the taxi dead. Static walls and the pad byte-identical; `verify_fares` `near miss moving:`, `verify_traffic` `near:`, 7 mutations caught; +6 `draws`, `phys` unmoved. Owed: the user's drive (no scripted drive swerved into a paying pass). 2026-11-13: an ONCOMING car inside `near_miss_m` pays unaimed (the user's report of bare misses unpaid); 2 mutations caught.
-- `P3-4` 🟡 Trams (`Q176`, 2026-11-01) — 60 + 13 directed tracks (4393 + 1371 m), 18 routes, longest
-  3431 m, both tracks over the seam, 19 + 5 stops and 26 + 6 stop lines bound. Parked trams 15 + 3 → 0;
-  3 + 2 published vehicles refused in a tram's path. 16 trams: +2 `draws`, ~+0.5 ms `phys` on the
-  throttle route, +326 KB web PCK for the documents and the bell. Owed: the user's drive and ears,
-  the handset's cost.
-- Push on impact (`Q180`, 2026-11-04) — moving cars and trams take the taxi's momentum by kerb mass; a car slides, spins and stands as a wreck, then drives on; a tram moves along its rails only. Pad: six push rows match the analytic exchange, every other row byte-identical at 42 / 63 / 86 kph; `verify_traffic` `knock:`, `verify_trams` `push:`, 7 mutations caught; `phys` and `draws` unmoved by `--push=off`. Owed: the user's drive.
-- `P3-8` 🟡 `B3` — taxis in the traffic (`Q183`, 2026-11-05): 16.8% of the roster (TD's census), red / green / blue by the region's stands (Wan Chai and Causeway Bay all red, Sha Tin 24% green), half lit for hire; `verify_traffic` `licence:`, 3 mutations caught. Throttle route: traffic +3 to +8 `draws` (the recorded +7) and `phys` 4.2 vs 2.6 ms off (two runs each, +1.6 against the `P3-3c` ~+1, not split by cause). Seed 7 exposed a `Q173` give-way hole, fixed (`Q183`). Owed: the user's look and drive, minibus behaviour. The bus-lane penalty dropped until enforcement exists (`Q181`); `is_routable` exists (`Q51`) and Review 2026-11-06: a green or Lantau taxi now stops at the kerb, breaks the line and honks as a red one does (`rules_kind`), and a route-only kind's horn loads at setup (`Q187`).
-  `RoadRouter.Profile.legal()` routes on it (`P3-43`); `P3-3` still owes the player's
-  `BeamBudget` slot, and whether `is_routable`'s bar is a lane or a vehicle (`P3-33e`).
-- `P3-78` 🟡 Buses and green minibuses on their published routes (`Q182`) — built 2026-11-05: `busroutes` stage (Wan Chai 464 directions kept, 1,355 of 1,395 stops snapped; Causeway Bay 241, 527 of 531), city schema 45; `tools/bus_legs.py` (Wan Chai 830 of 862 legs reached, p50 1.02 max 5.34; Causeway Bay 189 of 252, max 7.96); six routed slots in `TrafficSystem` driven by `RoadRouter.goal_tree`, dwelling 12 s at each stop, routed minibuses green and wandering ones red. Owed: a drive and the frame cost. ⚠️ The wandering fleet alone meets in a signalled junction on seeds 1, 2 and 8 (`Q182`). 2026-11-06 (`Q187`): no parked bus at a stop; termini queue buses by the hour's departures (Wan Chai 3 placed, Causeway Bay 7); stop signals (brake + left, right on pulling out); minibus and taxi kerbside stops, a quarter of the red minibus's and taxi's on a yellow line. Owed: a drive by day and at night. Review 2026-11-06 (`Q187`): `parked` reads the termini off busroutes' manifest and a run with no route deletes a stale file; parked manifest schema 2; the kerb side and its flow spelled once in `drawnroad`; `TrafficSystem` split into `TrafficTurns`, `TrafficHorns`, `TrafficFleetMix`, `TrafficRouted` and `TrafficKerbside` with every RNG's seed and draw order kept, `verify_traffic` byte-identical on both regions after each step; the placed dwell's share is `traffic.tres`' `placed_dwell_left`. Throttle route after the split, two runs a side (2026-11-07): traffic +3 to +6 `draws`, `phys` t=1–5 mean 3.7 / 4.2 ms against 1.8 / 1.9 off — level with `P3-8`'s 4.2 on; no pre-split run on the same day, so not a like-for-like delta.
-- `P3-79` 🟡 The taxi's own sounds (`Q185`, the user's ask 2026-11-05) — built 2026-11-06: `tools/make_vehicle_sounds.py` (35 files, replaces `make_car_horn.py`); the meter flag's motor down and up, an LPG four on a virtual 4-speed (the hybrid a switch), the squeal on the marks' own bar, crashes in three tiers on the award's bars with a layer by what was hit, a horn per kind in patterns drawn per reason with a temper (own RNG, no car moved), the player's horn held, the card beep and coins at the door, door / relay / landing, `SFX` / `Engine` / `Cabin` buses. Round two the same day: the engine rebuilt as muffled pulses, the always-on loops 10–12 dB down. Round three: the engine −18 dB and changing up at 4,000, the squeal by speed as well as slip, and no handbrake, skill, penalty or wrong-way sound. Owed: the user's ears, the PCK cost. Review 2026-11-06 (`Q185`): silent while parked under the menu (`park_fade_s`), the off-throttle cut eased (`off_throttle_ease_db_s`, owed the user's ears), the last constants in `taxi_audio.tres`, no rewrite of an unchanged voice. Owed: a listen on HOME and REPORT.
-- `P3-80` ✅ The 成績表 saved as a picture (`Q188`, the user's ask 2026-11-06) — SAVE IMAGE / 儲存圖片 on REPORT, free mode's PAUSE and RECORD (`SheetImage`): the sheet's own column copied into a `SubViewport` on the housing's field at `sheet_image_scale` 2.0 — REPORT 2240 × 1540, RECORD 2240 × 1644 en / 1678 zh — saved to Pictures with the folder opened on a computer, downloaded on the web, hidden on a phone (app and browser) until a share plugin. `verify_menu` `image:` 11 lines, four mutations caught; the press wrote the PNG and read IMAGE SAVED. Frames `build/driver/p380_{report,record}_{zh,en}`. A first cut at a fixed `ledger_px` cut RECORD's total off: only the PNG showed it. Owed: the user's look, and a press on the web build.
-- `P3-81` 🟡 A free drive's REPORT (`Q189`, the user's ask 2026-11-06) — free mode's PAUSE ends on END DRIVE / 收車 into REPORT with the time driven (行車時間 30:34 on the sample) where a shift has its best, AGAIN a free drive; `SessionTally.driven_s` ticks on `FareSystem`'s physics, so the pause and the menu are not counted. SAVE IMAGE is SAVE RESULT / 儲存成績. `verify_menu` `free:` 8 lines, one mutation caught; frames of both languages, the free PAUSE and the shift's REPORT. Owed: the user's look and a real drive ended.
-- `P3-82` 🟡 The taxi at a die-cast's detail (`Q190`, the user's ask 2026-11-07, proportions 2026-11-09) — `tools/make_vehicle.py` builds every feature the Tiny City Crown Comfort carries except lettering, at its measured proportions (nose 0.65 m, tail 1.10 m, sill -0.38, cabin -0.83..1.74); 1,948 triangles against 1,204, +0.2% primitives and no draw calls in a drive. A see-through slit at the four lower corners, shipped, closed. Tests rewritten against the parts the body draws; seven mutations caught; `check.sh` passes. The collider follows the body (4.575 m, set 0.2175 m back) with the inertia frozen in `CarSpec.inertia_kgm2` at the old box's: every driving row on the skidpad identical at 42 / 63 / 86 kph, only contact moved (`wall@30` at 42 exits 12.45 kph against 24.62). Owed: the user's look; the headlamp spots, 16 cm above the moved lenses.
-- `P3-83` 🟡 Posts collide (`Q191`, the user's ask 2026-11-09) — lamp columns, sign poles and signal posts: a cylinder up each, read off the library mesh's foot by `PropBatch.post_of`, a body per kind and plan cell. Wan Chai 1,077 + 634 + 368 shapes in 18 + 1 + 15 bodies; Causeway Bay 364 + 216 + 64 in 10 + 1 + 6. `VerifyLayer.check_posts` and `verify_signals` `heads:`, three mutations caught; `check.sh` passes. Owed: `phys` on the throttle route, and the user's drive into each.
-- `P3-84` 🟡 Detail lines on the vehicles (`Q196`, the user's report 2026-11-11) — built: `tools/vehicle_ink.py` marks each edge where a body's colour or marker changes into `TEXCOORD_1`, the import hook carries it and `vehicle_body.gdshader` draws it in the surface's own colour ×0.35, 2 cm wide on the vehicle (bold near, fading far, capped at 4 px), a third thinner and 20% fainter at the player's full speed. No draw call. Vertices +7% on the taxi body (2,264 → 2,417) and +8% on the roster (15,290 → 16,573); `taxi_body.glb` 80.0 → 105.2 KB, `parked.glb` 553 → 734 KB on disk. ⚠️ Owed: the user's pick between 1.2 / 2 / 3 cm, a night frame, the PCK, the handset. ⚠️ `tools/check.sh` was run with another session's schema-46 work in the tree, so every city verifier refused the schema-45 bundle; the vehicle steps (`import`, `verify_settings`, `sidecars`, `warnings`, `verify_vehicle`) passed.
-- `P3-85` 🟡 The roster at its die-casts' detail (`Q200`, the user's asks 2026-11-11) — built: the roster's three taxis are the player's die-cast body, door shut and wheels baked in, in each licence's paint (742 → 1,516 triangles; the stand's footprint 4.575 m, 17 of Wan Chai's 23 taxis moved ≤ 6.3 cm, every count unchanged); the lofted kinds carry what Tiny's models of them do — a falling bonnet and boot on the saloon, MPV and van, slotted hubcaps, shut lines, a rub strip, bezels, wipers, glazed kerb-side doors on the bus, minibus and coach, the tram's doorways and top lights (672–932 → 710–960 triangles, footprints unchanged); two more liveries a private kind; and `TrafficSystem` draws only the cars shown, where each hidden instance of no size still cost its triangles. Throttle route at 2 s: 1,192,947 `prims` / 120 `draws` before, 1,349,927 / 120 with the detail, 900,233 / 119 with only the shown drawn. `verify_traffic` unchanged but for the line that holds the drawing; nine mutations caught; `check.sh` passes. A box lorry, 784 triangles, stands at TD's goods bays and behind the van at an office's door by day: 29 on Wan Chai, 3 on Causeway Bay, parked only — not in the moving traffic, whose mix is the census's and the user's call. Web PCK 98,402,008 B. ⚠️ Owed: the user's look (`build/driver/p385_before_all` against `p385_after_all`) and drive, the handset, the three plan calls taken at their recommendations (taxi length, references, ink weight), and the lorry's invented rank at an office's door. **Reshaped the same evening** on "does the tram and bus rly has same shape as tiny models": the bus and the tram are flat-sided now (one wall to a crowned roof, windows applied run by run, off Tiny's Enviro500 MMC and tram), the van, minibus and lorry cab moved to their models, and the user picked reflection streaks for the glass — bus, tram and the taxi's side windows. ⚠️ The tram lost its cream band to the model; the route's `prims` are not re-measured; five review tweaks wait on `Q201`'s work in `make_vehicle.py`.
-- `P3-86` 🟡 Street hails and a measured par (`Q203`, the user's asks 2026-11-12) — built: `fares.json` carries 221 street spots on Wan Chai and 166 on Causeway Bay (a kerb every 60 m that no no-stopping run, bus lane or road over 50 kph covers, beside a named building); `FareSystem` keeps 4 customers waiting, three in four drawn from the street, each paired with a destination drawn the same way and replaced as a fare ends; the minimap's pins and the road rings follow `pickups_changed`. The allowance is the legal route over par with no floor, and par is 19 kph, the legal AI traffic's measured median run (18.8 / 19.2 kph at 18:00 / 12:00; 30 was its p90). Pairing is one forward search per customer (`RoadRouter.source_tree`, tied to `route()` on 8,528 pairs): 3.8 ms on Wan Chai alone, and the merged runtime boots `4 waiting of 380 pickups (359 street; 1 stranded), 385 destinations, pairing 4.6 ms`. A customer always waits at the start stand (`FareSystem.wait_at`, seated by the harness at the start and on a restart), so the game still opens on pulling forward into a fare. The five first guesses measured 2026-11-13: `junction_clear_m` 15 (TD's stands' p10 to a junction), cleared at junction ends only, `stop_length_m` 5 (TD's bay pitch) — street spots 221 / 166 (were 166 / 102); `spacing_m` 60, `live_pickups` 4, `street_share` 0.75 kept on the user's calls against the measured curves. The waiting stay near the car (the user's ask): placed within `place_m` 160 (half the minimap), the farthest past `retire_m` 320 swapped for one placed near, a swap placed before the leaver goes, one draw a sample (`verify_fares` `turnover:`). ⚠️ Owed: the user's drive.
-- `P3-87` 🟡 Pressed panels on the vehicles (`Q232`, the user's asks 2026-11-17) — built: the shader tilts `NORMAL` at a pitch the generator stamps per face (bus joints 1.35 m, lorry ribs 0.6 m, a flank crease on `car_a`, `car_b`, the van and the minibus; the tram, the coach and the taxis none) and at every inked edge, so windows, frames and lenses read as seated on every vehicle. No texture; `parked.glb` the same 1,092,976 B. The bow 0.04 is the user's pick. Owed: a handset frame time, the browser.
-- `P3-88` 🟡 The tram's doors and lamps (`Q234`, the user's asks 2026-11-17) — built: folding leaves in place of the open doorways, two at the exit and four at a wider entrance (`Shape.door_leaves`), each a pressed panel under a pane on `Q232`'s seat, and every tram lens faceted (`lens_bevel_m`); 468 → 512 triangles, `pytest` 3,203. Owed: the user's eye on the reading of "4 doors", a moving tram seen from the taxi by day and at night.
-- `P3-44` ✅ Minimap (`Q136`), one panel with the street plate; one-way arrows off since 2026-09-24 for a border arrow toward an off-map target, main roads apart (iB1000 `STREETTYPE`) and the harbour and parks under the roads (`basemap.json`) — +5 `draws`, +14.7k `prims` over `--minimap=off` carrying (was +4 / +13.4k with arrows; 37.7k built naively); whole HUD +15 `draws` (`Q139`); `map:` assertions in `verify_hud`, 12 mutations caught. The user's drive and the web build's clip frame owed.
-- `P3-45` ✅ The harbour (`Q140`, the user's calls) — on the minimap as `P3-44`'s `basemap.json` (2026-09-24), and in the world since 2026-09-25: `water.glb`, one flat mesh at mean sea level (+1.3 mPD), the ground under it sunk to −3.0 m by the tile stage because the sheets' terrain over the harbour is 1.1–4.2 m of noise against a 2.7–4.9 m shore; after the sink 2.1% of the sea's ground stands above the water and 10.1% of the 12 m shore band sits under it (both the straddling slopes). `verify_water` holds the plane flat at `water_level_m`; `city.json` 37, `basemap.json` 2. Cost on the throttle route at t=6: **+1 `draws`, +213 `prims`** (804,679 / 108 against 804,466 / 107 with `--hide-layers=water`). Waves since the same day: `water.gdshader`, two scrolling sine trains tilting the normal and lifting the crests, every number in `water.tres`, no texture. A car that drives off the quay is pulled back onto the nearest road (`drive_harness.gd`, `drown_depth_m`; the user's call). The user's frame owed (the blue, the wave dials, a skirt past the frame). 🐛 2026-10-07: the second wave train jumped every 4 s (one wrapped phase scaled by `wave_speed_ratio`); a `fract` per train, no jump in 45 consecutive 0.1 s frames.
-- `P3-47` ✅ The parks in the world (`Q144`, the user's calls) — the tile stage paints every ground vertex inside `basemap.json`'s `parks` `materials.park_grass` (`#416227`, 10%), all five open-space codes like the minimap; no mesh, no draw call. 131,534 / 122,157 vertices painted (`ground_park_vertices`). ⚠️ The edge fades over one ground triangle and streaks where it is long. The user's frame owed.
-- `P3-49` 🟡 Skills and the receipt (`Q145`, the user's ask, 2026-09-25) — flat HK$ per event into the tip: drift HK$1 once a slide has held 0.5 s (`drift_min_s`) at or over `drift_slip_threshold_deg` (14°, `handling.tres`) and again per second, each award HK$1 more than the last (`drift_step_hkd`, `Q172`, 2026-10-28; was HK$5 flat from 2 s), speed HK$5 per 200 m driven over 80 kph (`speed_hold_m`, never under the tariff's `step_m`), early arrival HK$10 with half the clock left (`skills.tres`); each flashed under the clock in the gain's green and the passenger's face popped from the rear seat; the live tip is the skills alone on a second LED under the meter in the meter's red (the time priced at the door — the user's fourth round, 2026-09-25); the delivery callout holds the receipt ("meter 29.0 + time 18.0 + drift ×2 10.0") for `callout_hold_s` 5 s, the early arrival named in its caption; a bail reads RAN OFF WITHOUT PAYING / 乘客走數 over what was lost. `verify_fares` `skills:` on the frame region, `verify_hud` the strings in both languages, `verify_vehicle` the rig. Near miss is a slot; air is `P3-51`'s. The skills run with no passenger aboard too (the user's call, 2026-09-26): one tracker for the session, an empty-car stunt flashed by name alone on `practised`, never paid, and every award paid or not counted in `skill_counts` for a later achievement; `verify_fares` `practice:` holds it and the reset at boarding. The user's drive on the new table owed; the draw-call delta (two faces up) unmeasured.
-- `P3-50` 🟡 Penalties (`Q148`, the user's ask, 2026-09-25; built 2026-09-26) — three tiers on ONE number, the speed into the wall on the tick of the hit (`VehicleController.take_impact_mps`, the pre-step velocity along the contact normal): a touch under 20 kph is free but ends a slide, a collision docks HK$2 (`Fare.Skill.BUMP`), a heavy crash at 60 kph docks HK$5; one wall is one dock for 1 s. The bars come from the skidpad's new wall manoeuvre (`--only=wall`, 10 / 30 / 90° at 63 / 86 / 105 kph entries: brushes 11–18, clips 34–54, head-ons 70–108 kph into the wall; the latch and the tool's own approach reading agree on every row). The tip floors at zero, the meter is never docked; the HURT face pops on any negative award. `verify_fares` `penalty:` holds every bar and the cooldown from both sides plus four mutations. ⚠️ Finding for handling, acted on as `Q151` (2026-09-29): the slide now reads the velocity the wall met; the clip exits 28.8 / 51.3 / 76.2 kph where it read 0.09, the head-on still stops, every bar unchanged. Driven: a 40 kph turn into the building south of Expo Drive docks HK$2 as a bump with the flash, the face and one `award:` line (`build/driver/p350_bump`); a kerb mounted at 43–71 kph reads nothing. Owed: the user's drive, and a crash-tier hit on the street (nothing near the stand meets a wall at 60 kph into it).
-- `P3-51` 🟡 Jump off any bridge, and pay the flight (`Q147`, the user's ask, 2026-09-26) — **(b) built:** air HK$5 at the landing once every wheel has been off the ground 0.5 s (`air_min_s`), again per 0.5 s of flight (`air_s`), upright landings only; a flight that never lands or lands on the roof pays nothing; the drift meter refuses airborne ticks. `verify_fares` `skills:` holds every bar from both sides and two mutations. **(a) built:** the parapet band (`carve.parapets`) over the eight listed ramps, whole by centroid after three shapes were priced and refused (`Q147`) — 8 rows in Wan Chai, 665 m² of parapet, the tiles 968,206 vertices / 93.7 MB; a band over every flyover edge (`levels: [1]`, `on_structure: true`) was built and measured — 58 rows in Wan Chai, 11,741 m² of parapet, the tiles +4.6% vertices — and withdrawn on the user's call the same day ("keep the original structure"); the switch stays, off; the eight ramps' cut face capped at the deck (`face_above_m`), since uncapped it was the guard rail the user photographed. Owed: the user's drive off a ramp.
-- `P3-52` ✅ The tyre-model spike (`Q152`, the user's ask, 2026-09-29) — a per-wheel tyre model on `VehicleBody3D`, a second car on its own skidpad, the shipped taxi untouched. The load rebuilt from the published contact point to 0.17% of the weight; the spin solved implicitly (explicit, a braked wheel limit-cycled and the car crept at 1.2 m/s). With twice the drive, traction control in a drift mode and the sideways force 0.8 of the way down to the contact, a countersteered slide holds 2.62 s at 63 kph and 3.22 s at 86 (shipped 0.12 / 0.00 s), brake and coast within 3.3%; the tap at 42 kph (9.2° then; 28.0° since the gameplay round, `Q153`), `lift` at 63 (6.8°) and `corner` (the doubled drive accelerates through it, 63 → 109 kph) fail; about 216 µs a tick on the desk. Street: no veto, a two-wheel lift at a kerb at 72 kph. Gameplay round (the user's ask): a countersteer assist, a 2 s traction re-arm and the side force at 0.7 give a player's plain input (`ride`) 1.85 / 2.55 / 3.15 s at 42 / 63 / 86 kph where the shipped car gives 0.00 / 0.40 / 0.00; open: doubled pace, `lift` at 42–63 kph, the kerb lift. The user's drive is by hand on the pad (`godot --path game res://scenes/dev/skidpad_tyre.tscn`, 2026-09-29); both pads now draw a 5 m grid on the ground (`greybox_grid.gdshader`, `GreyboxBuilder.ground_grid_m`) for the eye — paint only, the tap row byte-identical with and without it. Countersteer assist off on the user's call after the drive (same day, countersteering is the player's skill): `ride` 1.63 / 1.60 / 1.68 s, `hold` 1.87 / 2.55 / 1.40 s at 42 / 63 / 86 kph — a plain input is under `drift_min_s` 2.0 s, a countersteered slide over it at 63. The lock round (same day): a wider countersteer lock while sliding (`slide_lock_deg`) swept 0–45° and refuted — over the table's lock it shortens `hold` at every speed (86 kph 1.40 → 0.33 s), because the pad's driver commands a share of the lock; shipped absent, the shipped car byte-identical across the seam. `hold` at 86 kph stays open. The catch round (2026-09-30, the user's street report of a countersteer turning the car the other way): a `catch` row on the pad (full opposite lock held 0.1–1.5 s from the slide's peak, early or late, throttle held or lifted) — no snap on either car at any timing (< 0.4° of slip the other way); what happens is a gripping turn the other way at ~85°/s once the slide is caught, the same on the shipped car, so the keyboard's full lock and the shipped steering are the levers, not the tyre table. The timing round (same day): the `catch` table times the wheel to full lock (0.40 s — a lock-to-lock reversal runs at `steer_attack_s` the whole way), the slip under 14° and the first turn the other way; on the spike, throttle held, the turn starts at full lock just before the slip settles, lifted before the wheel arrives; the shipped car turns at 0.44 of lock. The catch cap round (same day, the user's call: a cap on the countersteer once the car turns the other way, over a slower rate or a keyboard ramp): `catch_lock_deg` behind a zero, latched on a tail-out slide and engaged on the heading reversing; at 6° a 1.5 s held countersteer turns the car −0.5 / −2.4 / −0.4° where it turned +50° at 42 / 63 / 86 kph, `settled` unmoved, lifted catches eased too, every other row (`hold` included) byte-identical; a first latch on the slip alone capped the 42 kph tap's turn-in (28.0° → 22.3°) and is fixed and mutation-checked. The `catch` table gains `capped` / `fronts@off` and runs to the end of its hold. Set at 6° on the user's call the same day, ahead of their drive (`Q152`). **Shipped 2026-10-03** on the user's instruction, trade (a): `city_drive.tscn` instances `taxi_tyre.tscn` (one line, and the off switch); a street trace with `--tyres=` before and a plain one after identical over 1,273 lines; `verify_vehicle.gd` grades that scene and refuses a drive scene on another car or a table with a zero key (mutation-checked). Re-graded on the new pace and not moved, the user's call: `speed_min_kph` 80 (2.4 s and about 28 m from rest, was 5.4 s and 66 m) and the wall tiers (`bump_min_kph` 20 / `crash_min_kph` 60 hold to 105 kph and break at 130: brush 22.6, clip 65.5, head-on 131.1 kph into the face).
-- `P3-53` 🟡 The drift's bars, Forza Horizon's split (`Q153`) — written before the first row and graded 2026-10-02, three byte-identical runs a row: the tap starts at 30–100 kph (28.0–30.3°; below 30 the user's call, 11.3 / 12.7° at 20 / 25 kph), a plain input never spins (peak 28–30°, 37–38° assisted) and does not pay (1.63 / 1.60 / 1.68 s); **fails:** an assisted slide at 42 kph (1.85 s; 2.55 / 3.15 at 63 / 86) and a countersteered one at 86 (1.40 s; 2.55 at 63). The pace beside it: the spike 67.7 / 122.8 / 132.5 kph after 2 / 4 / 6 s of throttle against 34.5 / 63.0 / 86.4 — the user's call owed, it picks `P3-55`'s lever (taken: the faster car). The fails worked the same day: `hold` at 86 was the rim limiter — `rim_overspeed` 0.5, behind a zero, gives `hold` 2.63 / 3.17 s and leaves only the assisted slide at 42 kph short (1.92 s), a plain input's peak rising to 48–52°; set at 0.5 on the user's call after the pad drive. The street drive then found the slide starting after the corner (181° of heading at 42 kph) and no way to end it at 90°: a `turn` pad row, a rear side cut on the button (0.6 to 42 kph, gone by 65), traction control back when the steering is let go, and the drive faded over 25–40° of slip — the turn settles 81–91° at 42–63 kph, a plain tap peaks 29–42° (was 31–65°), `hold` 2.00 / 3.28 / 3.17 s; the user's drive: happy. A lower `mu` and a locked handbrake measured and refused. Since the turn round the assisted slide pays at all three speeds and a plain input at none (`P3-56`, 2026-10-05). Owed: the kerb slide at speed, the tap under 30 kph.
-- `P3-54` 🟡 Real technique works (`Q153`) — built and graded 2026-10-05: `--only=technique`, each row against a control differing by its input alone (`flick`, `handbrake` against `corner`; `trailbrake` against `turnin`), 27 runs identical by cell. Spike: the trail-brake rotates at every speed (slip over `turnin`'s) but ploughs at 42 kph; the handbrake turns the car at every speed, its tail out inside 0.5 s only with the throttle lifted (63 / 86 kph; held, 0.5–1.0 s); **no flick** at 42–86 kph on either car, at any feint 0.35–1.5 s (≤ 8.7°), and no single dial gives one while `corner` grips (traction control holds both rears alike; nine levers swept, `Q153`); **since the flick trigger** (`FlickWatch`, `flick_*` in `tyre.tres`): a lifted or braked feint and reversal stands traction control down as the button does — `flick@lift` / `@brake` 31–40° at 63 / 86 kph in both modes, every other pad row byte-identical; handbrake-and-lift at 86 kph spins with the assist off (168.5°, on 46.0°). Candidate levers recorded, none turned. ⚠️ **The flick's 31–40° is the `mu` 2.0 car's** (bisected 2026-10-07, `Q153`): since the Crown Comfort's chassis (`1876da9`) it fires but the tail stays under the threshold, `flick@lift` 3.7 / 12.3 / 9.7° at 42 / 63 / 86 kph at pace 1.5, and 3.7 / 19.2 / 9.3° at 2.0 (over the threshold at 63 alone). `liftoff` built earlier (the nose tucks on both cars). Owed: the user's call on which fails to work, the user's drive.
-- `P3-55` 🟡 The power-on corner (`Q153`) — the spike accelerates and widens at full lock (86 → 120 kph, radius 28 → 41 m); `drive_scale` refuted (below 2.0 the slide dies first: `hold` 0 s at 42 / 63 kph at 1.5); next, the drive eased while traction control is armed and the fronts turned, which a slide never sees. Baseline 2026-10-02: full lock runs both cars to a terminal speed, the shipped car to 62–65 kph and the spike to about 128, so the bar is a terminal speed. Built 2026-10-02 behind a zero (`turn_drive_cut`), the pace kept on the user's call: 0.5 settles near 90 kph and pulls away at full lock as the shipped car does, 0.6–0.7 settles at the shipped car's 62–65 and pulls away 13–30% behind; the slide rows' peak and `longest` identical at every value, the gate mutation-checked. Set at 0.5 on the user's call after the pad drive (provisional); the street drive owed.
-- `P3-56` 🚫 Drift assist as a setting (`Q153`) — built 2026-10-05, dropped 2026-10-06 on the user's call ("if all drift assist do is just auto counter steer, we should drop it first to simplify things"): the menu option, `Settings.drift_assist`, `DriftAssist`, `--assist=` on `drive.sh` and the pad, `CountersteerAssist` with its table, and `stability_control.assisted_slip_cut_from_deg` are gone. The game's car is the old off mode, which the pads always graded; a player who had the default now drives without the automatic countersteer. Owed: the user's drive of the one car.
-- `P3-57` 🟡 Tyre marks and smoke (`Q154`, the user's ask, 2026-10-05) — built: `SkidMarks` on `taxi_tyre.tscn` reads `TyreVehicleController.wheel_slips` (combined slip over the tyre's peak), lays a mark over 1.2 into one 2,048-piece ring mesh (+1 draw call, always) and smokes the rears over 2.0 (`CPUParticles3D`, +1 a smoking wheel); `skid_marks.tres`. `verify_vehicle` drives the pure `SkidStrip` (the bar, the three breaks, two wheels, the wrap), mutation-checked; the tyre pad byte-identical bar the cost column; renders under Compatibility. Owed: the user's look and drive, the handset.
-- `P3-59` ✅ The car's dials as its systems (`Q155`, the user's ask, 2026-10-05) — seven tables under `tuning/systems/` (traction control, stability control, drift mode, the countersteer assist, the handbrake, the rev limiter, the arcade aids), `DriftMode` / `CountersteerAssist` / `CatchLimiter` owning their state, `tyre.tres` the tyre alone, `--sweep=<system>.<field>`; the pad byte-identical in both modes. Rename map in `Q155`. The countersteer assist went with `P3-56` (2026-10-06).
-- `P3-60` ✅ The car as a spec sheet (`Q156`, the user's ask, 2026-10-06) — `CarSpec` per car under `tuning/cars/` (the Crown Comfort's out of `handling.tres`, the mass out of `taxi.tscn`), the handbrake and the spring's ceiling derived from a wheel's load at rest beside `brake_g`. The pad identical bar the wall clips' exits at the rounded 4.0× ceiling.
-- `P3-61` 🟡 The overspin (`Q156`, 2026-10-06) — stability control brakes the front wheel outside a slide from 25° of slip: the turn let go comes out at 95 / 118 / 110° (was 180 / 164 / 146°) and 86 / 100 / 81° lifted, `hold` 3.52 / 3.35 / 2.13 s. Open: `turn@off` at 63 kph 8° over the bar, the lifted handbrake in a turn at 63 / 86. The user's drive owed.
-- `P3-62` 🟡 The pace as one scale (`Q156`, 2026-10-06) — `pace.tres`; gravity × pace with every force following (Froude scaling: the same car, √pace faster). Exact at a matched tick; holds to 2.0 at 60 Hz, not 2.5. The value is the user's drive.
-- `P3-63` 🟡 The aids no car has, and the pace (`Q156`, 2026-10-06) — `drive_boost` gone; `drift_side_cut` kept after a trial at 0 (the turn under-rotates to 59° at 42 kph); `pace_scale` 2.0 on the user's drive (2026-10-07; 1.5 the day before): `turn@off` 81 / 84 / 93°, `hold` 0.68 / 0.83 / 3.57 s (under the fare's 2 s at 42 / 63, taken knowingly), 80 kph in 2.8 s. Owed: the game's bars re-read at the settled pace; the LSD deferred.
-- `P3-64` ✅ A cel look for the city (`Q158`, the user's ask, 2026-10-06; shipped 2026-10-07) — the outline ships: every crease and silhouette a 1.0 px line in its own surface's hue at half its value, +1 draw call, renders under Mobile and Compatibility. The banded sun is built and not shipped (faces move 3–6 `L*`, no cel look of its own). The `facade` checks were taken for every variant: `facade_chroma.py --shipped` unchanged to the digit, the skyline within 0.8 `L*` and 0.13 `C*`. ⚠️ Owed: the outline's frame time on the `P3-9` handset — a depth copy and a colour copy a frame, unmeasured.
-- `P3-65` 🟡 The outline answers the car (`Q158`, 2026-10-07) — built: the line 1.5 px at rest, thinning to 1.0 px and fading to 80% at 120 kph (`outline_speed`, a global the player's car writes; no car, the rest line); `verify_vehicle` grades the speed share, `verify_settings` pins the global. The drift afterimage built here the same day (a hull off the end moving most, 0.06 m, dragged at most 0.15 m) is gone: reversed on the user's ask for the light tail, `P3-70`. Owed: the user's drive.
-- `P3-58` 🟡 Drift sparks (`Q154`, the user's ask, 2026-10-05) — built: `SkillTracker.drift_tier` (-1 / counting 0 / awards paid) out on `FareSystem.drift_tier_changed`, wired by `TaxiHire` to `DriftSparks` — a colour per tier off the rears (warm white counting, blue, orange, purple), a flare on each step, no boost; `drift_sparks.tres`. `verify_fares` `sparks:` steps it on the award's tick and puts it out on a fall, in the air and on a wall touch, mutation-checked. Owed: the user's colour and tier pick from the rendered frames, the drive. P3-56 still gates whether a novice lights them.
-- `P3-46` ✅ Route line on the minimap (`Q137` reversed, the user's call of 2026-09-24) — the legal route to the destination from the fare's own `Route`, from the car's hit to the stop point, re-routed at the 5 Hz sample and seeded the way the car faces (`Hit.along`); `route_px` 5 px in `map_route`; `map:` assertions on the cut, the mesh and the transform, and `verify_road_graph` pins the drawn polyline to `distance_m`; carrying from the boot stand at rest (`--fare-seed=1`, t=8): +1 `draws`, +221 `prims` over `route_px = 0`, and +7 / +14.9k over `--minimap=off` (137 / 775.5k against 130 / 760.6k; the map alone was +5 / +14.7k) — frames in `build/driver/route_a` (the line from the chevron, clockwise round the Expo Drive roundabout, east to 華懋世紀廣場) and `route_d` (cleared once the car left the network). The user's frame owed (colour, width).
-- `P3-2b` 🟡 The style combo (`Q205`, the user's design, 2026-11-13) — built: `StyleCombo` counts each bonus skill in one run of them, any award restarting a shared `combo_gap_s` (2.5 s, a guess) that stands still while a slide, a speed run or a flight is in progress; a collision or a crash ends it, a touch does not; practice counts and a boarding carries it; **no money moves**. On the HUD (`Q212`, the user's pick 2026-11-14): the live line in the tick's row — the skill that joined, small, beside 車手 ×N and the gap's bar — and the summary of every skill under the meter; the final total held then faded (red when broken), ×2 and up only. `SessionTally` keeps each skill's best and the best total, saved per skill under `[records]`; the 成績表 has a 車手 / MAX column and a 最佳車手 line. `verify_fares` `combo:` mutation-checked six ways. Frames `build/driver/q205_*` (the HUD shot with `combo_show_min` 1 for the frame, restored). Owed: the user's drive and gap; the fare combo is the rest of `P3-2b`.
-- `P3-1b` ⬜ `B4`. `P3-5b` 🟡 safe areas and the touch layout built (`Q204`, 2026-11-13): the glass shaded to the edge and the zones into the notch strips, a touch table at 1.25 with the map and speed off the thumbs on one line, the wheel-and-pedals sticks; the 成績表 one scrolling column at 1.4× on a touch screen (`Q206`), SAVE RESULT still the whole sheet. Owed: the handset drive and the sheet's thumb scroll; the one-handed layout.
-- `P3-9` ⬜ Authenticity round 1 — Phase 3 gate; different drivers from `P3-9a`, on a handset.
+- ✅ `P3-24`, `P3-25`, `P3-43`, `P3-1a`, `P3-5a`, `P3-44`–`P3-47`, `P3-52`, `P3-59`, `P3-60`, `P3-64`,
+  `P3-80`, `P3-3e`. Owed on them: the `B1` drive; a press of SAVE RESULT on the web build; the
+  minimap's web clip frame; the outline's handset frame time.
+- `P3-1a` note: four pickups are stranded by one-way exits off the map (`wan_chai/f_017`, `f_018`,
+  `f_020`, `causeway_bay/f_001`); only `Q6` reopens them.
+- `P3-86` 🟡 Street hails and a measured par (`Q203`).
+- `P3-3` 🟡 Traffic — `a`–`c`, `e`, `f1`–`f3`, `g` built; owed: the handset re-take of `cars`,
+  whether `is_routable`'s bar is a lane or a vehicle (`P3-33e`). Seeds 1, 2 and 8 meet in a
+  signalled junction (`Q182`).
+- `P3-3d` 🟡 The player's red — counted, never paid or docked until something enforces it (`Q181`).
+- `P3-2a` 🟡 Near miss, parked and moving (`Q161`, `Q175`).
+- `P3-71`–`P3-73`, `P3-75` 🟡 Parked roster — finding: the fill's lane-room bar does not count a bay
+  on the far kerb.
+- `P3-4` 🟡 Trams — owed: the handset's cost. Push on impact (`Q180`) 🟡.
+- `P3-8` 🟡 Taxis in the traffic — owed: minibus behaviour.
+- `P3-78` 🟡 Routed buses and green minibuses — owed: the frame cost.
+- `P3-79` 🟡 The taxi's sounds — owed: the user's ears, the PCK cost.
+- `P3-49` 🟡 Skills, the receipt, the passenger's face. `P3-50` 🟡 Penalties — owed: a crash-tier
+  hit on the street.
+- `P3-51` 🟡 Air and the eight jumpable ramps — the flyover parapet band stays off (`Q147`).
+- `P3-53` 🟡 Drift bars — owed: the kerb slide at speed, the tap under 30 kph.
+- `P3-54` 🟡 Real technique — the lifted flick stays under the threshold on the `mu` 1.0 car except
+  at 63 kph; which fails to work is the user's call.
+- `P3-55` 🟡 Power-on corner — `turn_drive_cut` 0.5 is provisional.
+- `P3-56` 🚫 Drift assist as a setting — dropped; one car, no automatic countersteer.
+- `P3-57` 🟡 Tyre marks and smoke. `P3-58` 🟡 Drift sparks — owed: the colour and tier pick.
+- `P3-61` 🟡 Overspin — open: `turn@off` at 63 kph 8° over its bar.
+- `P3-62`, `P3-63` 🟡 Pace 2.0 — owed: the game's bars re-read at the pace; the LSD deferred.
+- `P3-65` 🟡 Outline answers the car.
+- `P3-74` 🟡 Two modes — owed: a full shift. `P3-76` 🟡 成績表 and record — no red-light row.
+- `P3-81` 🟡 A free drive's REPORT.
+- `P3-2b` 🟡 Style combo — `combo_gap_s` 2.5 is a guess; the fare combo is unbuilt.
+- `P3-5b` 🟡 Safe areas and touch layout — owed: the one-handed layout.
+- `P3-1b` ⬜ Cross-harbour and long haul. `P3-9` ⬜ Authenticity round 1.
 
-Phase 6
+Phase 4–6
 
-- `P6-1` ✅ Start menu (`Q146`, the user's ask, 2026-09-26) — START GAME / OPTIONS / CREDITS & LICENCES in the HUD's housing, bottom-left, over the taxi standing at the Harbour Road stand (`showroom_fare_id` `f_001`, HKCEC behind it) with the chase rig circling it (`MenuOrbit`, 40 s a turn; since `Q164` a shot per page — PLAY with the door open, OPTIONS at the tail); `Main` parks the level (pedals gated, fares held, guide hidden) and resumes it on start, the car back on the start line. The language: `Locale` reads `--lang=`, the saved option (`user://settings.cfg`), the OS language, then `zh`; a pick rebuilds the menu and readies a fresh HUD. The credits carry `DATA_SOURCES.md`'s drafted text with the ownership sentence and both portals, the Free HK Kai CC BY credit, the engine and the code and assets' licences, in both languages — `verify_menu` in `ALWAYS_TOOLS` holds every phrase (mutation-checked: the ownership sentence removed fails it). `--menu=off` and `--lang=zh` appended by `drive.sh`; the default drive unchanged tick for tick (71.22 kph at t=6). HOW TO PLAY (the user's second ask): five steps abreast — drive, pick up, deliver, earn tips, mind the signs — each a drawn picture (`GuideCard`, the HUD's palette, the NO ENTRY sign reused) over a caption in both languages. Frames in `build/driver/menu_zh`, `menu_en`, `menu_pages/`. ENGINE NOTICES (`LICENSING.md` item 5, same day): a page under the credits' foot with the engine's full third-party notices composed at runtime (`EngineNotices`: `Engine.get_copyright_info()`'s 102 components and `Engine.get_license_info()`'s 19 licence texts — `get_license_text()` is the MIT screen alone), a `RichTextLabel` with its own scroll and threaded layout; `verify_menu` holds every component named and every licence text whole (mutation-checked: the texts dropped fails it). `--menu-page=<page>` opens the menu on a sheet, so a frame of any page is one `drive.sh` run; frames in `build/driver/notices_<lang>_<page>`. The pause (`Q165`, 2026-10-13): Esc, the HUD's ⏸, a tap on the 咪錶 (2026-11-13) or the app losing the screen pause the tree under a PAUSE page — RESUME, HOW TO PLAY, END SHIFT / MENU (no best written) — the thumbs let go; +1 draw. Owed: the user's look and drive, Android's back button (`P0-3b`). The sound (`Q221`, 2026-11-16): ON / OFF and a volume slider on OPTIONS, the Master bus; `verify_menu` `options:` 9 lines. OPTIONS as groups and under PAUSE (`Q223`, same day): `verify_menu` `groups:` 13 lines, `verify_input` `options:` 9.
-
-Phase 4–5
-
-- `P4-1` ✅ Level 1 open exactly where `clearance.LEVELS` measures — reviewed (`Q111`).
-- `P4-2`–`P4-5` ⬜ — `P4-2` owns the rest of `Q15`; `P4-3` MARSH ROAD's lip; `P4-5` streaming
-  distances and LOD0's cell.
-- `P5-1`–`P5-5` ✅ Scripts merged; signs, lamps, arrows, barriers as props — reviewed (`Q115`).
-- `P5-6` ✅ Road chunked by tile — 65 chunks, +13 to +17 draw calls on the route.
-- `P5-7` ✅ Region join, `a`–`g` (`Q116`).
-- `P5-8` ⬜ Content — outline only; behind `B1`–`B4`, `P3-9`, `Q6`.
-- `P5-9` ✅ Two-region runtime, `a`–`d`, `f`, `g`; 🚫 `P5-9e` shared libraries refused (+3 to +11
-  draw calls at the seam). Verdict on `P5-9f`'s drive across the line owed.
-- `P5-10`–`P5-13` ✅ DCC door, real UV (schema 28), occluders, importer LODs off (`Q121`).
-- `P5-14` ⬜ Textures as an option on tiles.
-- `P5-15`–`P5-18` ✅ Verifier fix, sidecar ratchet, per-tier occluder policy,
-  `tools/resident_budget.py` (`Q122`).
-- `P5-19` ✅ Box-junction convexity guard (`Q123`).
-- `P5-20`–`P5-27` ✅ Collaborator seam (`Q124`).
-- `P5-28a`–`d` ✅ `exposure_anchor` un-baked (schema 31); `facade_hue.strength` 3.0 on the user's
-  pick (`Q38`, `Q30`).
+- `P4-1` ✅. `P4-2`–`P4-5` ⬜ — `P4-2` owns the rest of `Q15`; `P4-3` MARSH ROAD's lip; `P4-5`
+  streaming distances and LOD0's cell.
+- ✅ `P5-1`–`P5-7`, `P5-9a`–`d`, `f`, `g`, `P5-10`–`P5-13`, `P5-15`–`P5-28`. `P5-9e` 🚫 shared
+  libraries (+3 to +11 draw calls at the seam). Owed: the drive across the seam (`P5-9f`).
+- `P5-8` ⬜ Content — behind `P3-9`, `Q6`. `P5-14` ⬜ Textures as an option on tiles.
+- `P6-1` 🟡 Start menu, options, credits, pause — owed: Android's back button (`P0-3b`).
 
 ---
 
 ## Questions
 
-The claim, evidence and refusals are in `DECISIONS.md` under the same ID. A question closes here
-and there in the same change.
+Every record is in `DECISIONS.md` under its ID. A question closes here and there in the same
+change. Closed questions are not listed here: see the headings in `DECISIONS.md`.
 
 ### Open
 
-- `Q6` Does the region need Central? (after `P3-9`). Deferred. The one way `Q141`'s three
-  westbound Wan Chai pickups come back.
-- `Q13` Nothing ramps between levels in the source (`P4-*`). Level 1 open (`Q111`). Left: the 15
-  bores (0 of 15 carry a corridor; `e489` lacks 0.22 m headroom) — needs a vertical instrument,
-  not a wider `levels`.
-- `Q14` Stands carry operating hours `P1-5` discards (`P3-1`). Deferred — schema bump + parser
-  when the fare loop needs it.
-- `Q15` Fare nodes snap by plan distance only (`P4-2`). Snap restricted to level 0
-  (`off_grade_nearer` counts it). Left: a point genuinely on a deck snaps to the street below.
-- `Q19` Level-0 edges with under one lane clear (user). Carved (`P3-28`) and fenced (`P3-29`).
-  Left: the building half, a drive of `e99`, `P3-32`'s carve-wall arm.
-- `Q21` Should level −1 be drawn at all? (Phase 4). Open — 11 of 30 ends clipped at the region
-  boundary.
-- `Q22` Off-grade carriageway hangs past its structure (Phase 4). 3.3% (`overhang.py`) after
-  `Q107`; no width rule reaches the rest.
-- `Q24` The road is a plane and the ground is not (unassigned). Three mechanisms, no shared fix;
-  instrumented by `ground_clearance.py`, which mechanism to buy is unassigned.
-- `Q30` Shipped façade palette exceeds `ART_DESIGN.md` (user). Widened on purpose at `strength`
-  3.0: 35.2% over `C*` 20. `strength` cannot fix it.
-- `Q31` The value range has an empty middle. `adjustment_contrast` 1.00 shipped; shadow mass
-  still flat — needs a sky-visibility bake. Quote shadow-mass `L*` and sd, never band share.
-- `Q35` Per-building material draw gives a salt-and-pepper skyline (`buildings.py`). Candidates:
-  spatial hash, block join, accept. Grade from the street.
-- `Q39` `wall_sky_tint` is uniform (`Q31`). Free once a sky-visibility term exists; do not lower
-  it globally.
-- `Q62` Sign facing is derived and ungraded (`signs.py`). Turn-restriction diff grades six plates
-  only; measured shut as a grader.
-- `Q65` Sign estate scoped to where-to-drive (user). Speed limits (73) on hold.
-- `Q66` Deviation board direction is unpublished (`signs.py`). Shipped on an assumption (chevrons
-  point away from the post's kerb); ungraded.
-- `Q68` 讓 / 停 lettering atlas (`sign_text.py`). `_plate_box`'s correction never reached
-  `sign_face_survey.measured()` — the two disagree on 10 of 21 faces.
-- `Q79` Street-plate typeface (`hud.gd`). Free HK Kai ships; glyph subset recorded, not taken (≈
-  +15% PCK).
-- `Q104` Ribbon wider than the cleared corridor (`P3-32`). Carve-wall arm.
-- `Q115` Props with placements vs merged meshes (Phase 5). `P5-1`–`P5-6` built; remaining Phase 5
-  steps.
-- `Q116` Two regions meet at a hard edge (`P5-9`). Built; a stub across the seam joins nothing;
-  `P5-9f` verdict owed.
-- `Q120` Scaling numbers extrapolated from Wan Chai (`P4-5`). `mong_kok` 35% denser; LOD0's cell +
-  radius is the lever; `sha_tin` / `mong_kok` ungraded by the batteries.
-- `Q121` Mesh contract vs a DCC workflow (Phase 5b). `P5-14` left. Held: non-convex cap,
-  `authored_roads:`, decals, landmark LOD.
-- `Q122` Occluder the web cut cannot use (user). Two one-line calls: far-tier occluder (culls
-  nothing, 4.63 MB) and a web bundle without occluders.
-- `Q126` Stacked arrows on two-way streets. Cause A closed (`lanes_forward`). C (lanes painted
-  2.7–2.9 m) and D (tram reserve in the width) each need a decision.
-- `Q127` Widths where the ray survey cannot read (user). `Q128` shipped the two survivors. Left:
-  the street borrow; consensus of ≥ 2 as the next rung.
-- `Q129` A width is the carriageway's (`P3-33`). `P3-33f`; the seam's 0.62 m overlap strip.
-- `Q134` Paint stands where TD surveyed it (user). `P3-36`, `P3-37` built; the user's drive owed.
-- `Q135` Road paint stays mesh; its frame cost measured (user). `P3-38`–`P3-42` built; the user's drive owed. Open: which deck where two cross (Sha Tin).
-- `Q136` Minimap from `RoadGraph`, own off-switch (`P3-44`, built). Heading-up, the merged plate and the border arrow are the user's calls; the one-way arrows are off (2026-09-24). Owed the user: a drive; `span_m`. Owed: the web frame.
-- `Q141` The 咪錶 runs TD's tariff; the tip is the skill; speed pays now (user; `P3-1a`, built). Closed on the user's calls; the drive owed. The four stranded pickups (`wan_chai/f_017`, `f_018`, `f_020`, `causeway_bay/f_001`) are closed as the data's (2026-10-15): one-way exits off the map, reopened only by `Q6`.
-- `Q142` The pending customer is the pickup pool, said as its building over its road; the arrow is crow-flies (user; `P3-5a`, built). Closed. The user's drive owed.
-- `Q139` One dark housing; dial for the speed, the 咪錶's red LED kept for the fare (user; built with `P3-44`). The session's total on a third LED row, six cells, tip and total right-aligned under the fare (user, 2026-11-11; 200 `draws` before and after). The user's drive owed.
-- `Q140` The harbour (user; `P3-45`): on the minimap with `P3-44`, in the world as a plane at sea level over ground the tile stage sinks (2026-09-25). The user's frame owed.
-- `Q138` Racing-game HUD arrangement, five reserved slots (user; built with `P3-44`). The user's drive owed.
-- `Q137` A router, and since `P3-46` a route line (the user reversed the stance, 2026-09-24):
-  the legal route drawn on the minimap. Held: arrow to the next junction.
-- `Q144` The parks in the world are the ground painted green, every code the minimap draws (user; `P3-47`, 2026-09-25). The user's frame owed.
-- `Q145` Skills pay flat HK$ per event, the delivery is a receipt, and the passenger's face pops from the back seat (user; `P3-49`, 2026-09-25). Not the style chain. Fourth round (the user's drive): a drift qualifies at 2 s, the speed skill pays per 200 m, the live tip is the skills alone on the meter's LED. Fifth round (2026-09-26): the skills run empty too, shown and never paid, so a stunt can be practised between fares. The user's drive on the new table owed.
-- `Q143` A street the region cuts is closed on the line; the neighbour's way in never (user;
-  `P3-29a`, built). Closed. The user's drive owed.
-- `Q156` The car is a spec sheet, its forces derived, the pace one named scale (user, 2026-10-06). All five steps shipped (`P3-60`–`P3-63`); pace 2.0 on the user's drive (2026-10-07; 1.5 the day before), at the 60 Hz tick's ceiling, with `hold` at 42 / 63 kph under the fare's 2 s taken knowingly, and the limited-slip differential is deferred.
-- `Q155` The car's dials are its systems (user, 2026-10-05): real-system names, one table per system, the game-only aids grouped as arcade aids. Closed; the rename map is the Q.
-- `Q154` The drift shown on two signals (user, 2026-10-05): tyre marks and smoke off each wheel's slip, sparks off the tracker that pays; no boost, no fire. Open on the look — the user's pick of colours, tiers and smoke from frames.
-- `Q153` Arcade grip, sim-lite slide: pillar 2 stands, and the drift is the one place for sim-lite skill — easy to start, forgiving to lose, held by throttle and countersteer (user, 2026-10-02). Closed. Reference Forza Horizon, not Mario Kart: the button guarantees the start, real technique works in the direction a driver expects, the assist a setting defaulting on. The spike (`P3-52`) is worked toward it (`P3-53`–`P3-56`); the assist an option since 2026-10-05, its fade band the assist's own on the user's call. A road tyre since 2026-10-05 (the user's call): `mu` 1.0, `drive_scale` 1.0, `handbrake_torque_nm` 2,000 — pillar 2 reworded to "easy to drive", the faster taxi reversed, the lifted flick slides on physics (44 / 48° at 42 / 63 kph), and since the same day a real taxi as the baseline (the user's call): gravity 1.0, `engine_force` 3,840 N, a Crown Comfort's, `drive_scale` gone; then its physical numbers (1,400 kg, 2.785 m wheelbase, 1.43 m track, 0.31 m wheels, 32° lock, `brake_force` 47), the toy chassis a later art pass, and the drive a Crown Comfort LPG's (6,000 N off the line, 83 kW above, air drag in place of Godot's damping: 0–100 in about 10 s) — the plain tap spun at 42 / 86 kph with the assist off until the slip cut moved to 10° and the handbrake to 1,150 N·m (tap 69 / 24 / 37°); on the user's drive (2026-10-06) a steering cap to the tyres' grip (the 50 kph plough), ABS with a 65% front bias and `brake_force` 70 (9.3 m/s²), a drive boost of 0.5 off in slides and faded with steering (0–100 in ~7 s), and drive restored to a spun car rolling backwards. the assisted tap's 123° at 50 kph fixed with its slip cut from 20° (tap 65–73°, still paying). The drift assist dropped the same day on the user's call (`P3-56`): one car, the old off mode. The slip read at the rear axle since the same day (a gripping U-turn read 15° at the centre of mass, stalled under the road slip cut and counted as a drift), the road cut 8–14°. The drive sized on the rim's speed, not the car's (a spinning wheel had more power than the engine), and the side cut's band to 105 kph: tap 43 / 27 / 27° at 42 / 63 / 86 kph, a plain tap paying at none, `hold` 3.52 / 3.35 / 2.98 s. The brake authored as 1.2 g of the car's weight (`brake_g`, any tick rate); the understeer cut kept after a yaw-deficit key and a friction-circle traction control were measured and withdrawn. The steering cap lifts on the countersteer side of a slide alone (lifted at any slip past the peak, a power-on corner's fronts went to the table's lock and ploughed: front use 3.3 → 2.3× at 63 kph with the cut at 0; the shipped pad unmoved but the held flick at 86). The friction-circle traction control re-tried on that cap and withdrawn again (level to 42 kph, 0.82 / 0.73 g against the cut's 0.91 / 0.85 at 63 / 86). Open: the tap at 125 kph spins; 86 kph and `turn` let go on `mu` 1.0, the user's drive; `P3-54`'s fails (no flick, the trail-brake at 42, the held handbrake's late swing, handbrake-and-lift spinning at 86).
-- `Q151` The wall slide reads the velocity the wall met (`Q148`'s finding; 2026-09-29). Closed: the 30° clip exits 28.8 / 51.3 / 76.2 kph at 63 / 86 / 105 kph entry where it read 0.09, the brush 34.5 → 57.1, the head-on a stop by construction, `approach` / `impact` unchanged so the penalty bars stand. Left: the scrub after a clip on the street (a yaw-away or tyre term, a handling dial).
-- `Q150` The taxi rigs' dials are tuning resources — `vehicle_lamps.tres`, `taxi_door.tres`, `passenger_emote.tres`, one profile per script on the user's call, and `beams.tres` filled after sitting empty since `Q119` (2026-09-29). Each rig refuses a zero key through `usable()` and goes inert; the guarded set is every key with an export floor above zero, the rest named as a hole. Frames byte-identical in the car region on the before/after series; the zeroed-table drive darkened every lamp. Closes `Q149`'s deferred migration.
-- `Q149` A refactor pass over the game scripts and the verify tools (user; 2026-09-26): eight batches — dead code, one init for the nine layer tools, `MeshContract` proved to refuse its mirror (and a bug: the absent-array guards were unreachable), `city.json` parsed once, one pending scan per sample, one verify base with the watchdog, the locators' hints, `TuningTable`, the UI factories. Deferred: the lamp policies and the export-default migration.
-- `Q148` The penalties are three tiers on the speed into the wall, read off the skidpad's wall rows (user; `P3-50`, 2026-09-26). A touch is free and ends a slide; a collision docks HK$2, a crash HK$5; one wall is one dock. The user's drive owed.
-- `Q147` A carved ramp's edge is jumpable, and the flight is a skill paid at the landing (user; `P3-51`, 2026-09-26). No synthesised rail existed to remove: the blockers are source parapets and the carve's cut face. Air built; the band built over the listed ramps; the flyover band built, measured and withdrawn — the flyovers keep their published parapets.
-- `Q146` A start menu over the parked taxi, and the language read flag → saved option → OS → default
-  (user; `P6-1`, 2026-09-26). The credits screen is the licence gap closed. The user's look owed.
+- `Q6` Does the region need Central? Deferred to after `P3-9`.
+- `Q13` Nothing ramps between levels in the source. Left: the 15 bores — needs a vertical
+  instrument, not a wider `levels`.
+- `Q14` Stands carry operating hours `P1-5` discards. Deferred.
+- `Q15` Fare nodes snap by plan distance; a point on a deck snaps to the street below (`P4-2`).
+- `Q19` Solid geometry in the carriageway. Left: the building half, a drive of `e99`, the
+  carve-wall arm (`Q104`).
+- `Q21` Should level −1 be drawn at all? 11 of 30 ends clipped at the region boundary.
+- `Q22` Off-grade carriageway hangs past its structure; no width rule reaches the rest.
+- `Q24` The road is a plane and the ground is not. Three mechanisms, none assigned
+  (`ground_clearance.py`).
+- `Q30` Shipped façade palette exceeds `ART_DESIGN.md`, on purpose; `strength` cannot fix it.
+- `Q31` The value range has an empty middle; needs a sky-visibility bake. `Q39` (`wall_sky_tint`
+  uniform) is free once that exists.
+- `Q35` Per-building material draw gives a salt-and-pepper skyline. Candidates: spatial hash,
+  block join, accept.
+- `Q62` Sign facing is derived and ungraded.
+- `Q115`, `Q116` Props and the two-region seam: built; a stub across the seam joins nothing.
+- `Q120` Scaling numbers extrapolated from Wan Chai (`P4-5`); `sha_tin` / `mong_kok` are ungraded
+  by the batteries.
+- `Q121` Mesh contract vs a DCC workflow: `P5-14` left.
+- `Q122` Two one-line calls for the user: the far-tier occluder (culls nothing, 4.63 MB) and a
+  web bundle without occluders.
+- `Q126` Stacked arrows on two-way streets: C (lanes painted 2.7–2.9 m) and D (tram reserve in
+  the width) each need a decision.
+- `Q135` Which deck's paint where two decks cross (Sha Tin).
+- `Q179` A drift holds 30 s on the pad and under 2 s on the street, so it is not capped; reopens
+  on any open space.
+- `Q181` Traffic-law penalties (red light, bus lane, double yellow) wait for an enforcer; no task.
 
-Residue inside closed questions: `e257` paints 2.45 m inside its own bracket and a lane count
-cannot vary along an edge (`Q113`, `Q114`); `e333`/`e504` count three and paint two (`Q130`);
-single stations where HyD's polygon touches the centreline at a node (`Q131`); 52 RM1001
-refusals need coverage-based hosting (`Q118`); MARSH ROAD's 0.65 m deck face needs a node-level
-descent pass (`Q90`); 9,779 triangles a run hit `MAX_SUBDIVISIONS` in `clearance` (`Q51`).
+### Picks owed by the user on built work
 
-### Closed — ID → what holds
+- `Q154` spark colours and tiers · `Q196` ink weight · `Q235` dawn / dusk strength · `Q213`
+  headlamp beam loudness · `Q229` whether RESET CAR costs anything · `Q208` a slang rank ladder ·
+  `Q234` glazed or open upper tram leaves · `Q220` steering curve 2.0 against 1.5.
+- `Q237` leaves the signal heads untested against junction asphalt. `Q226` is unseen in a browser.
+  `Q233`: a best set on the 5-minute shift still stands.
 
-- `Q1`–`Q5`, `Q7`–`Q12`, `Q16`–`Q18`, `Q20`, `Q23`, `Q25`–`Q29`, `Q32`–`Q34`, `Q34′`, `Q36`,
-  `Q37`, `Q40`, `Q41`, `Q43`–`Q46` — records in `DECISIONS.md`. `Q26` closed on `C`.
-- `Q38` — exposure is a Godot global per rig; `bounds:` required per material (`P5-28`).
-- `Q42`, `Q48`, `Q47` (survey half) — moot since `Q102`; `Q47`'s `podiums.json` join survives.
-- `Q49` — superseded in mechanism by `Q50`.
-- `Q50` — `VehicleBody3D` ships; isotropic friction; `brake_force` 40.
-- `Q51` — `is_passable` / `is_routable`; `ALONG_M = CELL_M`; width is a lower bound at the cell.
-- `Q52` — `verify_spawn.gd` refuses a start line a car does not fit.
-- `Q53` — procedural markings over the lane coordinate, no texture.
-- `Q54`, `Q56` — kerbside yellow from `NSR`, `painted_vehicle_types: [1, 5]`.
-- `Q55` — filler guard rejects repeated colours per texel; disjoint from `Q37`'s axis.
-- `Q57` — "unsourceable" was a Road Network v2 fact generalised to the estate.
-- `Q58` — `TW` is rails, not centrelines; tramway ships as geometry.
-- `Q59`, `Q93`, `Q96` — arrows read as a fraction across the road; branch glyph authored; lane
-  snap divides by the real width.
-- `Q60`, `Q61`, `Q112` — railings registered not read; three classes; coverage shader; slab.
-- `Q63` — textures fail unless a call site declares `texture_budget_px`.
-- `Q64`, `Q67` — TD's sheet is authority; `tools/sign_face_survey.py` grades faces.
-- `Q69` — transverse marks hosted by transversality; `host_disagreement` is the counter.
-- `Q70` — atlas ships as `signs_text.png`, named in the manifest.
-- `Q71` — `marking_paint.gdshader` shared; a shader change is every sharing layer's change.
-- `Q72` — `faces_against_traffic`; a counter must be reachable, so mutation-check it.
-- `Q73` — a layer can pass every check and be in no scene; `verify_city.gd` checks nodes.
-- `Q74` — closed by `P5-1`.
-- `Q75`, `Q99`, `Q119` — the editor never dropped a setting; configs committed in the writer's
-  form, rationale in sidecars, `verify_settings.gd` reads values back.
-- `Q76` (signals), `Q77` — signal layer built, dropped, removed (`P3-35a`); returns as a port.
-- `Q76` (renderer) — web runs Compatibility and crushes shadows; no knob; name the renderer.
-- `Q78` — sign registration is outward-only; railings keep `abs()` deliberately.
-- `Q80` — HUD layout: a tap zone may overlap, a thumb may not be occluded; no HUD arrow slot.
-- `Q81` — the nose raises the wrong-way sign, velocity may only withhold it; 120° bar.
-- `Q82` — lamps from `LPO`; lantern unlit; mesh compression off project-wide.
-- `Q83`, `Q97` — two relative thumbs; touch overrides the action map per axis.
-- `Q84`–`Q89` — drift dials: graded on dwell, torque decays on time, speed fades at 65/85 kph,
-  `drift_rear_grip_scale_at_top` 0.80, low branch latches (0.44 / 41 kph). Values need `P0-3b`.
-- `Q90` — touchdowns descend; `touchdown_max_grade_pct` 10.0; `tools/touchdown_error.py`.
-- `Q91` — `msaa_3d` 4x, pinned in `check.sh`; mobile unmeasured.
-- `Q92` — paint sits on `DrawnSurface`, cut along its creases; never raise `lift_m`.
-- `Q94`, `Q95`, `Q114`, `Q128`, `Q130` — width and lanes are measured; floor not multiplier;
-  no floor under `lanes`; five width sources; `arrows_unmeasured`.
-- `Q98` — exponential camera yaw law, `yaw_response` 6.0.
-- `Q100` — Hong Kong only; `hong_kong.yaml` + `pipeline/hongkong.py`.
-- `Q101` — crossings / footways re-opened (`P3-27`); TD publishes no coded-value domains.
-- `Q102` — vision reader withdrawn on cost; `TEXCOORD_1` survey channel removed (schema 20).
-- `Q103`, `Q105`–`Q110` — off-grade ribbon cut to its deck per station and side (`deck_rim_m`,
-  `offset_m`); clearance published at levels (0, 1); tools share `overhang.cross_section`;
-  `tools/corridor_truth.py` can clear an edge, never condemn one.
-- `Q111` — level 1 open; `fence.touchdown_levels` `[-1, 2]`.
-- `Q113` — the ribbon no longer shrinks at a ramp touchdown.
-- `Q117`, `Q125` — opposed pairs found by geometry; join drawn as geometry from
-  `opposed_pairs`; `draw_pair_join` off.
-- `Q118`, `Q132` — longitudinal lines from TD's survey only; nothing where TD is silent.
-- `Q123` — convexity guard on border quads (`P5-19`).
-- `Q124` — collaborator seam built. Refused: feature folders. Held: HUD as a scene.
-- `Q126` — see Open (C, D); `lanes_forward` shipped.
-- `Q131` — `seam_m` 0.10, kerbed islands read through, no area cap.
-- `Q133` — refactor, not rewrite (`P3-35`); OSM unevaluated (hard rule 7).
-- `Q152` — the per-wheel tyre car is the game's car (2026-10-03, trade a): `city_drive.tscn`
-  instances `taxi_tyre.tscn`; the engine-tyre control car and its drift code dropped on the
-  user's call (2026-10-05), `skidpad.tscn` grading the tyre car. `speed_min_kph` and the wall bars
-  were read off the old car's pace, which `drive_scale` 1.0 restored (`Q153`).
-- `Q157` The checks and the build run side by side (user, 2026-10-06): `check.sh` 54 → 21 s
-- `Q158` The city takes an outline, not a banded sun (user, 2026-10-07): a thin line in each surface's own darkened hue, over black ink and over no line (`P3-64`). The handset's frame time is owed. The car's own answer (`P3-65`): the line thins with speed; the drift afterimage reversed for the light tail off the lamps (`P3-70`, 2026-10-07).
-- `Q159` The fences and the railings collide as a box per prop (user, 2026-10-07; reverses `P3-19`'s no-collider stance): the barrier's trimesh → a box over its extent; the railings a box per panel, asset still collider-free (`P3-68`).
-- `Q160` The day runs to night as game time (user, 2026-10-07; reverses "the sun does not move" and `Q82`'s unlit lantern): one blending rig, never two; `exposure_anchor` holds and the dark comes from the light (`P3-69`).
-- `Q163` One head-up display (user, 2026-10-13): bare readouts on a bracketed, vignetted frame, the map a round fading scope, the speed a sweep, the 咪錶 alone housed; the menu on the same glass over a blurred backdrop. The user's drive owed.
-- `Q164` The menu's camera follows its page (user, 2026-10-13): HOME turns, PLAY at the kerbside front three-quarter with the door open, OPTIONS at the tail, the sheets from above, REPORT head on; eased on one rig. The user's look owed.
-- `Q165` The drive pauses the tree, not the level (user, 2026-10-13): Esc, the HUD's button or the 咪錶, the app losing the screen; RESUME / HOW TO PLAY / END SHIFT with no best written; no OPTIONS mid-run. The user's look and drive owed; Android back is `P0-3b`'s.
-- `Q166` The parked roster detailed inside its footprint (user, 2026-10-13): folded mirrors, the body a skin and a bumper inside the box the collider is sized from; the parked taxi keeps its own shape, since the player's body is 4.34 m to the stand's 4.70 m. Owed: the user's look. Open: hazard lamps.
-- `Q167` A parked vehicle wears a livery drawn per placement, unless its colour means something (user, 2026-10-13): taxi, bus and tram keep theirs, the minibus's roof green or red, private cars mostly neutrals; a fifth marker and `INSTANCE_CUSTOM`, no draw added. Owed: the user's look.
-- `Q168` Rails and fences take the car's painted sky, never metalness (user, 2026-10-14): the hour changes which sky metal would reflect, not that sky is all it has; probes refused on cost and staleness (Forward Mobile has them). `tramway`/`railings.gdshader` mix the `sky_light`-scaled gradient by fresnel, rails 0.5, fences 0.25 (they darken a few codes). Handset cost owed.
-- `Q169` The skills take the 黃紙's names (user, 2026-10-26/27; bonuses reworded as feats 2026-10-28): names only — a bonus pays, a penalty docks, no three-minors rule, no verdict; 碰及物體 for the crash (the user's item); 甩尾 kept, the Kai lacks 軚. A 成績表 and a lifetime record planned as `P3-76` parts 2 and 3. Parts 2 and 3 built 2026-11-01 as two ledger tables, not TD's form; the user's look owed.
-- `Q170` Space is the handbrake (user, 2026-10-27): the `drift` action renamed `handbrake`, HOW TO PLAY says so in both languages; the side cut and drift mode stay behind the press, since a handbrake alone under-rotates the turn. No force moves.
-- `Q171` Trees from HyD's and LCSD's inventories, only where surveyed (user, 2026-10-27; built as `P3-77` the same day): reverses `Q144`'s "trees are not built"; Victoria Park and the streets bare for now; HyD's Tai Hang slopes included; a tree is a crash.
-- `Q173` Signals return as an authored, checked phase plan (user, 2026-10-29): reverses `Q77`;
-  a junction is signalled where an `RM1011` is hosted (115 of 120 within 15 m of a head), grouped
-  by `surface.py`'s stub clusters; heads only once the controller lights them (`P3-3e`, built 2026-10-30); the
-  player's red counted, never paid or docked, until the user decides.
-- `Q177` Public transport's windows light at night (user, 2026-11-01): bus and tram at `cabin_glow` 0.25, minibus 0.12, the coach dark; the tram's head lamp, on no circuit until now, lights, and two white side lamps ahead and two red behind burn while it runs, day and night. Owed: the user's drive.
-- `Q178` Cars sound their horns at the taxi, and the meter beeps when the reading moves (user, 2026-11-01): a horn when cut up or stood behind the taxi with no red to wait for, silent while it is parked; a beep at the flagfall and each unit, which the 2 km flagfall makes rare (18% of routes reach a unit). No ear has graded either; the user's drive is owed. Round two (2026-11-04): the taxi's own horn on `H` / X (no touch home), and a car honks when close-called or when the taxi hits something in its path or hits it.
-- `Q180` The taxi knocks moving cars and pushes trams by momentum, and a tram never leaves its rails (user, 2026-11-04): kerb masses cited (tram 12.5 t, HKT's own), restitution 0.15 (SAE), react 0.9 s (TD); a struck car slides on the road tyre's grip, stands on its hazards and drives on, or stays a wreck; parked fixed in v1; penalty on closing speed alone; `--push=off`. Owed: the user's drive.
-- `Q183` Taxis join the traffic at TD's 16.8% and wear a licence their region's stands name (user, 2026-11-05): one mesh per licence in `parked.glb`, the region's mix off every stand in its stands' districts (`city.json` `taxi_licences`, schema 44), the roof sign lit on half the spawns. The user's look and drive owed.
-- `Q181` No traffic-law penalty until something enforces it (user, 2026-11-04): the bus-lane penalty leaves `P3-8`; it, the red the player runs (`P3-3d`), a double yellow and a bus lane or stop come back together behind an enforcer — something like a policeman who catches them. The red stays counted, never docked. No task yet.
-- `Q182` Buses and green minibuses run their published routes and stop at their stops; a bus at a stop may be moving or parked, at random (user, 2026-11-04): TD's stop sequences, the path between stops inferred by the legal router, entered at GTFS headways. `P3-78`, built 2026-11-05; the path is found at runtime by `RoadRouter.goal_tree`, not in the ETL.
-- `Q184` The web build compiles its shaders under a boot cover, and a batched car holds no instance uniform (user, 2026-11-05): cold, the menu stalled 0.6–2.1 s and the drive start 0.3–0.5 s, now all behind the cover; 83 instance-uniform errors a load to 0. Not covered: the first dusk's lights, what a drive builds at start (309 ms in one cold run of three).
-- `Q186` The traffic's mix and size follow the clock hour, off TD's census on these streets (user, 2026-11-06): the census site's own JSON, the 2025 census, three VCO stations pooled by count and seven hourly shapes; supersedes `Q183`'s 16.8% taxi share. `P3-3g`.
-- `Q187` A bus parks only at its terminus, filled by the timetable; buses and minibuses signal at their stops; minibuses and taxis stop at the kerb for passengers, red minibuses and taxis now and then on a yellow line (user, 2026-11-06). Reverses `Q182`'s parked bus at a stop. `P3-78`.
-- `Q191` Lamp columns, sign posts and signal posts collide (user, 2026-11-09): an upright cylinder up each post read off the library mesh's foot, a body per kind and plan cell; faces, arms and heads stay non-solid; the assets stay collider-free. `P3-83`.
-- `Q192` The bus lane's line is TD's survey (user, 2026-11-09): the shader's invented `U = 1` bar — 0.46 m, 1.7 m inside Hennessy Road's traffic lane — is off, and `RM1006` / `RM1007` are drawn at 250 mm (Wan Chai 1,940 m, Causeway Bay 514 m); every other road-marks row unchanged.
-- `Q193` A building's street band takes no measured colour of its own (user, 2026-11-09): split by height, shop vs tower is distinct on 10.8% of tall Wan Chai buildings (bar 25%), all three layers on 1.2%, and the mid-vs-tower shift agrees across walls at chance (29% vs ~33%). The layers are structure the shader already draws.
-- `Q194` The tower's surveyed hue is mostly the building, not the light (user, 2026-11-09): compass and brightness explain 15% of the wall-to-wall hue, sheets 1.4% of the between-building hue; the building mean is 0.70 / 0.74 reliable on `a*` / `b*`. No survey change; the estimator's +1 `b*` lean to lit walls is filed under `Q30`.
-- `Q195` A podium's cornice is drawn at iB1000's line and nowhere else (user, 2026-11-11): the line rides `COLOR_0.a` (schema 46) on 133 Wan Chai + 61 Causeway Bay buildings with ≥6 m of tower above it; 0.28 dark, 0.5 m, the user's pick of four. No default podium, no shopfronts, no palette; a measured podium colour where `Q193` resolves one is owed.
-- `Q196` Vehicles take detail lines from their own mesh (user, 2026-11-11): the depth outline cannot see a window or a band on a flat panel, so the generator marks those edges and the body shader inks them, a width in metres. The weight is the user's to pick. `P3-84`.
-- `Q202` The player's taxi carries its plate (`TX 852`), its roof sign's lettering (`的 TAXI 士`) and a boot seam (user, 2026-11-11; amends `Q190`): flat strokes in the car's own colours, no texture, on the player's car alone; +174 triangles to 2,130, over the 2,000 a vehicle is allowed, as a standing exception to 2,200. ✅ Built; the mark and the wording are the user's to correct.
-- `Q203` Customers wait at street kerbs as well as stands, four at a time, each knowing where they go; the allowance is the legal route at a measured 19 kph par, no floor (user, 2026-11-12; reopens `Q142`'s designated passenger as a live set). ✅ Built as `P3-86`; the user's drive owed.
-- `Q205` The style combo is a count per skill — 車手 ×N — shown and recorded, never money; any skill keeps it alive, the gap stands still while a skill is in progress, a collision or a crash ends it, ×2 and up called out (user, 2026-11-13). ✅ Built as `P3-2b`'s first part; the user's drive owed.
-- `Q212` The style combo splits: its live total where the skill flashed, the summary under the meter; reverses `Q138`'s "no award in the middle" for one line; the desk's tick row moved to y 288 off the guide arrow (user, 2026-11-14). ✅ Built. Two rows since 2026-11-16 (user): 車手 ×N on top, the skill in its own row below; the touch table's `tick` 368 → 338 to keep it off the roof sign.
-- `Q206` On a phone the 成績表 is one column the thumb scrolls, type 1.4×, buttons pinned, REPORT's sheet right of its column; the saved picture is the whole card (user, 2026-11-13). ✅ Built; the handset's drag owed. Amended 2026-11-15 (user): four ranks of type with the total largest, idle rows muted, titled books, and the sums first on a phone.
-- `Q207` The iOS build bakes its shaders at export (2026-11-13): first frame of a fresh install ~12 s against none in 260 s, +10,571,620 B of PCK; export with a window and the Metal toolchain, and count the PCK's `.metal.cache` entries. ✅ Built; Android unbaked, unmeasured.
-- `Q210` A key is shaped into a linear input before the car sees it (user, 2026-11-14): input assists per input method (`keyboard_steer.tres`, `touch.tres`), drive assists per car, tuned against a linear input; `Q174`'s speed-eased ramp moved from the car to the keys, the car's rack a flat 0.2 s, `flick_window_s` 0.3 → 0.6 for the shaped key. ✅ Built; the iPhone drive owed (touch has no speed ramp now).
-- `Q209` The loading screen is a toy taxi idling over the cab's meter (user, 2026-11-13): the boot splash and the iOS launch screen are its still, `LoadingCover` takes over in place over the menu's first seconds, the fare ticking from the flag fall as the tiles and the warm-up count down; one drawing (`taxi.json`) for both. ✅ Built; the cold handset look owed.
-- `Q213` Every moving vehicle throws a headlamp beam on the road at night, a box of air the depth buffer lights, never a spot light (user, 2026-11-13); parked vehicles throw none. ✅ Built; the loudness pick and the handset's fill owed.
-- `Q214` No vehicle appears or vanishes in view (user, 2026-11-14): traffic is placed out of the camera's sight, or past 180 m fading in; retired past 260 m only once out of view for 1 s, else faded out near the camera's `far`, so a chased car stays; a dithered fade in the batched vehicle shader. Parked cells lose the engine's whole-cell `visibility_range_end` and rebuild only with their nearest edge past the `far`. ✅ Built; the handset's cost of the `discard` and the user's drive owed. The same whole-cell cut on lamps, signs and heads is noted, not fixed.
-- `Q215` Shade is lit by the street, paint gloss is the engine's clearcoat, the railings are the lamp posts' steel (user, 2026-11-14): ambient sky share 0.62 → 0.4 toward a warm grey bounce, `CLEARCOAT` replaces the albedo-mixed paint reflection (red `C*` in sun 68.90 → 75.51), `rail_colour` 0.64 → `galvanised_steel`'s 0.569. A canyon band in the reflection and glossier hubs refused on the frames. ✅ Built.
-- `Q220` The steering thumb has a response curve (user, 2026-11-16: "the touch steering is too sensitive"): `touch.tres` `steer_curve` 2.0, the lock is the share of the travel squared; travel, dead band and full lock unmoved, the car and the keys untouched. ✅ Built, a desk pick; the handset drive owed (2.0 against 1.5).
-- `Q222` The whole day moves (user, 2026-11-16): morning, an overhead noon at 1.15 and the afternoon join `Q160`'s keyframes; the authored day is one moment (`day_at` 0.174), a resting rig still writes nothing; the sun at 0.604 °/s on every daylight leg, colours on a smoothstep. The moving sky costs the iPhone Air about 0.15 ms a frame (95.4–96.3 fps against 96.8–97.6 held, under `--max-fps 120`); `update_hz` stays 10. Owed: the user's drive, the floor handset; 21:00 → 07:00 not built.
-- `Q221` The sound is an option (user, 2026-11-16): 聲音 開 / 關 and a volume slider on OPTIONS, saved beside the language and set on the Master bus at boot and on a change; the level is the travel squared. ✅ Built; the user's ears and a handset drag owed.
-- `Q225` A free drive's sky comes round (user, 2026-11-16): `loop_at` 1.714, the night at the day's pace (214 s; 600 since `Q233`), four keyframes through moonset and a dawn back to 07:00; a shift still ends at 21:00. Owed: the user's night drive, the handset.
-- `Q224` The screen turns to either landscape (user, 2026-11-16): `window/handheld/orientation=4`, the iOS plist lists both sides, and the safe-area side insets take the larger of the two on both since a half turn re-reads nothing. ✅ Built; a handset turned over owed, Android unread.
-- `Q241` A menu tap now moves the car, and RESET CAR lands on a road it can leave (user, 2026-11-17: "time changed by my car's position was not reset at all"): `place_at` pushes the transform to the physics server (`force_update_transform`) — set from an input event it was overwritten by the server's sync, so 收工 → 特更 restarted the clock and left the car, and every scripted check passed; the reset takes the nearest edge that is `is_routable` and joined to the start line in the player's network (37 + 14 of 984 edges refused, 99 of 6,933 samples fall back to the start line). ✅ Built; `verify_vehicle` and `verify_road_graph` `accept:` hold it. Owed: the user's handset drive.
-- `Q240` A building's street band takes its measured lightness step from its tower, shrunk by its own walls' disagreement (user, 2026-11-17: "build it then?"; reverses the `L*` refusal for that band alone): `facade_hue.band_lightness` 1.0, the survey's new `noise_l`; 56% of 1,644 measured feet move 5 `L*` or more, most darker; no triangles, no schema bump. ✅ built; the user's drive and the Causeway Bay frames owed. The measured shopfront head and the storey relief were measured and not built.
-- `Q239` CONTROLS offers the wheel and pedals following the thumbs or standing still (user, 2026-11-17: "build a option that wheels and throttle are static position or relative"): `ControlOptions.anchor`, `--touch-anchor=`, relative the default; fixed reads each thumb from the middle of its rest. ✅ built, `check.sh` passes; 🔴 the handset drive is owed.
-- `Q238` The touch wheel stays turned when the thumb lifts and comes back with the car's speed, and a thumb that goes round it turns it (user, 2026-11-17: "some mobile user confused that they should spin the thumb to turn the wheel, and that the wheel should not auto reset to center"): one scheme, no option — the wheel hangs from the thumb, its twelve o'clock where the thumb landed, so a slide along the top is what it was and on down the rim is the thumb's angle round the wheel's middle (`InputRouter._go_round`; the path-curving rule was refused on the handset the same day), four desk-picked dials in `touch.tres`. ✅ built, `check.sh` passes, the pad unmoved; 🔴 the handset drive is owed.
-- `Q237` No lamp column or sign post in a junction's asphalt (user, 2026-11-17: "why there is a pole in the center of a turning lane?"): `lamps.py` and `signs.py` refuse a foot inside `carriageway_region.json`'s R less its islands (`drawnroad.drawn_carriageway`), because a ribbon's kerb stations are a share inside a junction; Wan Chai lamps 1,012 → 997 and sign poles 634 → 614, Causeway Bay 364 → 361 and 216 → 213. Owed: the signal heads; the paved-over median noses as islands, which would bring the refused posts back.
-- `Q236` The phone's app draws the 3D scene at 0.75 of the window (user, 2026-11-17: "anyway we can save on video memory?"): `clean_daylight.tscn` `phone_scale_3d` 0.75, the iPhone Air 358.9 → 270.4 MB and a lap's long frames 26% → 1%; the app only (`Handset.is_app`), a phone's browser at 1.0 because the web's renderer stair-steps it. MSAA 2x in the app as well (`msaa_3d.mobile` 1), 235.9 MB. ✅ Built. Owed: the user's look at the railings in motion, the A13 floor, Android.
-- `Q235` Dawn is blue and dusk is yellow (user, 2026-11-17: "so that we can tell the time diff"): `dawn.tres`, `dusk.tres` and their two keyframes' light, the middle of three strengths. Owed: the user's pick of the strength; first light and 19:00 still share `twilight.tres`; the 07:00 morning is still warm.
-- `Q234` The tram's doors are folding leaves (user, 2026-11-17: "draw the 4 tram doors properly with details and normal map", then the indicator lights): four at the entrance, two at the exit, panelled and glazed, seated by `Q232`'s inked edges with no shader change; the lenses are faceted geometry because the ink marks no edge on a box. Owed: his call on the reading and on glazed against open upper leaves.
-- `Q233` A second driven is a minute on the clock (user, 2026-11-17: "slower shift and clock time to 1s real time = 1min in ingame clock"): `day_to_night.tres` `length_s` 300 → 840, so a shift is 14 minutes of driving and a free drive's day 24; the sun at 0.216 °/s where it was 0.604. Owed: the user's drive of a whole shift; a best set on the 5-minute shift is still the best to beat.
-- `Q232` A vehicle's panels are pressed in the shader (user, 2026-11-17: "bus side is not one flat surface", then windows and frames, then "not random relief on body" of the tram): joints, a crease and a seat at every inked edge, by tilting `NORMAL` — no texture. Only what the real vehicle carries; `relief_pillow` 0.04 is the one invented term, and the user's pick. ✅ Built; the groove and the seat are the model's dials.
-- `Q231` The boot menu is lit at its own hour (user, 2026-11-16: "grey and washed out, not attractive for main menu first sight"): the showroom stand is in HKCEC's shadow at every hour but 0.36–0.46, so `DriveLevel.showroom_time_of_day` 0.41 (12:44) lights the boot menu and PLAY puts the run's hour back; a menu after a run keeps that run's hour.
-- `Q226` A batch with custom data and no colours draws black on the web (user, 2026-11-16: a black traffic taxi beside the player's red one): the Compatibility renderer multiplies `COLOR` by a zero-filled instance colour, so `PropBatch`, the traffic and the trams write white. ✅ Fixed, seen on desktop Compatibility; the browser, a tram and a signal head owed. Not `Q76`.
-- `Q227` A run after the first starts short of a stand drawn afresh (user, 2026-11-16: "when user 收工 a new shift should start at a randomized location"): `DriveLevel.play` draws from the fare loop's published pickups in both regions, seats that stand's customer and sets the car down 20 m behind it; the first run and every scripted one keep `f_004`. `RoadSpawn.starts_a_run` is the bar, 26 of 27 pickups clear it. ✅ Built; the user's drive owed, and nothing clears a drawn start of traffic.
-- `Q230` The drive fades from 60 kph, a thumb is slewed at speed, a wall turns the nose along it (user, 2026-11-16: "accelerate fast but is hard to steer on straight road, even minor bumps or normal steer would throw the car to spin"): `drive_fade_from_kph` 42 / `drive_fade_curve` 2.0 (120 kph after 8.7 s where it was 5.2, stood down in drift mode), `touch.steer_attack_at_top_s` 2.0 (a thumb's full-lock swap at 120 kph 29.8° → 7.2°), `collision_align_s` 0.3 (a 30° clip at 63 kph leaves at 77 kph where it rested at 18). ✅ Built, graded on the pad with a new `--only=bump` and `--steer=touch`; the user's drive and the handset owed; a post caught by a corner is still a dead stop.
-- `Q229` The pause has RESET CAR (user, 2026-11-16): 重置的士 under RESUME puts the car back onto the nearest road at rest, as the harbour does (`DriveLevel.recover`); the fare, its clock and the meter untouched, no penalty. ✅ Built, `verify_menu` `pause:` 6 lines; the user's own stuck car owed, and whether it should cost anything is open.
-- `Q228` The pedals show how far they are pushed (user, 2026-11-16, from a new player on a phone): a green level up the accelerator and a red one down the brake where the pedal used to fade (`touch_go`, `touch_stop`), ▲ ▼ by the pedals and ◀ ▶ by the wheel, kept under a thumb, a pedal's arrow white until pressed that way. ✅ Built, no draw added; a handset and a new player's hands owed.
-- `Q223` OPTIONS is a list of groups (user, 2026-11-16): SOUND, CONTROLS, DISPLAY, LANGUAGE, a page each, and PAUSE has OPTIONS without the language, the thumbs' sides or the hour. New: touch steering response gentle / normal / sharp (`steer_curve` 2.5 / 2.0 / 1.5), the steering thumb left or right, a phone's 60 / 30 frame cap, and 120 where the screen refreshes at it (a pick, never the default); the engine's `--max-fps` beats the saved cap. ✅ Built; every one of the three owed a handset.
-- `Q219` More traffic (user, 2026-11-15): the fleet was already a pool; the cost was every car's look at every other. A 64 m index in fleet order, far out-of-view cars' rules every 4th tick (reverses `Q217`'s staggering refusal — no camera, no thinning, so the seeds held), the spawn by lane-metres with `spawn_main_weight` 1.0, `cars` 40 → 60 (80 fails Causeway Bay). A low-detail far mesh held. The user picked 60 and 1.0. Owed: a handset tick (deferred).
-- `Q218` Three hands (user, 2026-11-15): Bakudai brush for the menu's name (Bold) and choices (Medium), Noto Sans HK 黑體 for interface text in menu and HUD, the Kai kept for names, Knewave for the English menu's brush lines; the focus is a drawn brush stroke. Two OFL subsets cut by `tools/make_fonts.py`, read on the web export. ✅ Built; phone frame owed.
-- `Q217` The architecture pass (user, 2026-11-14): five bugs (air coast drag, `place_at`'s stale impact, the camera snap, a bare sync dropping regions, unchecked config sources), dev code out of the export (web PCK 98.71 → 98.20 MB), `PerfClock`'s per-system and boot timings under `--perf-log`, and nine result-identical savings — the railings and fence at a Jolt body a cell (5,851 → 49 in Wan Chai, 2,233 → 27 in Causeway Bay), the streamer's pass on camera travel, no night layers by day. ✅ Built; the typed obstacle, physics interpolation and boot threading wait.
-- `Q216` The five façade colours are 20% darker, by eye (user, 2026-11-14): 49–62% → 40–48% reflectance, hue held, inside their bounds; `facade_chroma` `L*` 61.3 → 56.1 at the same chroma. ✅ Built; still not cited.
-- `Q208` The game is 香港的士車神 / Hong Kong Taxi Ace (user, 2026-11-13): `config/name` + `name_localized` (`zh_HK`), the menu's title per language from `menu_text.json`, the subtitle 港艇試駕版 / Island Test Drive Edition; desktop `user://` moves with the name (phones and web unaffected). ✅ Built; a slang rank ladder is open.
-- `Q201` The chase camera sits low and close on a narrow lens (user, 2026-11-11): `camera.tres` 6.0 m / 1.0 m / −6° / 50° + 4° on a 40.0 follow, low and close on the user's two reference frames (6.5 / 2.2 / −10.3° / 70° + 18° at the start of the day, 8.0 / 1.4 / −8° / 50° + 10° between), because a 70° vertical lens from 3.4 m up drew the taxi thin and long and a 2.2 m follow lag carried it small to the centre of the frame at speed; the lag is 0.7 m at 104 kph and most of the pull-away with speed is given up. ✅ Built; the user's look owed.
-- `Q200` The roster takes its die-casts' detail, the taxi's the player's own body, and a batch draws only the cars shown (user, 2026-11-11; reverses `Q166`'s refusal of the reuse, amends `Q186`): 1,516 triangles a taxi, 710–960 a lofted kind; the throttle route 12–28% under where it began once hidden instances stopped costing triangles. A box lorry stands parked (29 / 3), not yet in the moving traffic: that share is the user's call. The bus and tram reshaped flat-sided to their models and the glass given the sky's streak, his pick, the same evening. Owed: his look and drive, the handset.
-- `Q199` A flyover's lamp stands on the flyover, and no column passes through a deck or a roof (user, 2026-11-11): surveyed inside a deck's drawn ribbon → hosted to the deck, 0.1 m past its kerb (`on_deck` 92 / 16); anything else with a drawn face inside its 9 m stands shorter under it (`shortened` 50 / 5), refused under 5 m (`under_structure` 39 / 3). Wan Chai 1,077 → 1,012 columns, Causeway Bay 364 → 364; 0 through a deck. Open: ~10 feet just off the slab edge. `P3-26`.
-- `Q198` The traffic is the cars on the street, flow over TD's detector speed (user, 2026-11-11, amends `Q186`): 8 detectors × 18 weekdays off DATA.GOV.HK's archive; the fleet peaks at 18:00 (29 kph), `cars` 24 → 40; a placement leaves the car behind room to stop (`_room_behind`). `P3-3g`.
-- `Q197` A building's street band and podium take the survey's colour, weighed by its own noise (user, 2026-11-11, reverses `Q193`): `facade_survey.py` measures three bands with `--regions`; the ETL cuts the finished tier at the measured heights. 1,637 street bands, 87 podiums; Wan Chai triangles +16.2%, PCK 92.9 → 98.4 MB; `facade_hue.bands` off is byte-identical.
-- `Q190` The taxi takes a 1:64 die-cast's proportions and detail, without its lettering (user, 2026-11-09): 4.54 m with a short nose and long boot, between the 4.30 m toy and the real 4.695 m; the bumper a bar again, chrome front and rear, rub strip, shut lines, pillars, mirrors, hubcaps; tail lamps red over amber over white; 1,948 triangles of 2,000; the door hinge 0.455. `P3-82`.
-- `Q189` A free drive ends from its PAUSE on its own REPORT, with the time driven (user, 2026-11-06): END DRIVE, no best, the drive's game seconds off the fare loop's tick, never written to the record; SAVE IMAGE renamed SAVE RESULT. `P3-81`.
-- `Q188` The result sheet is saved as a picture, not shared (user, 2026-11-06): the 成績表 itself, copied off screen, never a screen crop; no share sheet and no button on a phone until a plugin, since Godot 4.7.2 has no share API and a screenshot serves; achievements dropped, RECORD is the stat table. `P3-80`.
-- `Q185` The taxi's own sounds (user, 2026-11-05/06): every file synthesised by one script; a horn per kind in patterns off its own RNG; crashes tiered on the award's bars; no sound on a skill or penalty for now, a payout at the door; what is always there sits under what happens. `P3-79`.
-- `Q179` A drift can be held for 30 s on the pad and not for 2 on the street, so it is not capped (2026-11-04): `--manoeuvre-s` lifts the pad's 4 s window, which had hidden it; `ride` from 20 kph holds 28.6 s (HK$435), and `hold` from 76–95 kph holds 29.6 s. Six stands and the eight widest junctions never let a slide past 1.5 s. Reopens on the user's attempt or any open space
-- `Q176` The trams run the published rails as walls that never push (2026-11-01): direction read off the other track, a one-way street or what a bed continues, unresolved refused; a separate `TramSystem`, whole fleet always; moving trams replace the parked ones, and nothing stands in a tram's path.
-- `Q175` A hit on a moving car reads the closing speed, only when the taxi is moving into it, and the near miss looks at moving cars on the closing speed (2026-10-30). Bars and prices unchanged; the user's drive owed.
-- `Q174` The wheel goes to lock slower at speed (user, 2026-10-29): a full-lock lane change with the throttle held slid to 20.8° / 29.8° at 110 / 120 kph; `steer_attack_at_top_s` 2.0 blends the 0.2 s ramp on the speed share's square (0.75 s at 110), 6.3 / 6.5° now; drift mode and a countersteer keep 0.2 s, every drift row unmoved. Owed: the user's drive.
-- `Q172` A drift counts at 0.5 s and pays more each second of one slide (user, 2026-10-28): `drift_min_s` 2.0 → 0.5, a new `drift_step_hkd` (1.0), HK$1 / 3 / 6 / 10 at 0.5 / 1.5 / 2.5 / 3.5 s; at 2 s only a countersteered slide at 86 kph had ever counted on the pace-2.0 car. A reverse read ~180° of slip and paid at the new bar; slip past 90° (`FareSystem.REVERSED_SLIP_DEG`) is now not a drift.
-- `Q162` Two modes: 特更 to the handover, 兜風 with no end (user, 2026-10-11): one PLAY over both, the shift 07:00 → 21:00 on one clock with the sky, the total fare against a best kept locally, the day never stretched by a delivery; free mode keeps the daylight (`P3-74`, 2026-10-11). The user's full shift owed.
-- `Q161` Parked vehicles before moving traffic (user, 2026-10-11): a placements document over an authored roster from the 607 published bays, the bus / GMB / taxi / tram stops and the `NSR` complement, resolved by the rig's hour; `P3-3` deferred, `P3-2a` built against the stationary bodies, paying for danger (in the path) and never a lane pass (`P3-71`–`P3-73`, 2026-10-11). Loosened on the user's logged drive (2026-11-05): a close call (≤ 0.25 m) pays aimed or not, the near-miss band 0.6 → 0.9 m keeps the path rule. The user's drive owed.
-  (`CHECK_JOBS`), `pytest -n auto` 52 → 10 s, a Wan Chai build 73 → 50 s serial and 30 s at
-  `--jobs 4`, the battery 163 → 48 s at `--jobs 4`. Every one proven against its serial self.
+### Residue inside closed questions
+
+- `e257` paints 2.45 m inside its own bracket; a lane count cannot vary along an edge (`Q113`,
+  `Q114`). `e333` / `e504` count three and paint two (`Q130`).
+- Single stations where HyD's polygon touches the centreline at a node (`Q131`). The seam's
+  0.62 m overlap strip (`Q129`). The street borrow for unread widths (`Q127`).
+- 52 `RM1001` refusals need coverage-based hosting (`Q118`).
+- MARSH ROAD's 0.65 m deck face needs a node-level descent pass (`Q90`).
+- 9,779 triangles a run hit `MAX_SUBDIVISIONS` in `clearance` (`Q51`).
+- Speed-limit signs (73) on hold (`Q65`); deviation boards ship on an ungraded assumption (`Q66`);
+  the sign survey's plate box and `_plate_box` disagree on 10 of 21 faces (`Q68`).
 
 ---
 
 ## Risk register
 
-- **Web artefact and product render differently** — Medium. `Q76`: web crushes a third of the
-  frame under `L*` 10 against 6.0% on Mobile; cause undiagnosed, no knob (the black batched
-  vehicles were `Q226`, fixed; the shares are not re-measured since). Name the renderer in any
-  round's write-up; diagnose before compensating.
-- **Novelty does not survive the first session** — Medium. `P3-9a` could not measure it (sessions
-  ended on `Q19`). Next round, record how long each driver keeps going. Levers: `P3-2b`, a roster,
-  world-embedded challenges.
-- **Doesn't read as HK to locals** — High, evidence against. Round 0 recognised Wan Chai. Stays
-  High until `P3-9`: different drivers, handset, arrow off.
-- **Carriageway occupied by solid geometry** — Medium. `Q19`: carved + fenced; `is_routable` keeps
-  AI off, `verify_spawn.gd` guards the start. Left: building half, a drive of `e99`.
-- **Building meshes blow the triangle budget** — High. `resident_budget.py`: `mong_kok` 184%,
-  `wan_chai` 105% of 300k, LOD0 carrying 84–91%. Lever is LOD0's 1.5 m cell with the LOD0 radius
-  (`P4-5`), not the LOD1 ratio. No handset has run it.
-- **Perf misses 60 fps on the device floor** — Medium. `P2-6`, needs `P0-3b`.
-- **Occluder is dead weight on the web cut** — Medium. `Q122`: stock web templates omit the
-  raycast module; +10.3% download for nothing. User's call, one line per bundle.
-- **Open network is untrafficked and unfinished** — Medium. `Q111`: MARSH ROAD's 35.8% lip is
-  reachable (`P4-3`); streamer tuned without the extra area (`P4-5`).
-- **A test depends on the developer's fetched sources** — Low. Only CI sees it. Recipe in
-  `CONTRIBUTING.md`: run the suite with `pipeline.fetch.SOURCES_ROOT` at an empty directory. A
-  habit, not a gate.
-- **Vehicle shader unbinds silently** — Low. `verify_vehicle.gd` holds the binding; nothing
-  compiles the shader — render + `grep -i "shader error"`.
-- **`sha_tin`: 5 box-junction triangles inside no ring** — Low. `box_extent.py` `unattributed`
-  must be 0; a hole in attribution, not a bar to widen (`Q123`).
-- **3 road-mark triangles under the road at a ribbon overlap** — Low. `Q125`: worst 0.0151 m. Fix
-  is a crease at the overlap switch in `DrawnSurface`; never `lift_m`.
-- **`tools/collider_offset.py --sweep` crashes** — Low. Its scratch build runs the buildings stage
-  into an empty temp dir and the stage now wants `basemap.json` there first (2026-10-07, identical
-  before and after the helper-`NORMAL` change). The plain run grades; the sweep's cell prices in
-  `ARCHITECTURE.md` are the last ones it produced.
-- **Roster headlamps cap at four cars** — Low. Forward Mobile pairs 8 spots per object;
-  `BeamBudget` + `verify_beam_budget.gd`. `P3-3` decides whether the player's slot is reserved.
-- **Podium floors measure the treatment band** — Medium. `Q47`: data-only pack; true fill owed.
-- **`facade_lab.json` is an uncommitted input** — Low. Gitignored; `facade_survey.py
-  --filler-report` reproduces `Q55`; hand-run. Since `Q197` it also carries the bands (and since
-  `Q240` their `noise_l`, which `band_lightness` requires), cut at the
-  built `podiums.json` lines, so a podium change wants the survey re-run (`--regions`); the build
-  warns when a line it ships disagrees.
-- **The tyre model is unpriced on a handset** — Medium. `Q152`: about 216 µs a physics tick on
-  the desk, GDScript, eight substeps a wheel; never run on `P0-3b`'s floor handsets. Lever:
-  `substeps`. No off switch since the engine-tyre car was dropped (2026-10-05); a revert of that
-  commit is the way back.
+- **Doesn't read as HK to locals** — High until `P3-9`: different drivers, handset, arrow off.
+- **Building meshes blow the triangle budget** — High. `wan_chai` 128%, `mong_kok` 184% of 300k;
+  LOD0 carries 84–91%. The lever is LOD0's cell and radius (`P4-5`), not the LOD1 ratio.
+- **Perf misses 60 fps on the device floor** — Medium. Only an iPhone Air has run it (`P2-6`).
+- **The tyre model is unpriced on the floor handsets** — Medium. ~216 µs a tick on the desk, eight
+  substeps a wheel; the lever is `substeps`; there is no other car to fall back to (`Q152`).
+- **Web artefact and product render differently** — Medium. The web runs Compatibility and crushes
+  shadows, cause undiagnosed (`Q76`). Name the renderer in any write-up.
+- **Novelty does not survive the first session** — Medium. Unmeasured; record how long each
+  `P3-9` driver keeps going.
+- **Carriageway occupied by solid geometry** — Medium. Carved and fenced (`Q19`); the building half
+  is left.
+- **Occluder is dead weight on the web cut** — Medium. Stock web templates omit the raycast
+  module (`Q122`).
+- **Open elevated network is unfinished** — Medium. MARSH ROAD's 35.8% lip is reachable (`P4-3`);
+  the streamer is tuned without the extra area (`P4-5`).
+- **Podium floors measure the treatment band** — Medium. `Q47`; true fill owed.
 - **TAM too small** — Medium. Hong Kong only (`Q100`); scale by regions behind the IAP boundary.
-- **GPLv3 forecloses the App Store** — Medium. Contributions inbound MIT (`CONTRIBUTING.md`); no
-  retrofit once an outside contributor declines.
-- **Landmark depiction IP** — Low. Untextured massing; legal sight-check before launch
-  (`LICENSING.md`).
-- **GDScript learning curve** — Low. Complexity lives in Python.
-
-Retired: road data lacks Z (`Q1`); a second city is a YAML file (`Q100`); real geometry isn't fun
-(`Q8`); terrain fits no budget (`P3-10`); the car is two boxes (`P3-11`); settings vanish from
-`project.godot` (`Q119` — they never did; the `[importer_defaults]` loss of one recurrence is the
-one thing that does not explain); authored `.import` sidecars unpinned (`P5-20`); `sha_tin`'s
-inverted triangle (`P5-19`); `P3-7a` riders invisible (`Q102`); grade separation reachable and
-ungraded (`Q111`); `P3-11e`'s night path untested (`Q160`'s cycle ran it; `sun_glint.gd` has its
-`apply()`).
+- **GPLv3 forecloses the App Store** — Medium. Contributions come in under MIT
+  (`CONTRIBUTING.md`); no retrofit once an outside contributor declines.
+- **`facade_lab.json` is an uncommitted input** — Low. Gitignored and hand-run; it carries the
+  bands and `noise_l` (`Q197`, `Q240`), so a podium change wants `facade_survey.py --regions`
+  re-run.
+- **A test depends on the developer's fetched sources** — Low. Run the suite with
+  `pipeline.fetch.SOURCES_ROOT` at an empty directory (`CONTRIBUTING.md`).
+- **A shader fails silently** — Low. `check.sh` exits 0; render and `grep -i "shader error"`.
+- **`tools/collider_offset.py --sweep` crashes** — Low. Its scratch build lacks `basemap.json`;
+  the plain run grades.
+- **3 road-mark triangles under the road at a ribbon overlap** — Low. Worst 0.0151 m (`Q125`); the
+  fix is a crease in `DrawnSurface`, never `lift_m`.
+- **`sha_tin`: 5 box-junction triangles inside no ring** — Low. `box_extent.py` `unattributed`
+  must be 0 (`Q123`).
+- **Landmark depiction IP** — Low. Legal sight-check before launch (`LICENSING.md`).
 
 ---
 
 ## Metrics
 
-Measured values only, latest only. Bundle size is measured from a PCK, never summed from source
-files (`Q16`). Layer counters are read from `etl/out/<region>/*.json`, not from prose — verify
-there before quoting. Two values are `wan_chai` / `causeway_bay`.
+Latest values only. Layer counters are read from `etl/out/<region>/*.json` — verify there before
+quoting. Two values are `wan_chai` / `causeway_bay`.
 
 Budget
 
 | Metric | Target | Latest |
 |---|---|---|
-| FPS on device floor | 60 | — (`P0-3b`) |
-| FPS, Chrome on macOS, 2880×1450 | — | 119, worst frame 9.7 ms (2026-07-31; stale) |
-| Draw calls | < 150 | 136–150 on the seam line from `f_045` (`P5-9c`); `P2-6` measures properly |
-| Resident triangles, worst camera | < 300k | `wan_chai` 112%, 144% with paint · `causeway_bay` 82%, 90% with paint (2026-09-21, `Q135`) · `sha_tin` 47% · `mong_kok` 184% (`tools/resident_budget.py`); seam camera 73% (`--pair`) |
-| Paint layers, throttle route | — | 283,044 `prims` / 18 `draws` before `Q135`; shadows off (`P3-38`) and road marks in cells (`P3-40`) leave road marks 13–17k; boxes + crossings in cells (`P3-42`) 20,642 → 9,849 at the start line, 7,469 → 496 from `f_045`, peak `draws` 102 / 132 |
-| Texture memory | < 128 MB | 131,072 px — one 512 x 256 atlas, 47,398 B (`signs_text.png`) |
-| Bundle size (PCK) | < 200 MB | 98,402,008 B, web, `wan_chai` + `causeway_bay` (2026-11-11, `tools/export.sh web`, after `P3-85`); was 89,196,660 B on 2026-10-07 and 55,955,496 B at `P5-13` — re-export before quoting. iOS: 109,157,308 B baked, 98,585,688 B unbaked (2026-11-13, `Q207`) |
-| Boot to drivable (web, warm) | — | 830 ms (2026-07-31; stale) |
-| First load (web, cold GPU shader cache) | — | 14.0–14.8 s boot, then the cover up ~6 s; nothing over 50 ms after it lifts in 2 of 3 runs (`Q184`, 2026-11-05) |
-| Tab memory (web) | — | 307 MB (2026-07-31; stale) |
-| ETL full run, warm cache | — | not re-timed since 27 s / 19 stages; `region` alone 9.4 s |
-| Buildings stage peak RSS | — | 657 MB |
-| Signs stage peak RSS | — | 514 MB |
+| FPS on device floor | 60 | — (`P0-3b`); iPhone Air ~96 fps under `--max-fps 120` (`Q222`) |
+| Video memory, iPhone Air | — | 235.9 MB at 0.75 scale, MSAA 2x (`Q236`) |
+| Draw calls | < 150 | throttle route 116–122 with traffic, HUD off (`Q214`); `P2-6` measures properly |
+| Resident triangles, worst camera | < 300k | 128% / 82%; with paint 161% / 91%; buildings alone 110% / 73% (`tools/resident_budget.py`, 2026-11-17). `mong_kok` 184%, `sha_tin` 47% (2026-09) |
+| Texture memory | < 128 MB | one 512 x 256 atlas, 47,398 B (`signs_text.png`) |
+| Bundle size (PCK) | < 200 MB | web 98,750,864 B (`build/web/index.pck`, 2026-11-17); iOS app 116,032,712 B (`build/ios/app`, 2026-11-17). Re-export before quoting |
+| First load, web, cold shader cache | — | 14.0–14.8 s boot, then the cover ~6 s (`Q184`) |
+| First frame, iOS fresh install | — | ~12 s with baked shaders; relaunch ~4 s (`Q207`) |
+| Traffic tick, 60 cars | — | 1.67 ms bench, 2.59 ms p50 in game (`Q219`) |
 
 Scaling (`Q120`, four regions)
 
-- Tiles: 27.7 KB/building (1.8× spread). Thin layers: ~66 KB/road-km. Terrain: p50 66,432 B per
-  building-free 150 m tile. 200 MB buys ~5–15 km² at current fidelity.
+- Tiles 27.7 KB a building (1.8× spread); thin layers ~66 KB a road-km; 200 MB buys ~5–15 km².
 - Library meshes are region-invariant, so draw calls are too; only bytes and triangles scale.
-- LOD1/LOD0 triangle ratio 0.49 / 0.38 / 0.45 / 0.39.
 
-Bundle, from `etl/out` (schemas: `city.json` 37, `basemap.json` 2, `roadgraph.json` 15, `roadsurface.json` 12,
-`carriageway_region.json` 4)
+Bundle, from `etl/out` (schemas: `city.json` 46, `roadgraph.json` 15, `roadsurface.json` 12,
+`carriageway_region.json` 4, `basemap.json` 2)
 
-| Counter | Latest |
+| Counter | `wan_chai` / `causeway_bay` |
 |---|---|
 | Road graph | 792 edges, 614 nodes, 217 turn restrictions / 207, 166, 35 |
 | Road surface triangles | 92,611 / 31,355 |
-| Measured width coverage, level 0 (`Q128`) | 53.5% (393 of 734) / 63.3% (124 of 196) |
-| Signs drawn | 873 of 3,276 published, 634 poles, 117 text plates / 285 of 1,009 |
-| Lamps drawn | 1,077 of 1,263 candidates, `min_kerb_clearance_m` 0.1701 / 364 of 441 |
-| Railings read | 16,954 m of 20,273 m published / 6,356 of 7,169 m |
-| Arrows drawn | 741 of 1,365 symbols, `stacked_disagreeing` 18 (slots), `placed_by_slot` 16, `overlapping_drawn` 18 / 158 of 367, 0, 6, 2 |
-| Road marks drawn | 2,197 of 2,437 candidates, `host_off_carriageway` 217 / 549 of 594, 37 |
-| Deck paint (`P3-37`) | lines 100 of 105 (2,497 m), `stations_off_deck` 12; arrows 18 of 20 / 4 of 4 (175 m), 0; 4 of 4 |
+| Measured width, level 0 | 393 of 734 (53.5%) / 124 of 196 (63.3%) |
+| Signs drawn | 840 of 3,276 published, 614 poles, 110 text plates / 279 of 1,009, 213, 51 |
+| Lamps drawn | 997 of 1,263 candidates, `on_deck` 92, `min_kerb_clearance_m` 0.0397 / 361 of 441, 16, 0.1 |
+| Railings read | 16,954 of 20,273 m / 6,356 of 7,169 m |
+| Arrows drawn | 741 of 1,365 symbols, `stacked_disagreeing` 18, `placed_by_slot` 16 / 158 of 367, 0, 6 |
+| Road marks drawn | 2,279 of 2,593 candidates, `host_off_carriageway` 267 / 568 of 626, 47 |
 | Crossings drawn | 120 of 121, 762 stripes / 16 of 17, 80 |
-| Box junctions | 20 of 20, 14,931 triangles / 4 of 4 |
-| Tramway | Wan Chai 132 of 132 rails (9,086 m in region), 58 beds (4,100 m), `off_gauge_stations` 53 of 1,192, `inverted` 0; Causeway Bay 34 of 34 (2,854 m), 11 beds (1,218 m), 11 of 136, 0; rail area hidden under road or ground 0.0% in both, from 17.9% and 27.2% (2026-10-06, `Q58`) |
-| Harbour (`P3-45`) | 748,723 m² of sea, 213 triangles, 12,270 ground vertices sunk / 177,055 m², 55, 3 (its read box stops at the shore) |
-| Parks painted (`P3-47`) | 131,534 ground vertices / 86 polygons, 462,245 m² / 122,157, 57, 336,334 m² |
-| Player fence | 14 components, 15 mouths, 5 touchdowns, 67 clipped ends (316 units) / 3 components, 6 mouths, 19 clipped ends (85 units) |
-| Kerbside restriction published | 33,385 m over 722 edge sides; 96.4% agreement with `DTAD_RST_ZONE_LINE` (pre-region figure) |
+| Box junctions | 20 of 20, 14,931 triangles / 4 of 4, 1,318 |
+| Tramway | 132 rails (9,086 m), 63 tracks, `off_gauge_stations` 62 of 1,978 / 34 (2,854 m), 15, 11 of 433 |
+| Tram lines | 60 directed tracks (4,393 m), 19 stops / 13 (1,371 m), 5 |
+| Signals | 73 junctions, 72 staged, 178 approaches, 514 head posts / 22, 21, 41, 89 |
+| Parked placed | 716 of 1,346 candidates / 340 of 705; no parked trams |
+| Trees drawn | 1,061 of 1,123 / 2,375 of 2,413 |
+| Bus route directions kept | 464 of 486 / 241 of 251 |
+| Fare nodes, street spots | 48, 221 / 7, 166 |
+| Harbour | 748,723 m² of sea / 177,055 m² |
+| Parks | 86 polygons, 131,534 ground vertices painted / 57, 122,157 |
+| Player fence | 14 components, 15 mouths, 5 touchdowns, 67 clipped ends / 2, 4, 0, 19 |
 
-Graders (report-only unless a target is shown)
+Graders (last battery readings; report-only unless a target is shown)
 
 | Metric | Target | Latest |
 |---|---|---|
 | Deck error, \|error\| p90 vs shipped tiles | ≤ 0.50 m | 0.094 / 0.182 m |
-| Off-grade carriageway hanging past its structure (`Q22`) | — | 5.0% / 25.3% `overhang.py` (Causeway Bay's is `Q116`'s far halves); 6.6% `deck_margin.py` (upper bound, not re-run). If the two ever agree suspiciously well, re-measure |
-| Off-grade stations under the 3.20 m lane bar | — | 0 (`P3-35g1`) |
-| Tunnel ribbon inside its own bore (`Q21`) | none | 0 |
-| Paint below the road by > 10 mm, in carriageway | ≤ 0.5% of triangles | passes; boxes deep 0, road marks deep 0 before `Q125`'s join (3 of 24,023 since) |
-| Box paint off the drawn carriageway | — | 0.58 m² pooled before `P3-33c`; 1.32 m² at EXPO DRIVE EAST after `P3-35e`. Quote basis (count or area) and `--ray-m` |
-| `lane_paint` edges painting a lane under 3.00 m | — | 76 / 18 (`Q131`) |
-| Occupancy share at bumper height | `BUILDING` ≤ 1.72%, `INFRA` ≤ 1.60% | 0.214% / 0.560% · 0.309% / 0.338% (`P3-33e`); the corridor gate fails as it always has, 27 / 11 edges under one lane |
-| `clearance_reconcile` ratchet | — | 28 / 32 / 8 · 9 / 13 / 4 (all levels), 25 / 27 / 6 · 8 / 11 / 3 at grade; at the pipeline's 0.50 m cell the grader reads 24 / 10 (`P3-33e`) |
-| Ground proud of the carriageway (`Q24`) | — | 38 of 734 / 49 of 196 level-0 edges past 0.18 m travel, 10 / 4 over a tenth of the ribbon |
-| Railing to-source distance, p50 | — | 0.22 / 0.21 m (`railing_error.py`); `bends` 81 / 24 |
-| Sign / lamp `shift_m` p90 | — | signs 0.54 / 0.45 m, lamps 0.93 / 0.26 m (`P3-35d`) |
-| Reachability lost to the fence | 0 | 0 / 170 ordered pairs at the car's bar, no detour (`tools/reachability.py`; Causeway Bay's 170 predate the region). At the one-lane bar: 3,989 pairs (2.17%) / 173, `e53` and `e138` carrying Wan Chai's (`P3-33e`) |
-| `RoadRouter` against `reachability.py` (`P3-43`) | every pair within 0.001 m | 194,774 / 13,718 control and 179,601 / 12,716 one-lane pairs, worst 0.000000 m; 334,767 / 288,626 across the join at 0.000000 m (`verify_road_graph.gd`, `verify_join.gd`) |
-| `RoadRouter.prepare` a destination, max | ≤ 16 ms | legal 0.70 / 0.13 ms, player 1.86 / 0.59 ms |
-| `RoadRouter.route`, prepared, p99 | ≤ 1 ms | legal 8 / 7 µs, player 7 / 10 µs (every admitted edge to every fare node) |
+| Off-grade carriageway past its structure (`Q22`) | — | 5.0% / 25.3% (`overhang.py`; Causeway Bay's is the seam's far halves) |
+| Off-grade stations under the 3.20 m lane bar | — | 0 |
+| Paint below the road by > 10 mm | ≤ 0.5% of triangles | passes; 3 of 24,023 road-mark triangles deep (`Q125`) |
+| `lane_paint` edges painting a lane under 3.00 m | — | 76 / 18 |
+| Occupancy share at bumper height | `BUILDING` ≤ 1.72%, `INFRA` ≤ 1.60% | 0.214% / 0.560% · 0.309% / 0.338%; the corridor gate fails, 27 / 11 edges under one lane |
+| Ground proud of the carriageway (`Q24`) | — | 38 of 734 / 49 of 196 level-0 edges past 0.18 m |
+| Railing to-source distance, p50 | — | 0.22 / 0.21 m |
+| Reachability lost to the fence | 0 at the car's bar | 0 / 170 ordered pairs; at the one-lane bar 3,989 (2.17%) / 173 |
+| `RoadRouter` against `reachability.py` | within 0.001 m | worst 0.000000 m on every pair, and across the join |
+| `RoadRouter.prepare`, max | ≤ 16 ms | legal 0.70 / 0.13 ms, player 1.86 / 0.59 ms |
+| `RoadRouter.route`, prepared, p99 | ≤ 1 ms | 8 / 7 µs |
 
-Handling (skidpad, `VehicleBody3D`)
+Handling
 
-- Taxi: 1,948 triangles (1,142 body, 4 × 192 tyres, 38 door) since `Q190`; 1,180 before. +174 for `Q202`'s lettering and boot seam.
-- The drift works 34–86 km/h with no spin at any speed (`Q89`); the tap is dead below design
-  speed. Per-dial tables live in `handling.md` and `DECISIONS.md` `Q84`–`Q89`; run
-  `tools/skidpad.sh` before and after any change.
-- Coast-down to rest: 6.1 s from 30 km/h (`rolling_resistance_mps2` 0.8, `coast_drag_per_s` 0.15,
-  air drag `drag_area_m2` 0.72). Godot's body damping is replaced with 0 on the taxi since `Q153`
-  (it acted under throttle too and held the real taxi under 80 kph).
-- Wall rows (`--only=wall`, exit after 1 s): brush 57 / 79 / 97 kph, clip 29 / 51 / 76, head-on 0,
-  at 63 / 86 / 105 kph entry (`Q151`); the clip scrubs to rest on the street at 40 kph.
-- The braking falloff curve is unmeasured on `VehicleBody3D`.
-- Drag and brake coefficients are measured on `skidpad.tscn`, never `city_drive.tscn` (a 0.14°
+- The car is `TyreVehicleController` on `tuning/cars/crown_comfort.tres`, `tyre.tres` (`mu` 1.0)
+  and `tuning/systems/`, at `pace.tres` `pace_scale` 2.0. Run `tools/skidpad.sh` before and after
+  any change; the pad is fixed-step and byte-repeatable.
+- Player taxi: 2,130 triangles against a 2,200 ceiling (`Q202`).
+- Drag and brake coefficients are measured on the pad, never in `city_drive.tscn` (a 0.14°
   gradient is the size of the quantity under test).

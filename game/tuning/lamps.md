@@ -1,111 +1,29 @@
 # lamps.tres
 
-Rationale for `game/tuning/lamps.tres`. Each heading is the line the block sat above; `Overview` is the
-file as a whole. Why it lives here and not in the file: `Q119`.
+Rationale for `game/tuning/lamps.tres` (`Q119`).
 
-## Overview
+Material of the lamp posts (`P3-26`). `signs.tres`'s sibling on the same `signs.gdshader`: a layer
+is a parameterisation, not a shader (`Q61`, `Q71`). A change to that shader is a change to the
+signs and the lamps; `check.sh` exits 0 on a shader that fails to compile, so render both and
+`grep -i "shader error"`.
 
-Lamp posts, drawn as their own geometry (`P3-26`).
+`game/tools/generated_scene_import.gd` maps the ETL's `lamps` material name to this path.
+`verify_lamps.gd` checks the dispatch by `resource_path`, because a column that kept its imported
+`BaseMaterial3D` still draws in place, only pale (`Q27`).
 
-`signs.tres`'s and `signals.tres`'s sibling, on the **same shader**. What tells
-a lamp column from a sign plate is entirely the geometry `pipeline/lamps.py`
-built and the two numbers below: nothing branches in `signs.gdshader`, because
-a layer is a parameterisation rather than a shader of its own — `Q61`'s rule
-for the three railing classes and `Q71`'s for the three paint layers, arriving
-at a fifth place. That keeps the difference in tuning data (CLAUDE.md hard
-rule 4) rather than in a third shader that would drift from the first.
+No colour here. The column's colour rides `COLOR_0`, and its authority is
+`lamps.column_material` (`galvanised_steel`) in `hong_kong.yaml`'s `materials:` table, graded by
+`_check_reflectance` like a façade (`Q33`). `signs.colours`' exemption does not apply: a column is
+a real surface, not a printed specification.
 
-🔴 **SO `signs.gdshader` IS NOW A THREE-LAYER SHADER.** A change to it is a
-change to the signs, the signals *and* the lamps, and `tools/check.sh` exits 0
-on a shader that fails to compile — so render all three and
-`grep -i "shader error"`. The per-layer dispatch is still checked:
-`check_shader_material` compares the material's `resource_path` rather than the
-shader, so a column handed `signs.tres` still fails. Do not reach for
-`check_shader_source` to quiet that.
-
-`tools/generated_scene_import.gd` maps the ETL's `lamps` material name to this
-path and only this path. ⚠️ **The fallback failure is the quiet one
-`signs.tres` records**: the livery is on `COLOR_0`, so a column that kept its
-imported `BaseMaterial3D` still draws the right prism in the right place in the
-right colour — it just loses `vertex_srgb_to_linear` and comes out pale
-(`Q27`). `verify_lamps.gd` checks the dispatch because nothing else would
-notice.
-
-⚠️ **There is no colour in this file, and its absence is the decision** —
-`signs.tres`'s paragraph, but NOT for its reason, and the difference matters.
-`signs.tres` and `signals.tres` keep their livery in `hong_kong.yaml`'s own
-`colours:` mapping, **exempt from `Q33`'s palette rule** on two grounds: a sign
-face is a printed specification with no reflectance to grade, and a plate is
-four colours inside one draw call so the values have to ride the vertex.
-
-🔴 **Neither ground holds for a lamp post, so this layer does not take that
-exemption.** Galvanised steel is a real surface with a published albedo, and a
-column is one colour. So `lamps.column_material` names `galvanised_steel` in
-the city's `materials:` table, `_check_reflectance` grades it against the albedo
-range its own source names like any façade, and `_check_every_material_is_used`
-refuses the config if the block is removed and the material left behind. It is
-`tramway.rail_material`'s shape, not `signs.colours`'.
-
-⚠️ The value still rides `COLOR_0`, because this layer shares `signs.gdshader`
-and a mesh not supplying it renders white — so the vertex stream looks like the
-signs' and the *authority* for it does not.
-
-🔴 **REVERSED BY `Q160` (2026-10-07) — the lantern is lit at night; see the last section. What
-follows is the record of the stance as it stood.** THERE WAS NO LIT LANTERN, AND THAT WAS THE THING TO RESIST CHANGING HERE.
-`P3-26` ships unlit geometry and buys night mode **nothing** — that is the
-honest position, not an oversight. Night was blocked on `Q38` and on `Q26`, and
-✅ **`P5-28c` closed the first**: the exposure is a global shader parameter this
-rig sets, so a time of day is a number in a scene and not a full tile rebuild.
-What is left is `Q26`, the look nobody has chosen, and it is not geometry either.
-Pushing `sheeting_glow` up to "make the lamps read" would light 897 lanterns in
-broad daylight, which is wrong in every frame this project currently renders,
-and `ART_DESIGN.md` ends its Lighting section with "Resist adding lights."
-
-Judged at the `street` and `kerb` viewpoints per `ART_DESIGN.md`'s table, on
-**Hennessy and Johnston**, under both the `clean_daylight` and `golden_hour`
-rigs — the second because the glow parameter is the one that misbehaves in low
-light, and a dark lantern that reads as lit is exactly the failure above.
-
-## `shader_parameter/apply_exposure = true`
-
-🔴 **`true` here and absent — so `false` — on `signs.tres` and `signals.tres`,
-which is the whole reason the flag exists** (`P5-28b`). All three sit on
-`signs.gdshader`, and only one of them is an *exposed* material: a lamp column's
-colour comes from `hong_kong.yaml`'s `materials:` table, so it is `Q33`'s
-reflectance and has to be scaled by the rig to become a rendered colour at all. A sign's livery is
-a printed specification — TD prints NO ENTRY red — so `signs.colours` is exempt
-from the palette rule and must not move with the time of day.
-
-⚠️ **The default is off, deliberately.** A fourth `.tres` on this shader that
-forgets the flag keeps a printed colour printed, which is the safe failure: an
-over-exposed lamp post is visible in any frame, and an under-exposed sign face is
-a livery nobody can grade by eye.
-
-## `shader_parameter/plate_roughness = 0.80`
-
-Rougher than a sign plate's 0.55 and rougher than a signal head's 0.72. A lamp
-column is hot-dip galvanised steel that has been weathering in a marine
-atmosphere for years — the dullest surface this shader draws, and the one
-object here that carries no instruction at all.
-
-## `shader_parameter/sheeting_glow = 0.0`
-
-🔴 **Zero, and the zero is load-bearing.** `sheeting_glow` exists because a sign
-face is retroreflective and reads as slightly self-lit at dusk. A lamp column is
-weathered galvanised steel and its lantern is off: nothing here is
-retroreflective and nothing here is emitting. Any value above zero lights the city's lamps in
-daylight, which is the instruction `P3-26` deliberately refuses to give.
-
-## `shader_parameter/lantern_colour`, `shader_parameter/lantern_glow = 3.0`
-
-🔴 **The lantern is lit since `Q160`, on the user's instruction (2026-10-07: "yes light up the
-lamps"), and the paragraph above about resisting it is the stance that was reversed.** What made
-a lit lantern wrong was that it would burn "in broad daylight … in every frame this project
-currently renders". Both halves are gone: the glow is multiplied by the rig's `night_lights`, 0 by
-day, and the project renders a night. `sheeting_glow` stays 0.0 — it would still light the whole
-column, and at noon.
-
-The ETL marks the housing's luminous faces with `COLOR_0` alpha 0 (`lamps.json` schema 3,
-`library_lit_vertices` 20 a kind: every face but the lid); the shader lights only those. 3.0 is
-over the glow pass's threshold, so the lantern blooms. The light it throws on the road is
-`lamp_pools.tres`'s.
+- `apply_exposure` true (`P5-28b`): the column's colour is a reflectance, so the rig's exposure
+  scales it. Absent, so false, on `signs.tres`, whose printed livery must not move with the hour.
+  The shader's default is off: the safe failure.
+- `plate_roughness` 0.8: rougher than a sign plate. Weathered hot-dip galvanised steel.
+- `sheeting_glow` 0.0: load-bearing. It is the signs' retroreflection, and any value above zero
+  lights the whole column, at noon.
+- `lantern_colour`, `lantern_glow` 3.0 (`Q160`, the user's instruction): the lantern is lit at
+  night only. The glow is multiplied by the rig's `night_lights`. The ETL marks the housing's
+  luminous faces with `COLOR_0` alpha 0 (`library_lit_vertices`), and the shader lights only
+  those. 3.0 is over the glow pass's threshold, so the lantern blooms. The light on the road is
+  `lamp_pools.tres`'s.

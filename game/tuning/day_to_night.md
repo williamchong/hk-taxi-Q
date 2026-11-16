@@ -1,67 +1,29 @@
 # day_to_night.tres
 
-Rationale for `game/tuning/day_to_night.tres`. Each heading is the line the block sat above; `Overview` is the
-file as a whole. Why it lives here and not in the file: `Q119`.
+Rationale for `game/tuning/day_to_night.tres` (`Q119`).
 
-## Overview
+The day that runs to night as game time passes (`Q160`), read by `scripts/world/lighting_rig.gd`
+off `clean_daylight.tscn`'s `cycle` and driven by `scripts/world/day_clock.gd`. No `@export` in
+`rig_cycle.gd` or `rig_keyframe.gd` declares a default (`Q150`), so a key absent from a keyframe is
+0 (`at`, `sun_energy`, `night_lights`).
 
-The day that runs to night as game time passes (`Q160`, the user's ask, 2026-10-07), read by
-`scripts/world/lighting_rig.gd` off `clean_daylight.tscn`'s `cycle` and driven by
-`scripts/world/day_clock.gd` in `city_drive.tscn`. It reverses "the sun does not move; night is a
-switch between two static rigs" on the user's instruction; `DECISIONS.md` `Q160` has the record.
+The authored day is not in this file. The rig scene as authored (`clean_daylight.tres`, its `Sun`)
+is the look at `day_at`, read off the scene. A rig nobody moves is resting and writes nothing;
+`DayClock` rests it (`LightingRig.rest()`) for every run that holds the daylight.
+`verify_day_cycle.gd` holds that.
 
-🔴 **The authored day is not in this file.** The rig scene as authored — `clean_daylight.tres`, its
-`Sun` — is the look at `day_at`, read off the scene, so the graded daylight numbers keep one home.
-Since `Q222` (the user's asks, 2026-11-16: "can the sunlight and shine and sky color changes slowly
-according to daytime? e.g. the sun should be brightest and shine directly from up top to street
-level", then "can the light angle move linearly and color fades slowly") it is one MOMENT of the
-cycle, with a morning before it and noon after, not a look held from the start. A rig nobody moves
-is `resting` and writes nothing at all; `DayClock` rests it (`LightingRig.rest()`) for every run
-that holds the daylight. `verify_day_cycle.gd` holds that.
-
-The keyframes are picked from rendered frames (`build/driver/q160*/`, gitignored), under three of
-the user's calls on the way: not "pitch dark with a neon light-blue outline", which read as
-science fiction; "a more realistic night with some light-up touch"; and the buildings floodlit,
-not glowing. The first table went to black with a cyan line and was withdrawn the same day.
-
-## `length_s = 840.0`
-
-Fourteen minutes of DRIVING from the start to the end of the cycle, and the length of 特更 (`Q162`,
-2026-10-11): `shift.tres` holds the hours, 07:00 to 21:00, and takes its length from here so the sky
-and the HUD's clock end on one game second. **One second driven is one minute on the clock**
-(`Q233`, the user's ask, 2026-11-17: "slower shift and clock time to 1s real time = 1min in ingame
-clock"): 14 hours x 60, so the number follows `shift.tres`'s hours and moves with them. Was 300 s
-(`Q162`, about 21 s an hour) and 240 s before it (`Q160`), against `GAME_DESIGN.md`'s
-three-to-five minute session; the shift is the session, about fourteen to twenty-two fares at
-30–90 s each by the reckoning that gave 300 s its five to eight. Game time, not wall time — the clock stops under the start menu. Free mode
-runs the same table when its option is DAY TO NIGHT, and since `Q225` runs on round `loop_at`.
-
-## `day_at = 0.174`
-
-Where the authored scene stands on the cycle: 09:26 on the shift's clock. Not picked — solved. The
-authored sun is 48° up in the south-south-east, noon is 80° up at 0.36 and dusk 8° up at 0.79, so
-the afternoon's 78.0° of arc over 0.43 sets the speed (0.216 °/game s at 840 s), and the authored
-sun's 33.6° before noon puts it here. Move noon, dusk or `length_s`'s keyframes and this moves
-with them. Was `day_until` 0.71 (`Q162`): the authored daylight held to 17:00 and nothing moved
-before it.
-
-## `loop_at = 1.714`
-
-Where a free drive's day comes round to 07:00 again (`Q225`, the user's ask, 2026-11-16: "Loop the
-sky in free mode", "keep at the day's pace, the shift end at 21:00 untouched"): 24 hours on the
-scale where 1.0 is the shift's 14, so the night runs at the day's pace — 600 game seconds from
-21:00 to 07:00, 1440 a lap, a minute a second all the way round (`Q233`). 🔴 **A shift never passes 1.0**; `DayClock` caps it there and only a
-free drive wraps. 0 would be a cycle that holds its last keyframe.
-
-## `update_hz = 10.0`
-
-How often the rig is moved. Each move re-renders the sky's radiance, so this is a cost dial. At
-10 Hz over an 840 s cycle one step is 1/8400 of the way and no step is visible; a 10 s cycle driven
-on `f_045` held 120 fps, 8.3 ms, through the whole blend on the desktop. **Measured on the iPhone
-Air, 2026-11-16** (release, 2736x1260, `--max-fps 120`, a standing shift's first 60 s, traffic off,
-sky moving against `--day-cycle=off`, alternated): 95.4–96.3 fps moving beside 96.8–97.6 held, about
-0.13–0.16 ms a frame, under 1% of a 60 fps frame. Left at 10. ⚠️ One handset, the fastest we have;
-the floor handset is not measured, and this is still the lever there.
+- `length_s` 840: game seconds of driving from 07:00 to 21:00, and the length of 特更 (`Q162`);
+  `shift.tres` holds the hours and takes its length from here. One second driven is one minute on
+  the clock (`Q233`): 14 hours x 60. Game time; the clock stops under the start menu.
+- `day_at` 0.174 (09:26): where the authored scene stands on the cycle. Solved, not picked: the
+  authored sun's angle before noon at the daylight speed. Move noon, dusk or their `at`s and this
+  moves with them.
+- `loop_at` 1.714 (`Q225`): where a free drive's day comes round to 07:00, 24 hours on the scale
+  where 1.0 is the shift's 14, so the night runs at the day's pace. A shift never passes 1.0;
+  `DayClock` caps it and only a free drive wraps. 0 would hold the last keyframe.
+- `update_hz` 10: how often the rig is moved. Each move re-renders the sky's radiance, so it is
+  the cost lever. About 0.15 ms a frame on an iPhone Air (`Q222`); the floor handset is not
+  measured.
 
 ## The keyframes
 
@@ -80,56 +42,33 @@ the floor handset is not measured, and this is still the lever there.
 | 1.607 (05:30) | `twilight.tres` | the sun on the SSE horizon, 0.00 | twilight's | 0.80 |
 | 1.661 (06:15) | `dawn.tres` | 7° up in the SSE, `(0.8, 0.86, 1)`, 0.60 | `(0.7, 0.82, 1)` | 0.25 |
 
-- **The rows past 1.0 are the free drive's night and dawn** (`Q225`), and the last leg blends back
-  to the 07:00 row across `loop_at`. The moon sets in the west with its energy fading to 0.00 at
-  04:30; first light is 0.00 too, so the key light crosses from the western horizon to where the
-  sun rises unseen — the 19:00 trick mirrored. The 06:15 sun is on the morning's own arc, 9.7°
-  before the 07:00 one, so the wrap leg runs at the daylight speed. Dawn has its own look,
-  `dawn.tres` — blue and misty where dusk is yellow (`Q235`) — so the hour reads off the colour and
-  the sunrise is not the sunset backwards;
-  first light still borrows `twilight.tres`. 🔴 `verify_day_cycle.gd` holds that the widest swing of
-  the key light between two keyframes is on a leg dark at both ends, and that the wrap leg runs at
-  the daylight speed.
-- 🔴 **Every keyframe environment's `Sky` carries `radiance_size = 0`** (32 px, `Q225`). A loaded
-  `Sky` allocates its radiance map whether or not anything draws it, and the rig only ever reads
-  colours off these — the sky on screen is a copy of the day's. Measured on the desktop: the six
-  keyframe skies cost 110.4 MB of texture memory at the default 256 and 4.7 MB at 32 (129.65 MB
-  with the day's sky drawn; 240.09 with them loaded before, 134.34 after). A new keyframe
-  environment takes the line too. ⚠️ Not on `clean_daylight.tres`: that one is drawn — until the
-  rig moves, when the copy is drawn in its place and the rig shrinks the authored sky itself, giving
-  it back on `rest()` and on leaving the tree (18 MB, `Q225`).
-- A shift's 21:00 is 13% of the way from the 20:00 moon to the 03:30 one: the same night, the moon
-  a little further west.
-- **The sun sets in the west-south-west** — the engine's −X is west and +Z south.
-- 🔴 **By day the angle moves at ONE speed** (`Q222`): the rig slerps the DIRECTION to the light
-  along the great circle between two keyframes, and the five daylight keyframes sit on two great
-  circles that meet at noon — morning → authored day → noon, and noon → dusk — at angles and `at`s
-  solved so every leg runs at 0.216 °/s. `verify_day_cycle.gd` holds the legs within 2% of each
-  other, so a keyframe's angle or `at` cannot be moved alone: re-solve the leg (to a tenth of a
-  degree). ⚠️ So the 07:00 sun is in the south-south-east, not the east: the arc through the
-  authored sun and an overhead noon starts there.
-- **Colours fade on a smoothstep** between keyframes — the environments, the light's colour and
-  energy and both globals — so no look changes pace on the frame a keyframe passes. The angle
-  alone is linear.
-- **Noon is the brightest and the highest**, 2.20 against the day's 0.90 (the user's pick of 1.15 /
-  1.6 / 2.2 / 3.0 from frames, 2026-11-16; was 1.15), and `verify_day_cycle`
-  holds that the two coincide. 80° and not 90°: `looking_at` has no roll for a vertical light, and
-  a wall under an overhead sun takes no key light at all.
-- 15:00 and 17:00 reuse the day's environment: only the sun moves there, and 17:00 warms it.
-- 🔴 **The twilight keyframe exists so the key light can change hands unseen.** One
-  `DirectionalLight3D` is both sun and moon; at 0.86 its energy is 0.0, and the swing from the
-  horizon to the moon's 38° happens while it climbs from nothing. Without it the sun's disc rises
-  again as it fades.
-- 🔴 **Night dims the key light and never deletes it**: `VehicleLamps.read_rig` reads a missing sun
-  as "no rig" and drives dark. The moon's 0.30 sits under `vehicle_lamps.tres`'s `night_energy`
-  0.40 — the two move together, and `verify_day_cycle.gd` holds the pair.
-- **`exposure_anchor` is not here and must not be.** It scales `COLOR_0` alone; lowering it for
-  night would darken the walls while paint, fences and glass kept their day values. The dark comes
-  from the light.
-- `night_lights` is the one dial every lit layer multiplies its own `.tres` strength by: the
-  lanterns and their pools (`lamps.tres`, `lamp_pools.tres`), the floodlights
-  (`city_facade.tres`), the road paint (`paint_night_glow`) and the outline (`cel_outline.tres`).
-  0.25 at dusk is the lamps coming on before the light has gone.
-- The hours in brackets are 特更's clock (`Q162`): each keyframe is the shift's hour over its
-  14-hour span. Moving a keyframe here moves the hour it lands on, and the hour is what the player
-  reads.
+- The hours are 特更's clock (`Q162`): a keyframe's `at` is its hour over the shift's 14-hour span.
+- By day the angle moves at one speed (`Q222`): the rig slerps the direction to the light, and the
+  daylight keyframes sit on two great circles that meet at noon, with angles and `at`s solved so
+  every leg runs at 0.216 °/s. `verify_day_cycle.gd` holds the legs within 2% of each other, so
+  never move one keyframe's angle or `at` alone; re-solve the leg. This is why the 07:00 sun is in
+  the SSE, not the east.
+- Colours fade on a smoothstep between keyframes (environments, light colour and energy, both
+  globals). The angle alone is linear.
+- Noon is the brightest and the highest (2.20, the user's pick), and `verify_day_cycle.gd` holds
+  that the two coincide. 80° and not 90°: `looking_at` has no roll for a vertical light, and a
+  wall under an overhead sun takes no key light.
+- 15:00 and 17:00 reuse the day's environment; only the sun moves there.
+- One `DirectionalLight3D` is both sun and moon. The zero-energy keyframes (19:00, 04:30, 05:30)
+  exist so it can change hands unseen. `verify_day_cycle.gd` holds that the widest swing between
+  two keyframes is on a leg dark at both ends.
+- Night dims the key light and never deletes it: `VehicleLamps.read_rig` reads a missing sun as
+  "no rig". The moon's 0.30 sits under `vehicle_lamps.tres`'s `night_energy` 0.40; the two move
+  together and `verify_day_cycle.gd` holds the pair.
+- The rows past 1.0 are the free drive's night and dawn (`Q225`); the last leg blends back to the
+  07:00 row across `loop_at`, at the daylight speed. A shift's 21:00 is the same night, 13% of the
+  way from the 20:00 moon to the 03:30 one.
+- `night_lights` is the dial every lit layer multiplies its own strength by: lanterns and pools
+  (`lamps.tres`, `lamp_pools.tres`), floodlights (`city_facade.tres`), road paint
+  (`paint_night_glow`), the outline (`cel_outline.tres`). 0.25 at dusk is the lamps coming on
+  before the light has gone.
+- `exposure_anchor` is not here and must not be: it scales `COLOR_0` alone, so the dark comes from
+  the light.
+- Every keyframe environment's `Sky` carries `radiance_size = 0` (`Q225`): a loaded `Sky`
+  allocates its radiance map undrawn, about 18 MB each at the default. Not `clean_daylight.tres`,
+  which is drawn; a moved rig shrinks that sky itself and gives it back on `rest()`.

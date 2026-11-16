@@ -4,15 +4,11 @@
 
 1. **It must feel like Hong Kong to a Hong Kong driver.** Recognition beats fidelity. A local should
    navigate by memory, not by minimap.
-2. **Arcade, not simulation.** Three-minute sessions, instant restart, forgiving collision,
-   easy to drive. Fun outranks accuracy whenever they conflict. **The car's physics are a real
-   taxi's** — a Toyota Crown Comfort's grip, weight and drive (since 2026-10-05, `Q153`) — and the
-   ease is layered on top as hidden aids — traction control, the speed-narrowed lock, the catch
-   cap — never by bending a physical number. **The drift is the one place
-   for sim-lite skill** (`Q153`): easy to start and forgiving to lose, held longer and wider by the
-   player's throttle and countersteer — a low entry bar and a high ceiling.
-3. **Readable at a glance.** Two thumbs on a phone, on a bus, in daylight (`Q97`); one-handed stays
-   the deferred accessibility option (`auto_accelerate`, `P3-5b`).
+2. **Arcade, not simulation.** Short sessions, instant restart, forgiving collision, easy to drive.
+   The car's physics are a real Toyota Crown Comfort's (`Q153`); the ease is layered on top as
+   hidden aids (`tuning/systems/`), never by bending a physical number. The drift is the one place
+   for sim-lite skill: easy to start, forgiving to lose, held longer by throttle and countersteer.
+3. **Readable at a glance.** Two thumbs on a phone, on a bus, in daylight (`Q97`).
 
 ## The central design tension
 
@@ -20,336 +16,192 @@ Real geometry fights arcade fun, and fun wins. The open data is a skeleton, not 
 
 | Use the real data for | Deliberately diverge on |
 |---|---|
-| Road topology and connectivity | Road width — a minimum drawn width at grade (10.24 m; 12.48 m on ≥70 kph roads; a floor, not a multiplier, `Q95`), but authored width on structure: a widened ribbon overhangs its own deck |
-| One-way directions and turn restrictions (for AI traffic) | Player rule-breaking — always allowed |
-| Building massing and position | Pedestrian railings — drawn, and solid since `Q159` (a box per panel, the user's call); lamp columns, sign posts and signal posts solid since `Q191`; breakaway waits for `B3` |
-| Landmark placement | Ramps, jumps, shortcuts — hand-added, sparingly |
-| Street and place names | Kerb heights — flattened for mountability |
+| Road topology, widths and connectivity | Kerb heights — flattened for mountability |
+| One-way directions, turn restrictions and signals (for AI traffic) | Player rule-breaking — always allowed, never penalised (`Q181`) |
+| Building massing and position | Street furniture — railings, lamp columns, sign and signal posts are solid (`Q159`, `Q191`) and do not break away |
+| Landmark placement, street and place names | Ramps, jumps, shortcuts — hand-added, sparingly |
 
-The player may break every traffic rule; the AI obeys them. That asymmetry makes the city read as
-real while staying playable.
+The player may break every traffic rule; the AI obeys them. A breach is paid for only when
+something in the world catches it, and nothing does yet (`Q181`).
 
-⚠️ The divergences are not equally cheap. Width, kerbs and railings are invisible to a driver's
-memory of a street; a hand-added ramp is new geometry somewhere the player knows, and a debit
-against the acceptance test below. Prefer the shortcut that is there — the Canal Road Flyover, the
-elevated Gloucester approach, the plaza gaps, the alley grid. The ramps are in the source data:
-`P2-7` put the carriageway on them and `P4-1` (`Q111`) opened them to driving; `Q19`'s at-grade
-blockers were carved and fenced (`P3-28`, `P3-29`). Invent a ramp only where a specific stretch is
-demonstrably dead, and record it as a decision.
-
----
+A hand-added ramp is new geometry somewhere the player knows. Prefer the shortcut that is there —
+the Canal Road Flyover (drivable, `Q111`), the plaza gaps, the alley grid — and invent one only
+where a stretch is demonstrably dead, recorded as a decision.
 
 ## Core loop
 
 ```
-    idle / cruising
-          ↓  drive into a hail zone
-       fare hailed
-          ↓  passenger boards
-    carrying passenger  ──── timer running ────┐
-          ↓  reach destination zone            │
-       delivered  → fare + time bonus + style  │
-          ↓                                    ↓
-    combo continues                     timer expires → passenger bails
-          ↓                                    ↓
-    ← ← ← ← ← back to idle ← ← ← ← ← ← ← ← ← ←
+cruising → stop beside a waiting customer → passenger boards → carry, allowance running
+        → stop at the destination: meter + tip banked → cruising
+        → allowance runs out: the passenger walks without paying → cruising
 ```
 
-A shift (特更, `Q162`) ends at 交更: the HUD's clock runs 07:00 → 21:00 over fourteen minutes of
-driving, a minute on the clock a second (`Q233`), the sky with it, and the total fare is the
-score. The day does not stretch — a delivery
-adds money, never time. At 21:00 no new customer hails and the passenger aboard is the last fare.
-
-- **Session length:** 5 minutes of driving (`day_to_night.tres`'s `length_s`); the clock stops
-  under the menu.
-- **Restart:** instant, one tap — AGAIN on the report restarts the level in place. No loading
-  screen between runs.
-
----
+- **A shift (特更, `Q162`)** runs the HUD's clock 07:00 → 21:00 over fourteen minutes of driving, a
+  clock minute a second (`Q233`), the sky with it. The total fare is the score. A delivery adds
+  money, never time. At 21:00 no new customer hails and the passenger aboard is the last fare; then
+  交更, the report against the best.
+- The clock stops under the menu. AGAIN on the report restarts in place, no loading screen.
+- Boarding and delivery: stop (`stop_below_kph`) inside `hail_radius_m` / `deliver_radius_m`
+  (`fares.tres`).
 
 ## Fares
 
-Fare nodes come from `fares.json`, built from the Taxi Stands and Taxi Pick-up & Drop-off Points
-datasets, plus hand-added POIs — and from **street spots** (`Q203`): any kerb no no-stopping run
-reaches, off bus lanes and trunk roads, beside a named building, where a Hong Kong passenger flags a
-cab. Four customers wait at once (`live_pickups`), three in four of them at a street spot
-(`street_share`), each already knowing where they are going, and a new one appears as a fare ends;
-destinations are drawn the same way.
+Fare nodes come from `fares.json`: Taxi Stands, Taxi Pick-up & Drop-off Points, tram-stop POIs, and
+**street spots** (`Q203`) — any kerb no no-stopping run reaches, off bus lanes and trunk roads,
+beside a named building. `live_pickups` customers wait at once, `street_share` of them at street
+spots, each already knowing where they are going; a new one appears as a fare ends.
 
-| Type | Source | Payout | Notes |
-|---|---|---|---|
-| Short hop | `pudo` | The meter | Common; keeps the chain alive |
-| Standard | `taxi_stand` (urban), a street spot | The meter | The default fare |
-| Long haul | `poi`, cross-district | The meter | Rewards route knowledge (`P3-1b`) |
-| **Cross-harbour** | `taxi_stand` where category = `cross_harbour` | The meter + the HK$25 toll and HK$25 return toll | Terminates at the tunnel approach (`P3-1b`) |
+- **The meter is real** (`Q141`, `tariff.tres`, TD's urban tariff): HK$29 for the first 2 km, then
+  HK$2.1 per 200 m or per minute waiting until HK$102.5, HK$1.4 after — on metres driven and
+  seconds waited. Inside one region most trips stay on the flagfall, so the drive earns the rest
+  as a tip.
+- **The allowance is the legal route alone**: its length over `par_kph` (19, the legal traffic's
+  measured median), no floor by kind. A destination is at least `min_trip_m` (300) of legal route
+  away; a pickup that reaches none is not a pickup.
+- A fare's kind is its destination's (`pudo`, `taxi_stand`, `poi`, `street`). Nothing prices a kind.
+- Destinations are announced by name, bilingually — `Times Square / 時代廣場` — never by street
+  address. A guide assists, but the acceptance test is run with it off.
 
-**The meter is real** (`Q141`): the 咪錶 runs Transport Department's urban tariff — HK$29 for the
-first 2 km, then HK$2.1 per 200 m or per minute waiting until HK$102.5, HK$1.4 after — on the
-metres actually driven and the seconds actually waited. Inside one region most trips stay on the
-flagfall, so the base is HK$29 and the drive earns the rest as a tip (Scoring). The kind is the
-destination's. **The allowance is the legal route alone** (the user's call, 2026-11-12): its
-length over a par of 19 kph, the legal traffic's measured median, with no floor by kind. A
-destination is only ever drawn at 300 m of legal route or more, and a pickup that reaches none is
-not a pickup.
-
-The cross-harbour fare is the signature mechanic: the source dataset distinguishes that stand
-category, it pays the most, and it ends at a diegetic map boundary. The fare terminates at the
-tunnel approach, which is in the region at street level — three `CROSS HARBOUR TUNNEL` edges at
-elevation level 0 join ordinary streets through `WAN CHAI INTERCHANGE`. The six cross-harbour
-stands sit 191 m to 1,044 m from the portal; 191 m is barely a trip, so `P3-1` needs a minimum
-length or a different destination for the near ones. Whether stopping at a portal feels like
-completing the fare is a `P3-9` question.
-
-### Destination presentation
-
-Destinations are announced by name, bilingually — `Times Square / 時代廣場`, `會展`, `灣仔碼頭` —
-never by street address. Hong Kong drivers navigate by landmark name. Names ship in `fares.json`.
-
-A directional arrow assists, but the acceptance test is that a local can find the destination with
-the arrow disabled.
-
----
+**Designed, not built (`P3-1b`):** long-haul fares across districts, and the **cross-harbour** fare
+— the signature mechanic. The source data distinguishes `cross_harbour` stands; the fare pays the
+meter plus the HK$25 toll and return toll and terminates at the tunnel approach, which is in the
+region at street level. The cross-harbour stands sit 191–1,044 m from the portal, so the near ones
+need a minimum length or another destination.
 
 ## Scoring
 
+Values are `tuning/skills.tres` and `fares.tres`.
+
 | Component | Rule |
 |---|---|
-| Base fare | The meter's reading at delivery (`Q141`) |
+| Base fare | The meter's reading at delivery |
 | **Tip** (小費) | Everything below, in HK$, banked with the meter as one sum |
-| Time bonus | Remaining seconds × HK$0.5, priced at the door — pays a shortcut and a fast run alike (`P3-1a`); never in the live tip (`Q145`) |
-| **Drift** | HK$ once a slide has held `drift_min_s` at or over `drift_slip_threshold_deg`, and again per `drift_s`, each award `drift_step_hkd` more than the last, so a long slide pays the square of its length (`P3-49`, `Q172`, `skills.tres`) |
-| **Sustained speed** | HK$ per `speed_hold_m` driven over `speed_min_kph` — never oftener than the meter's 200 m unit (`P3-49`) |
-| **Early arrival** | HK$ once at the door with `early_share` of the allowance left (`P3-49`) |
-| **Near miss** | HK$ for passing a vehicle, parked or moving (`Q175`), inside `near_miss_m` at or over `near_miss_min_kph`, only when the car was heading for it a moment before — a lane pass at the same clearance pays nothing (`P3-2a`, `Q161`, the user's call); inside `close_call_m` it is a **close call** at twice the price |
-| **Air** | HK$ at the landing once every wheel has been off the ground for `air_min_s`, and again per `air_s` of flight — upright landings only, a roll pays nothing (`P3-51`, `Q147`) |
+| Time bonus | Remaining seconds × `tip_hkd_per_s`, priced at the door; never in the live tip (`Q145`) |
+| Drift (甩尾) | Once a slide has held `drift_min_s` over the slip threshold, and again per `drift_s`, each award `drift_step_hkd` more than the last (`Q172`) |
+| Sustained speed | Per `speed_hold_m` driven over `speed_min_kph` |
+| Early arrival | Once at the door with `early_share` of the allowance left |
+| Near miss | Passing a vehicle, parked or moving, inside `near_miss_m` at or over `near_miss_min_kph`, only when the car was heading for it a moment before; inside `close_call_m` it is a close call at twice the price (`Q161`, `Q175`) |
+| Air | At the landing once every wheel has been off the ground `air_min_s`, and per `air_s` of flight; upright landings only (`Q147`) |
+| Penalty | A wall or vehicle hit is tiered on closing speed: a touch is free, a collision (`bump_min_kph`) and a crash (`crash_min_kph`) dock the tip, never the meter (`Q148`) |
 
-Skills are paid during the drive and shown at once — a flash under the clock, the tip on its own
-LED under the meter in the meter's red, and the passenger's face popping out of the back seat — so
-players learn what the game rewards without being told. With no passenger aboard the same skills
-still flash — by name alone, nothing paid — so a stunt can be practised between fares, and each is
-counted for a later achievement. The live tip is the skills alone and only
-rises (or is docked by a penalty); the time bonus joins it at the door, because a tip that fell
-with the clock read as a penalty for driving (`Q145`). The
-delivery's callout is a receipt: the meter, the time left and each skill by name with its count,
-so the tip is never a number that appeared (`Q145`). A passenger whose clock runs out walks
-without paying, and the receipt says what walked out with them.
-
-**Every skill and penalty speaks the driving test's register** (`Q169`, the user's ask): a bump
-and a crash are the 黃紙's own 碰及物體（輕微／嚴重）, the fault sheet every Hong Kong driver took
-home, while a bonus is a feat with no fault word in it — a near miss 貼身而過, a close call
-險過剃頭, the speed run 高速行駛, a flight 凌空飛躍, the early arrival 走得快好世界; 甩尾 keeps its name. Names only,
-so no three-minors rule and no pass or fail. The words are `tuning/exam_sheet.json`.
-
-⚠️ **Flat money per event** (the user's call, `Q145`), not the *style chain* this section first
-sketched — a multiplier that a hard crash resets — because a pop the player can read beats a
-multiplier they cannot. The crash detector exists since `P3-50` (`Q148`): a wall hit is tiered on
-the speed into the wall — a touch is free, a collision docks HK$2, a heavy crash HK$5 — and docks
-the tip, never the meter. `P3-2b` may layer the chain on top; the
-awards stay what they are. "Chain" elsewhere in this document means the fare sequence, so the style
-one is always the *style chain*.
-
-| | Scope | Climbs on | Resets on |
-|---|---|---|---|
-| **Style combo** (車手, `Q205`) | Seconds of driving | Each bonus skill's own count; any skill keeps every count alive | A collision or a crash, or `combo_gap_s` with no skill in progress |
-| **Fare combo** | The session | Consecutive deliveries | A bailed fare |
-
-**The style combo is a count, never money** (`Q205`, the user's design, 2026-11-13): it layers on
-the flat awards and moves no fare. The same skill again adds to its count (speed ×10), a second
-skill joins beside it (speed ×10, close call ×1), and the end calls out the final — 車手 ×11, the sum
-of the counts — under the meter, from ×2 up. The gap does not run while a slide, a speed run or a
-flight is in progress. Practice counts. Each skill's best combo and the best total go in the
-成績表 and the lifetime record.
+- **Flat money per event** (`Q145`), not a multiplier a crash resets: a pop the player can read
+  beats a multiplier they cannot.
+- Skills pay during the drive and show at once: a flash, the tip on its own LED under the meter,
+  the passenger's face. The live tip only rises or is docked; the time bonus joins at the door,
+  because a tip that fell with the clock read as a penalty for driving.
+- With no passenger aboard the skills still flash by name, unpaid, and count for the record.
+- The delivery callout is a receipt: meter, time left, each skill with its count.
+- **Names are the driving test's** (`Q169`, `tuning/exam_sheet.json`): a bump and a crash are the
+  黃紙's 碰及物體（輕微／嚴重）; a bonus is a feat — 貼身而過, 險過剃頭, 高速行駛, 凌空飛躍,
+  走得快好世界, 甩尾. Names only: no pass or fail.
+- **The style combo (車手, `Q205`, `Q212`) is a count, never money.** Each skill has its own count;
+  any skill keeps every count alive; a collision, or `combo_gap_s` with no skill in progress,
+  ends it and calls out the total from ×2 up. Best combos go in the 成績表 and the lifetime record.
+- Not built: a **fare combo** for consecutive deliveries; achievements and a share sheet (`Q188` —
+  the 成績表 saves as a picture).
 
 Sustained speed belongs to Gloucester Road, drift and near miss to tram-pinned Hennessy, so which
-route pays more is a real choice. Air pays off any deck edge: the flyovers are jumpable by design
-(`Q147`), and the drop is the shortcut the time bonus already pays.
-
----
+route pays more is a real choice. Air pays off any deck edge: the flyovers are jumpable by design.
 
 ## Controls
 
-See `docs/ARCHITECTURE.md` for the action-set mapping across touch/gamepad/keyboard.
+Action mapping is `docs/ARCHITECTURE.md`; handling is `.claude/rules/handling.md`. All values live
+in `game/tuning/` (`handling.tres`, `tyre.tres`, `pace.tres`, `cars/`, `systems/`); grade every
+change on `tools/skidpad.sh`, never against a number written here.
 
-**Handling model:** Godot's `VehicleBody3D` with arcade overrides (`Q50`), and since 2026-10-03 a
-per-wheel tyre model in place of the engine's tyre force (`TyreVehicleController`, `Q152`). ⚠️ The
-engine's wheel friction is isotropic (`P0-5a`, never refuted; `Q50` accepted it as a cost): one
-`wheel_friction_slip`, one `tyre_grip`, no friction ellipse — which is why the tyres were replaced
-and the rest kept. All values live in `game/tuning/handling.tres` and `game/tuning/tyre.tres`;
-grade every change on `tools/skidpad.sh` and tune against a measurement, never a number written
-here. See `.claude/rules/handling.md`.
+**Handling model:** Jolt `VehicleBody3D` with the engine's tyre force turned off and a per-wheel
+tyre model applied instead (`TyreVehicleController`, `Q152`), because `VehicleWheel3D` friction is
+isotropic and cannot break lateral grip while keeping traction.
 
 | Property | Target feel |
 |---|---|
-| Grip | High, forgiving. No spin-outs from small errors. ⚠️ Braking through a corner costs no cornering grip and a power-on corner accelerates — `Q49`'s one-budget coupling is lost |
-| Drift | Started with the handbrake (`Space`, `Q170`), held by the throttle and the countersteer. A real handbrake scrubs speed, so a drift buys line, never pace — see below |
+| Grip | High, forgiving. No spin-outs from small errors |
+| Drift | Started with the handbrake (`Space`, `Q170`), held by throttle and countersteer; traction control returns when the steering is let go. A handbrake scrubs speed, so a drift buys line, never pace. Graded on dwell over the threshold, never on peak slip (`Q84`) |
 | Collision | Glancing hits deflect; head-on hits cost speed, never control |
-| Recovery | Auto-righting if flipped, within ~1 s |
+| Recovery | Auto-righting if flipped; RESET CAR on the pause puts the car on the nearest road it can leave (`Q229`, `Q241`) |
 | Reverse | Instant, no gear delay |
-| Braking | Strong (~0.95 g, 9.3 m/s² from 63 kph; `brake_g` 1.2 with a 65% front bias and ABS, a road tyre's limit, `Q153`) and as speed-uniform as the engine allows. Must out-pull the ramps: the brake is sized on the car's weight, so it follows the pace's gravity (`pace.tres`, `Q156`). The car must stop faster than it accelerates |
-| Coasting | Sheds a similar speed per second at 5 km/h as at 50, and comes to a stop. One pedal serves brake and reverse, so coasting is the only thing that can park the car (`P0-5b/c/d`) |
+| Braking | Strong, a road tyre's limit with ABS; must out-pull the ramps. The car stops faster than it accelerates |
+| Coasting | Comes to a stop: one pedal serves brake and reverse, so only coasting parks the car |
 
-### The drift as shipped
-
-Since 2026-10-03 the game's car is the tyre car (`Q152`), and its drift is `Q153`'s: the handbrake
-breaks the tail, the throttle and the countersteer hold it, traction control comes back when the
-steering is let go. `tyre.md` holds its tables. The list below describes the car before it —
-`taxi.tscn` on the engine's tyres, kept as the skidpad's control — and none of its numbers are the
-game's any more.
-
-- Three mechanisms: a rear grip cut (`drift_rear_grip_scale` 0.66), a yaw torque that decays on
-  **time**, never on measured slip (`drift_yaw_torque_nm` 7000, `drift_yaw_decay_s` 0.8,
-  `drift_yaw_sustain` 0.0; `Q85`, `Q86`), and speed envelopes: `drift_rear_grip_scale_at_top` 0.80
-  with the assist faded 65 → 85 km/h (`drift_fade_from_kph`, `drift_yaw_fade_to_kph`; `Q87`, `Q88`),
-  and `drift_rear_grip_scale_at_low` 0.44 below `drift_low_fade_kph` 41 (`Q89`).
-- Works 34–86 km/h with 0.42–0.98 s above the 14° bar; design speed 63 km/h reads 69.8° held, 20.5°
-  tapped. Figures in `Q84`/`Q86` describe a superseded car.
-- ⚠️ Inert above about 100 km/h by choice: a real drift there (grip 0.78) sits 0.01 from a cliff
-  and was refused (`Q88`).
-- ⚠️ The low branch latches at engagement where the high branch tracks (`Q89`): deepening the cut
-  as speed falls is positive feedback, and built as a tracker it spun the design speed to 165°.
-- ⚠️ Grade the dial on dwell (`secs>thr`), never on landing peak slip on the threshold (`Q84`): peak
-  slip and dwell trade against exit speed on the one dial, so "easy to hold" and "scrubs little
-  speed" are opposite ends of it. The yaw dials buy angle and cost speed; they never buy dwell.
-- Not reachable in this model (`Q85`): `get_rpm()` is road speed, so wheel spin cannot be read;
-  lifting the throttle cancels the drift (no lift-then-flick entry); a gripping turn beats the drift
-  round a 90° corner (63.4 against 52.8 kph), so a drift buys line, never pace; there is no
-  sustained drift equilibrium — a gripping circle or a spin.
-- ⬜ Open: the tap is dead below the design speed (3.9° at 42 km/h), and the yaw assist cannot fix
-  it — there, unbroken grip turns torque into a tighter line (`Q89`). Sustained full lock spinning
-  the car was never re-measured after `Q50`; re-grade before citing it.
-- ✅ A physical drift is the car (`P3-52`, `Q152`, shipped 2026-10-03): a per-wheel tyre model
-  holds a countersteered slide past the 2 s the fare pays on, at twice the drive and with the
-  car's everyday cornering changed. Owed: the speed skill's bar and the wall tiers, read off the
-  old car's pace (`Q152`), and the model's cost on a handset.
-
-⚠️ Touch carries three of six actions (`Q97`): steer, accelerate, brake/reverse. The handbrake,
-`look_back` and the horn (`Q178`) stay keyboard/gamepad until `P0-3b`'s handset can price the gesture.
-
-Driving against a one-way raises a blinking NO ENTRY disc (`Q81`, `P3-25`): raised by the car's
-nose (velocity may only withhold it), a 120° bar and dwells against false alarms in a region 93.5%
-one-way by drivable length, blink under the 3 Hz WCAG ceiling. It informs; it does not penalise.
-
----
+- **Touch carries steer, accelerate and brake/reverse** (`Q97`), drawn as the taxi's wheel and
+  pedals (`Q204`, `touch.tres`). The handbrake, `look_back` and the horn are keyboard/gamepad only
+  until a handset prices the gesture (`P0-3b`); thumb 2's vertical axis is reserved for the
+  handbrake.
+- `auto_accelerate` (one-handed play) is designed, not built.
+- Driving against a one-way raises a blinking NO ENTRY disc (`Q81`, `wrong_way.tres`). It informs;
+  it does not penalise.
+- Owed: the handset drive of the tyre model and of the reset.
 
 ## Hong Kong authenticity mechanics
 
-Ranked by impact-to-effort. The top four are where the "feels like HK" verdict is won.
+| Mechanic | Status |
+|---|---|
+| Bilingual destination callouts | Built |
+| Red urban taxi livery | Built. HK Island is red; green or blue reads as wrong |
+| Trams as moving walls | Built (`Q176`, `Q180`): on the published rails, stopping at the published stops and the reds. The taxi pushes one along its rails by momentum, never off them |
+| Buses and green minibuses on their published routes | Built (`Q182`): they stop at their stops; double-deckers block sight |
+| Traffic signals | Built (`Q173`): an authored phase plan, heads showing what it runs |
+| Parked vehicles from published bays, stops, termini and stands | Built (`Q161`) |
+| Bus lanes, reds and double yellows as penalties | Refused until something in the world enforces them (`Q181`) |
+| Bamboo scaffolding, cross-harbour tunnel queue, neon signage | Not built |
 
-| Mechanic | Effort | Source |
-|---|---|---|
-| **Bilingual destination callouts** | Trivial | `fares.json` |
-| **Red urban taxi livery** | Trivial | ✅ Shipped (`P3-11`): red, silver roof. HK Island = red; green or blue reads as wrong |
-| **Trams as moving walls** | Low | 🟡 Built (`P3-4`, `Q176`): on the published rails (`P3-14`, `tram_lines.json`), both ways, stopping at the published stops and the reds. Solid; the taxi pushes one along its rails by its mass, never off them (`Q180`), and a car knocked across them holds it; the near miss reads them. Owed: the user's drive |
-| **Bus lanes as penalty zones** | Low | `bus_lane` in `roadgraph.json` |
-| Double-decker buses as sight blockers | Low | Traffic AI vehicle type |
-| Bamboo scaffolding on buildings | Low | Prop instancing |
-| Minibuses that stop abruptly | Medium | Traffic AI behaviour variant |
-| Cross-harbour tunnel queue | Medium | Static congestion at the tunnel approach |
-| Neon signage overhanging streets | Medium | Instanced props + emissive shader |
+Neon is the highest-value gap: "the streets are bare" and "the streets are wrong" have different
+fixes, and the handset round should listen for which.
 
-> **Trams are the highest-leverage single object in the game.** They constrain lane choice as they
-> do in reality, are instantly recognisable, and cost far less than another building.
+## Traffic
 
-Only the livery and the tram rails are built. Neon is the highest-value gap: the common reading of
-why Sleeping Dogs' Hong Kong worked is signage density, not street accuracy — untested here, but
-`P3-9` should listen for it, because "the streets are bare" and "the streets are wrong" have
-different fixes. The day runs to night since `Q160` (2026-10-07), with lit lanterns, so neon now
-has the frame that justifies it — still unpriced. Not in the slice; first thing to price
-once `P3-9` reports.
+Built (`.claude/rules/signals.md`, `busroutes.md`, `trams.md`, `parked.md`; `traffic.tres`).
 
----
-
-## Traffic AI
-
-⚠️ **Deferred behind the parked roster (`Q161`, 2026-10-11).** The streets are populated first by
-stationary vehicles from published data — bays, bus stops, minibus termini, taxi stands, tram
-stops, named frontages and a fill of the free kerb — resolved by the hour, with the near miss
-paid against them. What follows is the moving layer that comes after.
-
-- Vehicles follow road-graph edges, respecting `direction`, `speed_limit_kph` and
-  `turn_restrictions`. The AI obeys the real rules; the player does not.
-- Density scales with the performance tier.
-- Vehicle mix: private cars, red taxis, double-deckers, minibuses, trams (scripted, fixed routes),
-  delivery trucks.
-- AI reacts to the player minimally — braking for imminent collision. Traffic, not opponents.
-- A car the taxi hits is knocked by momentum, by the two kerb masses (`Q180`): it slides and
-  spins on its tyres' grip, stands on its hazards, and drives on if it can rejoin a lane it may
-  drive, or stays a wreck the others pass. Parked vehicles stay fixed for now. The crash costs
-  the closing speed alone, whatever the mass.
-
-⚠️ One turn restriction in the region excludes taxis and `roadgraph.json` has no field for that, so
-the graph forbids a turn a real red taxi may make. Adding it is a schema change on both sides.
-
----
+- Vehicles follow road-graph edges, obeying direction, turn bans and signals. Traffic, not
+  opponents. Mix and size follow the clock hour off TD's census and detectors (`Q186`, `Q198`).
+- No vehicle appears or vanishes in view (`Q214`).
+- A car the taxi hits is knocked by momentum (`Q180`): it slides, stands on its hazards, and drives
+  on if it can rejoin a lane, or stays a wreck the others pass. Parked vehicles stay fixed. The
+  crash costs the closing speed alone, whatever the mass.
+- One turn restriction in the region excludes taxis and `roadgraph.json` has no field for that, so
+  the graph forbids a turn a real red taxi may make. Adding it is a schema change on both sides.
 
 ## Region and free-slice boundary
 
-PoC region is **Wan Chai → Causeway Bay** (bounds in `docs/DATA_SOURCES.md`).
+Regions are in `etl/config/hong_kong.yaml`; the game ships `wan_chai` and `causeway_bay` joined.
+Design Wan Chai to be standalone-playable: it becomes the free tier and the web demo, the rest the
+unlock.
 
-Design Wan Chai to be standalone-playable: it becomes the free tier and the web demo; Causeway Bay
-and later Central are the unlock. The seam costs nothing now and keeps the launch model open.
+**The circuit:** Gloucester Road (east, fast) → Canal Road Flyover (the vertical beat) → Hennessy
+Road (west, tram-pinned, technical) → Fleming / Fenwick back to Gloucester. Fast spine plus
+technical parallel is the contrast arcade driving lives on, and it exists in the real layout.
 
-### The circuit
-
-```
-Gloucester Road (east, fast, 4-6 lanes)
-      ↓
-Canal Road Flyover (elevated, the vertical beat)
-      ↓
-Hennessy Road (west, tram-pinned, technical)
-      ↓
-Fleming / Fenwick (cross-connectors)
-      ↓  back to Gloucester
-```
-
-Fast spine plus technical parallel is the contrast arcade driving lives on, and it exists in the
-real layout. The flyover half rests on `P4-1` (`Q111`); `P4-2`–`P4-5` are not started.
-
-**Map edges are diegetic:** Victoria Harbour north, the escarpment toward Kennedy Road south,
-Admiralty west, Victoria Park east. No invisible walls needed — the streets the rectangle cuts
-are closed on the line with the fence's own barrier row (`Q143`), and a road a neighbouring
-region continues is never closed.
-
----
+**Map edges are diegetic:** Victoria Harbour north, the escarpment south, Admiralty west. Streets
+the rectangle cuts are closed on the line with the fence's barrier row (`Q143`); a road a
+neighbouring region continues is never closed.
 
 ## Modes
 
 | Mode | Status | Notes |
 |---|---|---|
-| **特更 / THE SHIFT** | Built (`Q162`, `P3-74`) | The main mode, under PLAY. Morning to night — 07:00 to 21:00 on the HUD's clock over fourteen minutes of driving, one second a clock minute (`Q233`), the day always running — then 交更: the total fare against the best, which HOME shows. Replaces Arcade's session timer that deliveries extended |
-| **兜風 / FREE MODE** | Built (`Q162`, `P3-74`) | Under PLAY. Fares on, no end, daylight held unless OPTIONS picks DAY TO NIGHT (off by default since `Q162`) |
-| **Day to night** | Built (`Q160`) | Not a mode but the hour: the shift always runs it, free mode on the option. Since `Q162` the cycle is the shift's 840 s (`Q233`; was 300), dusk at 18:00 and night at 20:00 |
-| Free roam (dev) | Vertical slice | No fare or arrow: `--fares=off`, the state `Q8` was judged in. Where `P3-9` runs |
-| Time trial | Later | Fixed A→B, leaderboard |
-| Daily challenge | Later | Seeded fare sequence |
-
----
+| **特更 / THE SHIFT** | Built (`Q162`) | The main mode: 07:00 to 21:00, then 交更 and the total against the best |
+| **兜風 / FREE MODE** | Built (`Q162`) | Fares on, no end; ALWAYS DAY unless OPTIONS picks DAY TO NIGHT. Ends from PAUSE on its own report (`Q189`) |
+| Free roam (dev) | Built | `--fares=off`: no fare or guide |
+| Time trial, daily challenge | Not built | Fixed A→B; seeded fare sequence |
 
 ## Acceptance test
 
-**Hand the build to a Hong Kong driver, disable the minimap (`--minimap=off`) and the direction
-arrow, and name a destination.** If they can drive from the Convention Centre to Times Square from memory, using the
-correct one-way streets, the city reads as Hong Kong. If they need the minimap, the pillar has
-failed — and the test shows where, which screenshot comparison never does.
+**Hand the build to a Hong Kong driver, disable the minimap (`--minimap=off`) and the guide, and
+name a destination.** If they can drive from the Convention Centre to Times Square from memory,
+using the correct one-way streets, the city reads as Hong Kong. If they need the minimap, the
+pillar has failed — and the test shows where.
 
-Run it at the end of every phase from Phase 3 onward, with at least three different drivers.
-
-Round 0 (`P3-9a`, no-HUD free roam, 2026-08-30): three HK drivers recognised Wan Chai from geometry
-alone. The sessions ended on `Q19`'s blocked bridges; who said what was not captured and the build
-cannot be tied to a commit (`P3-9a′`). `P3-9` remains the handset test, with different drivers —
-that cohort has learnt the map.
-
----
+Run it at the end of every phase, with at least three drivers. Round 0 (`P3-9a`, web, no HUD): three
+HK drivers recognised Wan Chai from geometry alone. `P3-9`, the handset round, is owed and needs
+different drivers — that cohort has learnt the map.
 
 ## Anti-goals
 
-Explicitly **not** building:
-
-- A driving simulator. No realistic physics, damage modelling, or fuel.
+- A driving simulator: no damage modelling or fuel.
 - Energy timers, lives, or any session-gating monetisation.
 - Gacha, loot boxes, or randomised rewards — including the wheelspin shape.
-- Live-service, seasons, or anything always-online (hard rule 2: zero runtime network calls).
-- Licensed-car collection as a progression spine. The art direction is 800–2,000-triangle toys.
+- Live-service, seasons, or anything always-online (hard rule 2).
+- Licensed-car collection as a progression spine.
 - Pedestrians as collision targets. Keep pavements empty, or non-collidable ambience.
-- An open-world map of all Hong Kong. Scope is deliberately one corridor.
+- An open-world map of all Hong Kong.
 - Multiplayer.

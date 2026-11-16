@@ -1,45 +1,23 @@
 # hud_layout_touch.tres
 
-Rationale for `game/tuning/hud_layout_touch.tres`. Each heading is the line the block sat above; `Overview` is the
-file as a whole. Why it lives here and not in the file: `Q119`.
+Rationale for `game/tuning/hud_layout_touch.tres` (`Q119`).
 
-## Overview
+The touch screen's table (`Q204`). `HudLayout.for_device()` reads it where
+`DisplayServer.is_touchscreen_available()`, or under `--touch=mouse|on`; the desk keeps
+`hud_layout.tres`. `hud_layout.md` has the rules both tables share.
 
-The touch screen's table (`Q204`, the user's ask from the first handset,
-an iPhone Air, 2026-11-13). `HudLayout.for_device()` reads it wherever
-`DisplayServer.is_touchscreen_available()`, or under `--touch=mouse|on`; the
-desk keeps `hud_layout.tres`.
-
-🔴 `design_size` IS THE SCALE. The canvas is stretched by
-`1080 / design_size.y` over the desk's frame (`HudLayout.apply_scale`), so the
-readouts here keep the desk's sizes in units and draw larger — the menu too.
-The thumbs are physical, so the zones and rests are the desk's numbers over the
-scale.
-
-🔴 THE RESTS ARE THE HANDSET'S, NOT THE DESK'S 100-UNIT STRIP: the user's
-thumbs covered the map and the speed in the bottom corners, so each rest is the
-lower 380 desk units of its side, and `verify_hud` then refuses either readout
-there. Each rest stays inside its zone's lower half, so the check's probe that
-a rect over a tap zone is permitted still means something.
-
-🔴 THE USER'S PICKS OFF RENDERED OPTIONS (2026-11-13): scale 1.25 over 1.0 and
-1.15 (`design_size` 1536 × 864); layout A over B (map in the top-left corner,
-clock under it) and C (speed bottom-centre, which the chase camera puts on the
-taxi's boot). A keeps the desk's rule — left is the world, right is the car,
-top is the fare — one storey up: the map under the clock on the left, the
-speed under the meter on the right, at y 300 so 148 units clear the meter (the
-user asked for more than 244's 92).
-
-⚠️ `award` and `combo` stay reserved where the desk has them, over the map and
-the speed's columns. `pause` is 96 units, 47 pt on an iPhone at 1.25, over
-the 44 pt minimum the desk's 88 missed (34 pt).
-
-🔴 THE TIP CLOCK SITS UNDER THE GUIDE'S ARROW HERE, NOT UNDER THE GOAL BOX
-(the user's report from the handset, 2026-11-13): the arrow floating 2.6 m over
-the taxi (`guide.tres`) projects to ~18–24% of the screen's height, and at
-scale 1.25 the desk's y 116 put the countdown at 13–28% — the arrow drew
-behind "376 秒" and could not be read. `timer` moves to y 236, under the arrow,
-and `tick` (y 368) and `wrong_way` (y 432) follow it down the same column, so
-the desk's order — goal box, arrow, clock, tick, NO ENTRY — holds. Trialled
-against the clock left of the goal box (x 336, 168 wide), which crowded the
-numerals into the gap beside the 特更 clock.
+- `design_size` 1536 × 864 is the scale: the canvas is stretched by `1080 / design_size.y`
+  (`HudLayout.apply_scale`), 1.25, the user's pick. Readouts keep the desk's sizes in units and
+  draw larger, the menu too. Zones and rests are physical, so they are the desk's numbers over
+  the scale.
+- `thumb_rest_*`: the lower 264 units of each side, not the desk's strip. On the handset the
+  thumbs covered the map and the speed in the bottom corners, and `verify_hud` refuses either
+  readout there. Each rest stays inside its zone's lower half.
+- `minimap`, `street_plate`, `speed`: one storey up from the desk (the user's pick). The map
+  under the clock on the left, the speed under the meter on the right, on one line (`verify_hud`).
+- `timer` y 236: under the guide's arrow, which projects to about 18–24% of the screen's height
+  here and hid the countdown at the desk's y. `tick` and `wrong_way` follow down the same column.
+- `tick` y 338: the combo's skill row runs about 30 px under the rect, and lower is the taxi's
+  roof sign (`Q212`).
+- `pause` 96 units: 47 pt on an iPhone at 1.25, over the 44 pt minimum.
+- `award`, `combo`, `clock`, `meter`, `callout`: where the desk has them, shifted for the width.

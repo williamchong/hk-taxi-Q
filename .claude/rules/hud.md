@@ -18,177 +18,128 @@ paths:
   - "game/assets/authored/fonts/*"
 ---
 
-# HUD, wrong-way warning, street names and the font — before marking work done
+# HUD, wrong-way warning, street names, menu and fonts — before marking work done
 
-Moved verbatim from the root `CLAUDE.md`, which keeps the trigger and points here.
+Every block: `tools/check.sh` is the reading (it runs `verify_hud` and `verify_menu`); a verify
+tool prints `ok` having checked NOTHING when a `preload`ed script fails to compile. `verify_hud`
+sees no frame, so each block also owes frames. A clean art frame needs BOTH `--debug-view=off` and
+`--hud=off`. `drive.sh` appends `--menu=off` and `--lang=zh`. Looks cited to a `Q` are the user's
+calls: do not reverse them.
 
-- **HUD changes — `hud.gd`, `hud_layout.tres`, `hud_style.tres`, `chamfer_panel.gd` or
-  `street_tracker.gd`: `tools/check.sh` (which runs `verify_hud`), plus an A/B render at one camera
-  with `--debug-view=off --hud=off` and again with the HUD on, and the draw-call delta pasted.**
-  ⚠️ **A clean art-review frame needs BOTH `--debug-view=off` and `--hud=off`** — the player's HUD is
-  not dev chrome and the first flag does not touch it. ⚠️ **`verify_hud` sees no frame**: two defects
-  here shipped past a green `check.sh` and were caught by looking — a safe-area inset measured
-  against the window instead of the screen, which pushed the whole HUD off its own edges and logged
-  nothing, and a `--hud=off` crash from `queue_free()` being deferred while `_process` ran once more
-  (Godot exits **0** on a script error). ⚠️ **A layout change is a `P2-4` change**: `hud_layout.tres`
-  is where the touch geometry lives, and 🔴 **`touch_steer_*` and `thumb_rest_*` are not
-  interchangeable** — the HUD may overlap a tap zone and may not overlap a thumb, and the check
-  asserts **both** directions so that "tightening" it back onto zones fails rather than silently
-  banning the corners every shipped reference uses (`Q80`). 🔴 **One head-up display since `Q163`**
-  (the user's pick): readouts float bare with `float_shadow` on `HeadUpFrame`'s brackets and
-  vignette, the map is a round fading scope (`ScopeDisc`, the beacon on its rim), and only the
-  咪錶 keeps a box — do not put housings back on the clock, callout, speed or plate. 🔴 **A touch screen reads its own table since `Q204`** (`hud_layout_touch.tres`, scale 1.25 in
-  its `design_size`, rests the handset's): a layout change owes BOTH tables, and its frames are a
-  handset's — `drive.sh --window=1368x630 --safe-area=102,0,102,30 --touch=on`, two thumbs with
-  `--finger=`; the map and the dial stay on one line (`verify_hud` asserts it), and the shading and
-  the zones run to the glass while text stays inside the safe line. 🔴 **A pedal shows its push as a
-  level, never as opacity** (`Q228`, the user's ask from a new player): green up the accelerator,
-  red down the brake, growing away from the thumb (`TouchSticks.level_box`, `touch_go` /
-  `touch_stop`), ▲ ▼ by the pedals and ◀ ▶ by the wheel at rest AND under a thumb (🔴 the wheel draws `InputRouter.wheel_turn()`, the steering itself — it stays turned at its rest after a lift and unwinds as the car rolls; under a relative thumb it HANGS from the landing, twelve o'clock on the thumb, at `InputRouter.wheel_centre()`, so a thumb going on round the rim turns it, `Q238`; never draw it off the thumb's offset or centred on the thumb again), a pedal's arrow
-  white until its direction is pressed and then its pedal's colour — do not put the fade back. 🚫 **No screen
-  blur in the drive**: `backdrop_blur.gdshader` is the menu's, paid only while the level is parked;
-  in the drive it would be a back-buffer copy and a mip chain every frame on a phone.
-- **Wrong-way changes — `wrong_way_monitor.gd`, `no_entry_icon.gd`, `tuning/wrong_way.tres` (the two
-  bars and two dwells since `P5-26`), or the `warn_*` keys in `hud_style.tres`: `tools/check.sh` (which runs the 23 `way:` assertions), plus a drive that
-  actually goes the wrong way, and the draw-call delta pasted.** 🔴 **The nose raises the sign and
-  the velocity may only withhold it, and that asymmetry is the user's call, not a detail to
-  "restore consistency" on** — reversing while pointed the legal way is not wrong-way, because
-  NO ENTRY's instruction is *turn around*. Built the other way round first, and the taxi does
-  40 kph backwards, so the speed floor did not save it (`Q81`). ⚠️ **A miss CLEARS here where
-  `street_tracker.gd` HOLDS** — a stale street name is honest, a latched siren is not — so do not
-  align the two. ⚠️ **The false alarm is the failure mode, not the missed alarm**: the region is
-  **93.5% one-way by drivable length**, so the dwells and the **120°** bar are load-bearing and a
-  bar at 90 rings on every legal turn across a one-way street. ⚠️ **`warn_bar_length` and
-  `warn_bar_thickness` are the WORLD sign's numbers** — `hong_kong.yaml`'s `TS115` and
-  `signs.py::_NO_ENTRY_BAR_THICKNESS`, measured by `Q67` — and `verify_hud` is the ratchet, so a
-  change there is a change to the sign on the pole or it is a defect. ⚠️ **`warn_blink_hz` is capped
-  at 3 Hz on WCAG 2.3.1** and asserted, not commented. ⚠️ **The evidence is a frame**: Wan Chai is
-  dual-carriageway near the start line, so drifting across simply makes you legal — the route that
-  works is the user's, `--spawn-fare=wan_chai/f_004 --hold=accelerate@0.3+12.7 --hold=steer_right@4.6+1.3` (timed from the stand, not the 20 m setback), right out of HKCEC
-  and straight down Expo Drive East's northbound carriageway (`e660`). ⚠️ **`DEFAULT_ANGLE_DEG` and
-  `CORRECTING_ANGLE_DEG` are two bars and must not be re-merged** — the nose bar decides, the
-  withholding bar is the neutral 90, and reusing one number let a car pointed backwards *while
-  drifting sideways* read as already correcting. 🔴 **`verify_hud` can print `ok` having checked
-  NOTHING**: a `preload`ed script that fails to compile makes `new()` abort the calling function, so
-  every assertion is skipped and `_failed` stays 0 — only `check.sh`'s `SCRIPT ERROR` grep catches
-  it, which is why its exit code is the only thing that means anything. ⚠️ **Do not force the sign
-  visible with `if false:`** — the promoted-warnings sweep rejects the file, the HUD never builds,
-  and the run still says `DRIVER OK`. Numbers in `Q81`.
-- **Minimap changes — `minimap*.gd`, `tuning/minimap.tres`, the `map_*` keys in `hud_style.tres`:
-  `tools/check.sh` (the `map:` assertions), an A/B drive with and without `--minimap=off` at one
-  route, and BOTH deltas pasted — `draws` and `prims`.** ⚠️ **Re-run BOTH sides together**: a "+6" was reported here off a baseline taken before the dial existed. 🔴 **The map is a mesh drawn every frame,
-  so it has a triangle cost the rest of the HUD does not**: built naively it was **37.7k** prims,
-  an eighth of the mobile budget; it ships at **14.7k / +5 draws** over `--minimap=off` carrying (whole HUD +15 before `P3-5a`), the harbour and parks, the destination pin and the border arrow included, the one-way arrows off, on shared junction caps,
-  one-sided bevels and sub-pixel simplification (`minimap_mesh.gd`). ⚠️ **`map_field` and `map_road`
-  are opaque and asserted** — strokes overlap, a deck's casing is the field's colour, and the clip
-  is the field's alpha. ⚠️ **A mirrored map looks right on a grid**; the east-is-right assertions
-  are the evidence, not the frame. ⚠️ A mesh keeps colours as **RGBA8**, so a test comparing them
-  uses colours that survive 8 bits. ⚠️ `min_stroke_px`, `casing_px` and `span_m` are baked at
-  build, not live. 🔴 **The map and the street plate are ONE panel** (the user's call): move
-  `minimap` or `street_plate` alone and `abutting()` fails; in the strip the lettering shrinks,
-  never the box, and `--minimap=off` is the only place the plate is still cut to its name. 🔴 **A one-way arrow's direction is asserted, never eyeballed** — tip ahead along the vertex order; the arrows are off (`arrow_px = 0`, the user's call) and the assertions keep the mesh honest for the dial. 🔴 **The border arrow stands on the ray from the car** — `beacon_point` is asserted, and so is the car inside its room; a room cut short put it ON the car once. 🔴 **Red is the fare's and speed is the dashboard's** (`Q139`, the user's calls): the needle stays amber, `SevenSegment` is the meter's and draws nothing until `P3-5a`, and the three panel fields are ONE housing value. 🔴 **The route line is the fare's own `Route`** (`P3-46`, `Q137` reversed by the user): `Fare.route` read inside `sampled`, cut to the car's hit by plan length, one mesh under `Field/Roads`, walked and rebuilt only when its edges change or its start moves `ROUTE_STEP_M`; `route_px` 0 draws none and `P3-9` runs so. Its cost: **+1 draw, +221 prims** carrying (137 / 775.5k over 136 / 775.3k at `route_px = 0`; +7 / +14.9k over `--minimap=off`), so the map's number to hold is now 14.9k / +7 with a route up. 🚫 No route while idle (`Q142`), none on the player's profile. Owed: the web build's `clip_children` frame (`Q136`).
-- **Fare HUD changes — `fare_face.gd`, the fare panels in `hud.gd`, `fare_guide.gd` and
-  `tuning/guide.tres`, `locale.gd`, the pips and the pin in
-  `minimap.gd`, `seven_segment.gd`'s dot, or the `meter_*` / `timer_*` / `callout_*` / `map_pickup`
-  / `map_destination` / `map_pip_px` keys: `tools/check.sh` (the `face:`, `digits:` and pip
-  `map:` assertions), plus THREE frames at `--debug-view=off` — boarding at the boot stand,
-  carrying, and idle from `--spawn-fare=wan_chai/f_025` (31 m from any pickup, the one spawn that
-  boots idle) — and the draw-call delta against `--hud=off` pasted.** 🔴 **No goal until someone is aboard** (`Q142`, the user's calls): idle, the callout and the
-  clock are down, the arrow points at the CLOSEST pending customer, and EVERY pending customer in
-  range is marked — a pin per pickup on the map and a ring per pickup on the road (one multimesh)
-  — all hidden while a fare runs; do not bring the nearest-pickup callout back, and do not invent
-  a designated stand per hail — that is a `FareSystem` change and the user's call. 🔴 **The style combo is split** (`Q212`, the user's call): the live line — 車手 ×N and the gap's bar on top, the skill that joined small in a row of its own below (the user's call, 2026-11-16) — hangs from the top of the tick's row, and only the summary sits in `award`; a tick or a delivery takes the row back and the line returns after; the skill's row runs under the rect, so the touch table's `tick` sits 30 px higher (y 338) to keep it off the taxi's roof sign, and a third row would not fit. 🔴 **Every meter tick flashes under the clock**
-  (`tick` rect, `tick_fade_s`) off `meter_changed`, and the banked sum in green off `delivered`;
-  after a delivery everything but the total resets. 🔴 **Every string is `FareFace`'s** and `verify_hud` reads it on synthetic fares; a string
-  decided in `hud.gd` is one the check cannot see. ⚠️ **The early arrival is named in the delivery
-  caption** ("DELIVERED · +HK$10.0 early · TIP HK$22.5", the user's ask): it pays in the same call
-  as `delivered`, so its `skilled` flash is overwritten by the banked sum before a frame shows it —
-  a skill paid at the door is shown by the caption, never by the flash. 🔴 **The receipt sums the skills as ONE term** ("meter 31.1 + time 12.5 + skills 15.0", 咪錶 / 時間 / 技巧; the user's pick 2026-11-14): by name a many-skill fare overran the callout box and `shrink_to` cut it to an unreadable squiggle — each skill is named by its flash and counted on the 成績表. 🔴 **A stop is its building over its road**
-  (`Q142`): the first row is `Fare.Stop.place_en()` / `place_zh()` — `fares.json`'s `place`, iB1000's
-  name, falling back to TD's description — and the second is the graph's road name for the stop's
-  edge with the distance while idle. 🚫 Do not parse the building out of the description; the
-  ETL publishes the footprint's name (`fares.places`, `pipeline/fares.py::read_places`). 🔴 **Signal-driven, never polled**: the system
-  frees itself under `--fares=off` before `Main` hands it over (`fares.md`). ⚠️ **The filled slots
-  leave `reserved_slots()` and stay in `hud_slots()`** — `verify_hud` asserts both, because a slot
-  that leaves the graded set can drift onto a thumb with the check green. ⚠️ **The LED's dot is a
-  mark on the cell before it**, appended after every cell's segments so the stride-of-12 reader
-  still sees the cells first; `cells_of` is the one reader of a `.`. ⚠️ **`meter_unlit` is a ghost,
-  not a reading**: held under `MIN_CONTRAST` of the housing and over it from `meter_lit`. ⚠️ **The
-  clock rounds UP**: 0.2 s left reads 1, never 0 with time on it. 🔴 **The total is a third LED** (`Q139`, the user's ask
-  2026-11-11): `total_cells` never under `meter_cells` — an overflow drops the LEADING digit — and
-  the tip and total take turns on ONE line under the fare and end where its digits do (`Stack`, shrink-centred; the user's ask 2026-11-14) — the tip while carrying, the total otherwise (`FareFace.show_total`), since the takings move only at a delivery. Its red is
-  `total_lit`, dimmer than `meter_lit` to be told from the tip's, and held to HALF `MIN_CONTRAST`
-  off the ghost — the meter's own red clears the full bar by 0.006, so no dimmer one can. ⚠️ **+31 draws for the whole
-  HUD** (103 → 134 on the boot stand) against `Q139`'s +15 — the three housings, the LED, two
-  labels, four callout labels, two pip nodes and the arrow; measure BOTH sides again after any
-  change here. 🔴 **One language at a time in the callout** (`Locale`, `--lang=`): never English beside
-  Chinese on a row — the street plate too, since the user asked (default Chinese, `Locale.DEFAULT`). 🔴 **The distance is never between two
-  names** — road first, then "320 m". 🔴 **The guide answers distance** (`tuning/guide.tres`,
-  `guide.md`): the arrow small and red far, large and green near, the ring on the road the same
-  colour; `verify_hud`'s `guide:` assertions hold both ends and the middle. 🔴 **The countdown
-  is bare and centred** — the one readout in the middle, outlined in the housing's dark
-  (`timer_outline_px`), no panel. ⚠️ **The pin is the field's child, not the roads'** — it must
-  stand upright as the map turns; `follow` re-places it. ⚠️ **The route is the ROADS' child**
-  (`P3-46`), so their transform carries it and `follow` never touches it. 🚫 No
-  next-junction arrow yet (`Q138`); the options menu is `P6-1`'s (below), the layout pass `P3-5b`'s.
-- **Start menu changes — `start_menu.gd`, `menu_orbit.gd`, `menu_shot.gd`, `menu_profile.gd`, `menu_text.gd`,
-  `tuning/menu.tres`, `tuning/menu_text.json`, `settings.gd`, `locale.gd`'s readers, or
-  `main.gd`'s park / resume: `tools/check.sh` (which runs `verify_menu`), plus a frame at
-  `--menu=on --seconds=3 --shots=2 --debug-view=off` in EACH language (`--lang=zh`, `--lang=en`),
-  and a default `drive.sh` run to show the car still drives from tick one.** 🔴 **The credits'
-  wording is a licence term** (hard rule 6, `LICENSING.md`): the ownership sentence, BOTH portals
-  and the typeface's CC BY credit, in both languages — `verify_menu` holds the phrases, and an edit
-  that fails it is a wording change to clear with `LICENSING.md`, not a check to loosen. 🔴 **The
-  engine's third-party notices are the engine's own tables at runtime** (`engine_notices.gd`:
-  `Engine.get_copyright_info()` + `Engine.get_license_info()`, `LICENSING.md` item 5) — never a
-  text pasted into `menu_text.json`, which would be wrong the release after a point upgrade, and
-  never `Engine.get_license_text()`, which is the MIT screen alone; `verify_menu` holds every
-  component named and every licence text whole. A page is shot with `--menu-page=<home|guide|
-  options|credits|notices|record|pause>`; `--menu-sample=on` fills its 成績表. 🔴 **The
-  menu never reaches into the level**: `Main` parks it (`DriveLevel.park` — pedals gated by
-  `VehicleController.parked`, the fare loop's tick held, the rig handed to `MenuOrbit`) and
-  resumes it on `started`; a second entry to the world goes through the harness, not the menu.
-  ⚠️ **The car stands at `showroom_fare_id` (`f_001`, Harbour Road), not the start line** — the
-  line is under HKCEC's podium and the orbit there looks at a soffit; `resume` places it back on
-  the line, and the fare guide is hidden under the menu (`guide`).
-  ⚠️ **`--menu=off` is what keeps every scripted run what it was** — `drive.sh` appends it; a
-  driver that forgot would run six seconds of a parked car and print `DRIVER OK`. ⚠️ **`--lang=`
-  beats the saved option and the OS language** (`Locale`: flag, saved, `OS.get_locale_language()`,
-  default — the user's ask, a fresh install in the phone's language): a frame compared across runs
-  must not read the machine's pick or locale, so `drive.sh` appends `--lang=zh`; the menu warns
-  when the flag pins a choice it just saved. ⚠️ **A language change is
-  a new HUD, not a relabel**: `Main` retires the HUD and readies a fresh one so `hud.gd` keeps one
-  build path. 🔴 **Three hands, by what a line is** (`Q218`, the user's asks): the brush for the
-  menu's name (Bold), choices and headings (Medium), Knewave for the same lines in English; the 黑體 for interface — running text, the
-  成績表, the HUD's captions, units and flashes; the Kai for NAMES alone — the plate, the callout's
-  place and road. Do not put an interface line back in the Kai or a name in the 黑體. A skill's or a penalty's name flashes in the brush beside its money in the theme's numerals, Knewave in English (`load_font_flash`); a sum alone stays 黑體. The focus is
-  a drawn brush stroke (`InkStroke`, `brush_stroke`), not a rule. ⚠️ **The 黑體 and the brushes
-  are subsets**: a wording change in `menu_text.json`, `exam_sheet.json` or a script's Chinese string owes `pytest etl/tests/test_fonts.py`, and
-  on a failure `tools/make_fonts.py` (needs `fonttools` and the pinned sources). A glyph a face
-  lacks falls to the next — brush, 黑體, Kai, the theme's — so the failure is one character in the
-  wrong hand, which no check but that test sees. 🔴 **The guide's pictures are drawn, never textures or screenshots** (`guide_card.gd`): the
-  bundle ships no UI textures and a screenshot of the city is the generated data committed in
-  another form (hard rule 7); a step names a `GuideCard.KINDS` picture and `verify_menu` refuses
-  one that does not exist. 🔴 **The 成績表 is the driver's books, two tables, not TD's form** (`P3-76`, `Q169`, the user's call): `LedgerCard` on REPORT, free mode's PAUSE and RECORD; no tick-boxes, no section headings, no red-light row until `P3-3d`. 🔴 **On a touch screen it stacks into one scrolling column at `ledger_stacked_scale`** (`Q206`, the user's pick): a sheet change owes a handset frame of RECORD and REPORT in both languages, and SAVE RESULT must still copy the whole card, never the scroll's window (`verify_menu`'s `stacked:`). 🔴 **Four ranks of type, and a phone reads the sums first** (`Q206`'s amendment, the user's ask 2026-11-15): the total, a block's title, a row, a column head (`LedgerCard.Rank`); a row nothing happened on is muted, never dropped; amber is the page heading's alone. ⚠️ Two `_follow.bind` on one signal are ONE connection to Godot: a second follower of a page connects a lambda. ⚠️ `menu.tres`'s `ledger_px` is read off a frame: a row more needs height, and nothing but a frame shows the total under the panel. A run naming `--menu-page=` or `--menu-sample=` saves no record. 🔴 **The sound is the Master bus's, on OPTIONS** (`Q221`, the user's ask): ON / OFF and one volume slider, `Settings.apply_sound` at boot and on a change, the slider heard as it moves and never a rebuild; no per-bus sliders — the buses' balance is `taxi_audio.tres`'s. 🔴 **OPTIONS is a list of groups, a page each** (`Q223`, the user's pick): `_groups` lists what this device and this menu have, a list of one is skipped; a new option joins a group's page or makes a group, never a scroll. The pause's groups never need a new HUD. A pick that changes a drive (`ControlOptions`: steering response, steering thumb, and whether the controls follow the thumbs or stand at their rests, `Q239`) takes a flag that beats it, named in `drive.sh`. A frame of a group is `--menu-page=sound|controls|display|language`; CONTROLS needs `--touch=on`, and FRAME RATE shows on a phone alone — 60 / 30, and 120 above them on a 120 Hz screen (`ControlOptions.caps_for`), never the default; the engine's `--max-fps` beats the saved cap, which is what keeps `P2-6`'s `--max-fps 120` gauge reading. 🔴 **Two modes behind one PLAY** (`Q162`, the user's call): HOME is PLAY, RECORD, HOW TO PLAY,
-  OPTIONS, CREDITS with the shift's best over them; PLAY holds 特更 and 兜風; `started(mode)` hands
-  `Main` the pick. A shift's end opens a FRESH menu on REPORT (`StartMenu.report`), whose AGAIN is
-  the same `started` — `Main` renews the HUD and `DriveLevel.play` restarts in place. A frame of
-  either page is `--menu-page=play|report`; `--mode=free` shoots a free drive's REPORT, which free mode's END DRIVE opens with the time driven where a shift has its best (`Q189`). ⚠️ TIME OF DAY is free mode's alone; a shift always
-  runs the day. 🔴 **The shift's clock is the hour, never a countdown** (the user's call): the
-  `clock` rect top-left, "14:32" over "交更 21:00", housing ink not the meter's red; hidden outside a
-  shift, read off `DayClock` at 4 Hz. 🔴 **The pause holds the TREE, never `DriveLevel.park`** (`Q165`, the user's ask, reversing "no pause menu"): `park` moves the car to the showroom. `Main` stays pausable (its children inherit it) and the PAUSE menu alone is `ALWAYS`; its way out writes no best, and its OPTIONS leave out the language and the thumbs' sides (`Q223`), since a HUD renewed mid-fare misses the fare's signals. The HUD's `PauseButton` takes a tap, and so does the 咪錶 (a style-less `PauseButton` over its housing, the user's ask) — `FOCUS_NONE`, Space being the handbrake — and `InputRouter` lets the thumbs go on `NOTIFICATION_PAUSED`. 🔴 **RESET CAR is the pause's** (`Q229`, the user's ask): `reset` → `Main` unpauses → `DriveLevel.recover`, the harbour's way back onto the nearest road, the fare and its clock untouched; a wording change there owes the font test (輛 is in no subset). `--menu-page=pause` drives a second and pauses; shoot it at `--debug-view=minimal` or the held screen can stall the capture. 🔴 **The camera follows the page** (`Q164`, the user's ask): `page_shown(shot)` → `Main` → `DriveLevel.frame_menu` → `MenuOrbit.frame`, never the menu reaching the rig; the opening page is cut to, later ones eased. A frame per page is `--menu-page=`, and a standing shot must sway or the capture stalls. 🔴 **The boot cover compiles the web build's shaders** (`ShaderWarmup`, `Q184`): `Main` opens it under the menu only, and the menu takes no input until it lifts. It copies what is in the level's tree once the city settles. A layer built only once a drive starts is not warmed, and its first draw stalls a cold web load. Graded cold in Chrome with the GPU helper's Metal cache moved aside, never warm: a warm cache hides the whole problem. 🔴 **The cover is the loading screen, and the boot splash is its still** (`LoadingCover`, `Q209`, the user's picks): one drawing, `assets/authored/loading/taxi.json`, read by both — a change to it owes `tools/make_splash.py` (`test_make_splash.py` fails a stale PNG) and a frame of the fitted splash beside the cover at one window, the taxi and the line in the same place. Both lay out from the screen's centre against its HEIGHT; the iOS launch screen fits the same square only at `storyboard/image_scale_mode` 2. The meter counts real steps and never runs back — never put a timer behind it.
-- **Street-name or font changes — `street_plate.json`, the bundled typeface, or any new region:
-  also `tools/font_coverage.py --region <r>`.** It exits non-zero on a character that is in neither the font nor the
-  display substitution table, which is the only thing standing between a data refresh and a tofu box
-  on one street's plate. ⚠️ **Substitutions are a DISPLAY fix and `roadgraph.json` is never edited**
-  — a street's name is the strongest case of `Q54`'s sourced-not-invented rule. ⚠️ The bundled fonts
-  are the **fourth and fifth** licences in a repo whose hard rule 7 says three — the Kai's CC BY
-  and, since `Q218`, the OFL of the 黑體 and the brush, whose subsets must NOT be named Bakudai;
-  `LICENSING.md` carries them, and the credits screen too (`menu_text.json`, held by
-  `verify_menu`; `Q79`).
-- 🔴 **A menu flow is tested by TAPPING its buttons** (`Q241`): `Input.parse_input_event` with a
-  touch or a click on the button's rect, never `_on_start()` or an emitted `started`. A handler
-  that runs from an input event runs after the frame's last transform flush and before the physics
-  sync; one called from a script's frame does not, and the 收工 → 特更 restart that left the car
-  where it stopped passed every check written the second way. `VehicleController.place_at` now
-  forces the flush, and `verify_vehicle` reads the body back off the server.
+## HUD and layout
+
+Owed: an A/B render at one camera, HUD off and on, and the draw-call delta (both sides re-run).
+
+- **A layout change is a `P2-4` change**: `touch_steer_*` (tap zones, the HUD may overlap) and
+  `thumb_rest_*` (thumbs, it may not) are not interchangeable; both directions asserted (`Q80`).
+- **A touch screen reads `hud_layout_touch.tres`** (`Q204`): a layout change owes BOTH tables and
+  handset frames — `drive.sh --window=1368x630 --safe-area=102,0,102,30 --touch=on`, thumbs with
+  `--finger=`. Shading and zones run to the glass; text stays inside the safe line, which is
+  measured against the screen, not the window.
+- One head-up display (`Q163`): bare readouts, a round scope map, only the 咪錶 boxed.
+- A pedal shows its push as a level, never opacity (`Q228`). The wheel draws
+  `InputRouter.wheel_turn()` at `wheel_centre()`, never the thumb's offset (`Q238`).
+- No screen blur in the drive: `backdrop_blur.gdshader` is the menu's.
+
+## Wrong way — `wrong_way_monitor.gd`, `no_entry_icon.gd`, `wrong_way.tres`, `warn_*` keys
+
+Owed: a drive that goes the wrong way, and the draw-call delta. Route: `--spawn-fare=wan_chai/f_004
+--hold=accelerate@0.3+12.7 --hold=steer_right@4.6+1.3` (north up Expo Drive East's `e660`).
+
+- **The nose raises the sign, the velocity may only withhold it** (`Q81`): reversing while pointed
+  the legal way is not wrong-way.
+- **Two bars, never merged**: `angle_deg` 120 (the nose) and `correcting_angle_deg` 90. The region
+  is 93.5% one-way by drivable length, so the false alarm is the failure mode: a nose bar at 90
+  rings on every legal turn across a one-way street.
+- **A miss CLEARS here; `street_tracker.gd` HOLDS.** Do not align them.
+- `warn_bar_length` / `warn_bar_thickness` are the world sign's (`TS115`,
+  `signs.py::_NO_ENTRY_BAR_THICKNESS`, `Q67`), ratcheted by `verify_hud`. `warn_blink_hz` is capped
+  at 3 Hz (WCAG 2.3.1).
+- Do not force the sign visible with `if false:` — the HUD never builds and the run still says
+  `DRIVER OK`.
+
+## Minimap — `minimap*.gd`, `minimap.tres`, `map_*` keys
+
+Owed: an A/B drive with and without `--minimap=off` on one route, both sides run together, `draws`
+and `prims`. To hold, carrying with a route up: **14.9k prims / +7 draws** (naively 37.7k).
+
+- `map_field` and `map_road` are opaque, asserted. Mesh colours are RGBA8. `min_stroke_px`,
+  `casing_px`, `span_m` are baked at build.
+- A mirrored map looks right on a grid: the east-is-right assertions are the evidence. One-way
+  arrows are off (`arrow_px = 0`) with their direction asserted; so is `beacon_point`.
+- Map and street plate are ONE panel: `abutting()` fails if either moves alone.
+- Red is the fare's, speed is the dashboard's (`Q139`): the needle stays amber.
+- **The route line is the fare's own `Route`** (`P3-46`), read inside `sampled`, a child of the
+  ROADS; `route_px` 0 draws none. None while idle (`Q142`). The pin is the FIELD's child.
+- Owed: the web build's `clip_children` frame (`Q136`).
+
+## Fare HUD — `fare_face.gd`, `fare_guide.gd`, `guide.tres`, `locale.gd`, `seven_segment.gd`
+
+Owed: three frames at `--debug-view=off` — boarding at the boot stand, carrying, idle (from
+`--spawn-fare=wan_chai/f_025`; confirm it still boots idle) — and the draw delta against
+`--hud=off`.
+
+- **Every string is `FareFace`'s**; one decided in `hud.gd` is invisible to the check.
+  **Signal-driven, never polled** (`fares.md`).
+- **No goal until someone is aboard** (`Q142`): idle, the arrow points at the closest pending
+  customer and every pending pickup has a pin and a road ring; all hidden while a fare runs. No
+  nearest-pickup callout, no designated stand per hail.
+- A stop is `Fare.Stop.place(language)` over its road name; the distance is never between two
+  names. One language at a time (`--lang=`), the plate included.
+- Every meter tick flashes under the clock (`tick`), the banked sum off `delivered`. A skill paid
+  at the door is named in the delivery caption (its flash is overwritten). The receipt sums skills
+  as ONE term. The combo's live line hangs from the tick's row (`Q212`); a third row does not fit.
+- LEDs: the dot is a mark on the cell before it (`cells_of`); `meter_unlit` is a ghost under
+  `MIN_CONTRAST`; the clock rounds UP; the total shares a line with the tip
+  (`FareFace.show_total`), `total_lit` dimmer than `meter_lit`.
+- Filled slots leave `reserved_slots()` and stay in `hud_slots()`; both asserted.
+- No next-junction arrow yet (`Q138`).
+
+## Start menu — `start_menu.gd`, `menu*`, `settings.gd`, `main.gd`'s park / resume
+
+Owed: a frame at `--menu=on --seconds=3 --shots=2 --debug-view=off` in each language (`--lang=zh`,
+`--lang=en`), and a default `drive.sh` run showing the car drives from tick one. Pages:
+`--menu-page=home|play|guide|options|sound|controls|display|language|credits|notices|record|report|pause`;
+`--menu-sample=on` fills the 成績表; `--mode=free` shoots free mode's REPORT; CONTROLS needs
+`--touch=on`; shoot `pause` at `--debug-view=minimal`. A standing shot must sway or the capture
+stalls. A run naming either flag saves no record.
+
+- **A menu flow is tested by TAPPING** (`Q241`): `Input.parse_input_event` on the button's rect,
+  never `_on_start()` or an emitted `started` — a direct call runs at a different point in the
+  frame and hid a restart bug.
+- **Credits wording is a licence term** (hard rule 6): `verify_menu` holds the phrases; clear a
+  failing edit with `LICENSING.md`. Engine notices are `Engine.get_copyright_info()` +
+  `get_license_info()` at runtime (`engine_notices.gd`), never pasted text.
+- **The menu never reaches into the level**: `Main` parks it (`DriveLevel.park`) and resumes on
+  `started(mode)`. The car stands at `showroom_fare_id`, not the start line.
+- **The pause holds the TREE, never `DriveLevel.park`** (`Q165`); its OPTIONS omit language and
+  thumb sides (a HUD renewed mid-fare misses the fare's signals). RESET CAR is
+  `DriveLevel.recover` (`Q229`), fare and clock untouched.
+- A language change is a new HUD, not a relabel. `--lang=` beats the saved option and the OS's.
+- Two modes behind PLAY (`Q162`); a shift's end opens a fresh menu on REPORT; the shift's clock is
+  the hour, never a countdown; TIME OF DAY is free mode's alone.
+- OPTIONS is a list of groups, a page each, never a scroll (`Q223`). A pick that changes a drive
+  (`ControlOptions`) takes a `drive.sh` flag that beats it. Sound is the Master bus alone (`Q221`).
+- The camera follows the page through `Main` → `DriveLevel.frame_menu` (`Q164`).
+- The 成績表 (`LedgerCard`, `Q169`, `Q206`): on touch it stacks into one scrolling column — a
+  change owes handset frames of RECORD and REPORT in both languages, and SAVE RESULT copies the
+  whole card (`_check_stacked`). `ledger_px` is read off a frame.
+- The guide's pictures are drawn (`GuideCard.KINDS`), never textures or screenshots (hard rule 7).
+- Boot: `ShaderWarmup` (`Q184`) warms only what is in the tree under the cover; grade cold in
+  Chrome with the GPU cache moved aside. Cover and boot splash are one drawing,
+  `assets/authored/loading/taxi.json` (`Q209`): a change owes `tools/make_splash.py` and a frame
+  of both.
+- Two `_follow.bind` on one signal are ONE connection: a second follower connects a lambda.
+
+## Type and street names
+
+- Three hands (`Q218`): the brush for the menu's name, choices, headings and a skill's flashed
+  name; the 黑體 for interface text; the Kai for NAMES alone (plate, place, road).
+- **The 黑體 and brushes are subsets**: a wording change in `menu_text.json`, `exam_sheet.json` or
+  a script's Chinese string owes `pytest etl/tests/test_fonts.py`, and on failure
+  `tools/make_fonts.py`. A missing glyph silently falls to the next face.
+- **`street_plate.json`, the typeface, or a new region**: `tools/font_coverage.py --region <r>`
+  (non-zero on a character in neither the font nor the substitution table). Substitutions are a
+  display fix; `roadgraph.json` is never edited (`Q54`).
+- The fonts are a fourth and fifth licence (`LICENSING.md`, the credits, `Q79`); the OFL subsets
+  must not be named Bakudai.

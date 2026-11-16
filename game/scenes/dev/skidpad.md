@@ -1,50 +1,18 @@
 # skidpad.tscn
 
-Rationale for `game/scenes/dev/skidpad.tscn`. Each heading is the line the block sat above; `Overview` is the
-file as a whole. Why it lives here and not in the file: `Q119`.
+A measuring instrument for `tools/skidpad.sh`: the greybox ground with the car parked clear of
+every building, so a handling number is not cut short by a wall. The rows that want an obstacle
+(`--only=wall`, `P3-50`; `--only=traffic`, `Q175`) stand it from the tool and free it after.
+`--scene=` takes another path if a second car is ever graded.
 
-## Overview
-
-A measuring instrument, not a place to play: the greybox ground with the car
-parked well clear of every building, so a handling number is not cut short by
-a wall. The two manoeuvres that want one (`--only=wall`, `P3-50`, and
-`--only=traffic`, `Q175`, a car-sized body that moves) stand it from the tool
-and free it after the row, so nothing here changes for them.
-
-⚠️ **The spawn is the whole point of this file.** `greybox.tscn` starts the car
-at (-250, -150), which is inside the road network — `greybox_wanchai.json`'s
-segments span x ±300 by z ±150 and its buildings are set back from those, so a
-car that turns is into a block within about 40 m. Measured: a drift run there
-went 54 kph to 0 in 0.25 s across 0.5 m of travel, which reads in the telemetry
-exactly like a spin and is not one. This spawn sits at z −500, some 350 m clear
-of the nearest segment on 1600 m of ground.
-
-⚠️ Since `Q50` the car this grades IS a `VehicleBody3D`, so the paired
-`skidpad_builtin.tscn` that used to sit beside this one is gone — it would now
-be a second copy of the same vehicle model. `tools/skidpad.sh --scene=` still
-takes a path, for when the roster has a second car worth grading here.
-
-## `[node name="City" type="Node3D" parent="."]`
-
-`ground_grid_m = 5.0` draws a 5 m grid, heavier every 20 m, on the greybox
-ground (`greybox_grid.gdshader`, `P3-52`, the user's ask 2026-09-29). Paint on
-the same box and collider, so no number the ablation grades moves; it is for
-the human at the wheel, who otherwise has a flat grey field and no way to see
-the tail step out. `greybox.tscn` leaves it at 0.
-
-## `[node name="Taxi" parent="." instance=ExtResource("2_taxi")]`
-
-`taxi_tyre.tscn`, the game's car (`Q152`), since the engine-tyre control was dropped on
-2026-10-05: `taxi.tscn` on its own tyres sat here as the control, and `skidpad_tyre.tscn` was this
-scene with the tyre car in its place. Every number tagged "the shipped car" before 2026-10-03 was
-graded here on the engine's tyres.
-
-Facing +X, the same basis `greybox.tscn` uses. Row-major, and forward is the
--Z column — do not rewrite these from a direction.
-
-`sun` points the car at this scene's own key light (`P5-24`): the glint and
-the lamps read `VehicleController.sun` instead of searching the window for a
-`DirectionalLight3D`, so the scene that owns the rig is the one that names it.
-Unset, the car reads no rig — no daylight to be in or out of — and drives with
-its front lamps out, which is `vehicle_lamps.gd`'s stated rule for a car with
-no world around it.
+- `City` (`greybox_builder.gd`): `ground_grid_m = 5.0` draws a 5 m grid, heavier every 20 m
+  (`greybox_grid.gdshader`), so a human driver can see the tail step out. Paint only; no graded
+  number moves. `greybox.tscn` leaves it at 0.
+- `Taxi`: `taxi_tyre.tscn`, the game's car. The spawn (−400, 1, −500) is the point of this scene:
+  about 350 m clear of the nearest greybox segment. `greybox.tscn`'s spawn is inside the road
+  network, where a drift run hit a block and read in telemetry like a spin. Facing +X; the
+  transform is row-major and forward is the −Z column, so do not rewrite it from a direction.
+  `sun` names this scene's key light (`P5-24`); unset, the car reads no rig and drives with its
+  front lamps out.
+- `Sun`, `WorldEnvironment`: a plain greybox light, not the shipped rig.
+- `CameraRig`: the chase camera on `tuning/camera.tres`, `far = 2000.0`.

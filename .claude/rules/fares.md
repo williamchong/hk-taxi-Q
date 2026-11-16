@@ -11,254 +11,107 @@ paths:
 
 # The fare loop — before marking work done
 
-`P3-1a`, `Q141`. `FareSystem` (`game/scripts/fares/fare_system.gd`) runs hail → board → carry →
-deliver / bail over the published fare nodes, metered by `FareMeter`
-(`game/scripts/core/fare_meter.gd`) at Transport Department's tariff (`tuning/tariff.tres`), with
-the loop's own numbers in `tuning/fares.tres`.
+`P3-1a`, `Q141`. `FareSystem` runs hail → board → carry → deliver / bail, metered by `FareMeter`
+at TD's tariff (`tariff.tres`); the loop's dials are `fares.tres` and `skills.tres`, with values
+and reasons in their sidecars.
 
-- 🔴 **`tariff.tres` is the government's table, not ours.** Every value is TD's published urban
-  fare with its effective date in `tariff.md`; a change there is a tariff revision, cited, never a
-  tuning pass. What is ours — radii, dwells, the par speed, the tip rate — lives in `fares.tres`.
-  🚫 No abstract multiplier (`1×`, `2×`) anywhere: the meter shows money.
-- 🔴 **The meter is honest and the tip is the skill.** The reading is the tariff on the metres
-  driven and the seconds waited; nothing a player does at the wheel moves it except driving
-  further or sitting still. Everything earned — the seconds left on the allowance now, `P3-2b`'s
-  style chain later — is `Fare.tip_hkd`, and the two bank as one sum. 🚫 Do not make a shortcut
-  or a fast run *raise the meter*; a shortcut lowers it and raises the tip, by design.
-- 🔴 **The unit rule is "or part thereof", on two buckets, no speed bar.** A unit is charged when
-  it BEGINS (one centimetre past 2,000 m reads 31.1), either bucket exceeding its unit charges and
-  resets both, and nothing is charged for waiting inside the flagfall distance. `verify_fares.gd`
-  pins 2,001 / 2,200 / 2,201 / 9,000 / 9,200 m and the bucket reset; a "waiting speed" threshold
-  is not a field because the tariff's two units already cross at 12 kph.
-- 🔴 **Cents, not dollars, inside `FareMeter`.** 29 + 35 × 2.1 must land on 102.50 exactly for
-  the threshold comparison; `_cents_of` rounds once at construction.
-- ⚠️ **Par is the legal profile** (`Q137`'s recommendation): the allowance is
-  `legal route / par_kph` and nothing else — no floor by kind (the user's call, 2026-11-12,
-  `Q203`). `par_kph` 19 is MEASURED: the AI traffic's median run (18.8 / 19.2 kph at 18:00 / 12:00;
-  the recipe and the table are in `fares.md`). 🚫 Not the player's profile: par is what obeying the
-  signs costs, and the player may break every rule to beat it. A change to the traffic's pace
-  (`traffic.tres`'s `cruise_of_limit`, the signal timings) is a reason to re-measure it.
-- ⚠️ **A few customers wait, each paired with where they are going as they are drawn** (`Q203`).
-  `pickups()` is the LIVE set — `live_pickups` of the pool, `street_share` of the draws from the
-  street spots — and `pick_destination` reads the pair `_refill` drew: a destination drawn the same
-  way from those one forward search from the pickup reaches at `min_trip_m`
-  (`RoadRouter.source_tree`, `pair_ms` on the boot line and in `verify_fares`). 🚫 Drawing blind
-  and routing each try: a `prepare` a try, 24 for a stranded kerb, and false strands (`Q203`). `_board` takes the customer off the kerb and `_deliver` /
-  `_bail` draw the replacement. 🔴 A pairing is `source_tree`, uncached — never a `prepare`, which
-  would evict the tree the car's route reads mid-fare (`router.md`'s `TREE_CACHE`). 🚫 The old
-  all-pairs reach table: ~390 street spots make it seconds at load. 🚫 Drawing blind and retrying
-  AT THE HAIL was built and refused: a stand with one reachable destination was refused most of
-  its hails — here a pickup that pairs with nothing is never shown. 🚫 "No route" is a pool
-  decision, never an assert (`Q137`).
-- ⚠️ **The waiting stay near the car, and stay put** (`Q203`, the user's asks 2026-11-13): a new
-  customer is placed within `place_m` (160, half the minimap's span) — `_placeable` — or at the
-  nearest free kerb where none is; `_turn_over` at each sample (not while BOARDING or closed)
-  refills one short of `live_pickups`, else swaps the farthest past `retire_m` (320) for one
-  placed near. 🔴 **One draw a sample, strands included** (`_refill(1)` caps ATTEMPTS): each is a
-  forward search, and a kerb at the clip strands its neighbours one after another — Causeway Bay
-  alone strands 9 on the way to its far corner. 🔴 **A swap, never a removal alone**
-  (`_room_near`): with no free kerb within `retire_m` nobody leaves, or the nearest far kerb is
-  placed and removed every sample. 🚫 Customers that follow the car (the user: they "dont
-  follow"). `setup` refuses `retire_m` at or under `place_m`. `verify_fares`' `turnover:` block;
-  mutations: `retire_m` past the city, the radii inverted; in the code, the swap guard dropped
-  (fails the turnover, practice and tally blocks) and the attempt cap lifted.
-- ⚠️ **The start stand always has a customer** (`Q203`, `Q142`'s opening). The drive harness calls
-  `FareSystem.wait_at` for its spawn stand at the start and in `play`, after `reset`; it seats
-  first, paired, and the last drawn steps aside. A spawn stand that is not a pickup or reaches
-  nowhere seats nobody and the harness warns. `verify_fares`' `seat:` block; mutations: no trim,
-  seat at the back. ⚠️ **The start stand moves after the first run** (`Q227`): `DriveLevel` draws
-  it from `published_pickups()` — never the street spots — and seats it through the same
-  `wait_at`; a pool rule that empties `_pool` leaves every run on the boot stand, silently.
-- ⚠️ **The pools are the yaml's rules.** A stand is a pickup and a destination unless
-  `cross_harbour` (`P3-1b`'s); a PUDO point is what its `pickup` / `dropoff` say — a quarter are
-  drop-off only, and a hail at one is what a Hong Kong player notices; a `poi` tram stop is
-  neither. A street spot (`fares.json`'s `street`, `fares.street` in the yaml) is both, where the
-  legal router admits its edge: a kerb no no-stopping run of either kind reaches, off bus lanes
-  and roads over 50 kph, beside a named building. The kind of a fare is the DESTINATION's (`pudo`
-  → short hop, anything else standard) and prices nothing since `Q203`. ⚠️ **`street_share` is
-  the one key `setup` does not refuse at zero**: 0 is the off switch, the published points alone.
-- ⚠️ **A pickup that reaches no destination at `min_trip_m` is
-  stranded**: dropped from the pickup pool as it is drawn, kept as a destination, counted in
-  `FareSystem.stranded` and named by `verify_fares` and the boot line. Found by the draw, not by
-  a survey, so which are stranded depends on the seed and grows over a session; the clip-edge
-  points whose forward direction leaves the region (`Q141`) are the ones it finds. A new pattern is
-  a finding about the data, answered by looking at the node — never by lowering the bar silently,
-  and never by an assert that would fail every region with an edge.
-- ⚠️ **`nearest_pending` never returns a pickup the loop would refuse**: disarmed after a
-  delivery, it skips every pickup inside `hail_radius_m` — the user read an arrow at the kerb
-  under the car as a "dumb 3 s cooldown". `verify_fares` asserts it at the delivery.
-- ⚠️ **Nor is it marked** (`Q142`'s fourth round, the user's call): `withheld_pickups` is the
-  same rule as `nearest_pending`'s skip, and the road rings and map pins hide those indices. A
-  new marker of pending customers reads it too, or the drop-off grows a ring under the car.
-- ⚠️ **The game starts short of the stand** (`RoadSpawn.DEFAULT_SETBACK_M`, 20 m back, outside
-  the 12 m hail): `verify_spawn` fails a `hail_radius_m` raised past it. `--spawn-fare` is on the
-  node itself.
-- ⚠️ **A fare cannot start where the last one ended.** `_armed` clears on every end and on a
-  refusal, and sets again only once a sample finds no pickup in reach. Without it a delivery at a
-  stand that is also a pickup hails again on the spot.
-- ⚠️ **Mutation-check it rather than reading its pass** (`Q72`). Each of these fails by name in
-  `verify_fares.gd`: `step_m = 1` (a linear meter) at the 2,200 m point; a zero price (an inert
-  meter); a drop-off-only point, a tram stop and a cross-harbour stand smuggled into `fares.json`
-  (the pools); `min_trip_m` raised past every route (every pickup stranded, no one waiting);
-  `street_share` 0 (no street spot waiting or bound); the boarded customer still waiting, or no
-  replacement drawn at the delivery (the loop);
-  half the tip rate (what the same drive banks); the same trip delivered 2 s later (banks
-  strictly less). Dwells and bars are asserted from BOTH sides: 0.75 s boarding and 1.0 s
-  aboard; arriving fast and arriving stopped; one tick short of the allowance and one past it.
-- ⚠️ **Verify tools never run by hand and read** (`verify_hud`'s rule): `verify_fares.gd` can
-  print `ok` having checked nothing when a preload fails to compile. `tools/check.sh` is the
-  reading. `TICK_S` is 0.25 — exact in binary — so a 1.0 s dwell lands on the fourth tick and not
-  the fifth; do not "round" it to 0.2.
-- ⚠️ **Two tables, two sidecars, both required** (`Q119`): `tariff.md` and `fares.md` beside the
-  `.tres`, no defaults in either profile script, and a zero field is refused with the file named
-  rather than run on a literal — by `TuningTable.any_zero` (`scripts/core/`), the one loop
-  `FareMeter`, `SkillTracker` and `FareSystem.setup` share. The skills' table and the drift angle
-  are the TRACKER's to refuse (`SkillTracker.usable()`); `setup` refuses to hail on an inert one.
-- ⚠️ **`--fares=off` is free roam** and what `P3-9` runs with the arrow off; `--fare-seed=<int>`
-  fixes the draw for an A/B drive. Both go through `Cmdline`, like `--hud=`.
-- ⚠️ **A stop carries its building and its road** (`Q142`): `fares.json`'s `place` is iB1000's
-  `BUILDINGNAME` for the footprint nearest the kerbside `pos` within `fares.places.max_distance_m`
-  (25 m), the one the point's text names where it names one inside the radius, `NAMESTATUS` `E`
-  only, the city's `block_suffix` stripped for the search and never from the published name;
-  `Fare.Stop.place(language)` falls back to the description, and `road_en` is `RoadGraph.name_of` at
-  load. A node that loses its place on a rebuild is a finding about the data (`f_001`, opposite
-  its building, is correctly none). `pytest tests/test_fares.py::TestNearestPlace` holds the
-  radius, the footprint-not-centroid distance and the mention rule from both sides.
-- ⚠️ **The HUD reads this through signals only** (`P3-5a`, `Q142`): `hud.gd` and
-  `fare_guide.gd` connect `sampled`, `delivered`, `bailed` and `pickups_changed` (`Q203`: the pins
-  and rings are rebuilt there, a handful, never walked per frame over the pool) and read `state`,
-  `fare`, `pending`, `withheld` and `pickups()` inside them, because under `--fares=off` the system frees
-  itself in `_ready` before `Main` hands it over. A new consumer that polls it from `_process`
-  reads a freed node on the second frame. `fare_face.gd` is the one place a string is decided,
-  and `FareFace.target_of` the one place a reader's target is — the guide's arrow and the map's
-  pin both take it. ⚠️ `pending` and `withheld` are ONE scan per sample (`_rescan`,
-  before every `sampled`); `nearest_pending` / `withheld_pickups` are the same scan as queries,
-  for `verify_fares`, which asserts the fields agree with them at the delivery. A reader never
-  rescans the pool from the car's position.
-- 🔴 **The skills are flat money per event, paid as they happen** (`P3-49`, `Q145`, the user's
-  call over the style chain) — but for the drift, whose awards rise within one slide (`Q172`): `SkillTracker` (`skill_tracker.gd`) is fed every tick's speed and
-  slip by `sample()` in every state, `tuning/skills.tres` prices them (sidecar `skills.md`), and
-  while carrying each award lands on `Fare.awards`, in `skills_hkd` and `tip_hkd` at once, and
-  out on `skilled`. `time_hkd` is the seconds left priced at the door; `tip = time + skills`.
-  🚫 No multiplier on the money — `P3-2b`'s style combo (`Q205`) counts beside it, the awards do not change.
-- 🔴 **Empty, the skills are shown and never paid** (the user's call, 2026-09-26: practice, and
-  a later achievement). ONE tracker for the session, built in `setup`; `_award` routes by state —
-  every award counts in `skill_counts[skill]` (paid or not — the session's tally, the
-  achievement hook); not carrying, it goes out on `practised(award)`, on no fare, in no tip,
-  never into `earned_hkd`. `hud.gd` flashes `FareFace.practice_text`, the
-  name alone; `taxi_hire.gd` does not listen (no passenger). `_tracker.reset()` at `_board` keeps
-  a slide held into the hail off the passenger's receipt; `verify_fares`'s `practice:` block holds
-  the empty drift and crash, the boarding seam, and the reset as a named mutation. 🚫 No money
-  for practice, in any form — the chain (`P3-2b`) is where it becomes money. `--fares=off` still
-  frees the node, so free roam shows nothing.
-- 🔴 **A drift must qualify, its money grows with its length, and the speed skill is paid by the
-  metre** (the user's calls, 2026-09-25, `Q145`; 2026-10-28, `Q172`): a slide counts once it has
-  held `drift_min_s` (0.5 s since `Q172` — at 2 s only a countersteered slide at 86 kph ever
-  counted on the pace-2.0 car) and pays again every `drift_s`, each award `drift_step_hkd` over
-  the last in the same slide, so its total grows with the square of its length; a new slide starts
-  again at `drift_hkd`. ⚠️ Slip past `FareSystem.REVERSED_SLIP_DEG` (90°) is reversing, not
-  a drift — a reverse reads ~180° and paid at 0.5 s. 🚫 Not a fare-wide chain: the step is one slide's (`P3-2b` is the chain); a run at or over `speed_min_kph` pays every `speed_hold_m`
-  DRIVEN, and `verify_fares` refuses `speed_hold_m` under `tariff.step_m` so the skill can never
-  tick faster than the meter's 200 m unit. 🚫 No `speed_hold_s`: time at speed is what the clock
-  already pays. The drift's bar is seconds because `Q84` grades drift on dwell.
-- 🔴 **The drift's angle has ONE copy: `HandlingProfile.drift_slip_threshold_deg`** (`Q84`'s
-  design target), handed to `setup` and loaded by `verify_fares` through `HandlingProfile.PATH`;
-  `skills.tres` carries no angle. ⚠️ `FareSystem.slip_deg_of` DUPLICATES
-  `skidpad_ablation.gd::_slip_deg` on purpose — the grader must never call what it grades — so a
-  change to either's flattening or floor is made twice, by hand, and named.
-- 🔴 **The bars are inclusive and every dwell is asserted from both sides** in `verify_fares`'s
-  `skills:` block: one tick short of `drift_min_s` / `speed_hold_m` pays nothing and the tick that
-  reaches it pays, a slide as long as `drift_s` but short of `drift_min_s` pays nothing, twice the
-  speed pays in half the ticks (distance, not time); a degree under the threshold never pays; a
-  slide or run that ends forfeits its unpaid part (two short ones are not one long one); the share
-  a tick under and on. Mutations:
-  a zeroed `drift_hkd` or `drift_step_hkd` and a zero threshold are inert systems, named; half the
-  price and half the step each bank less; the second and third awards of a slide pay one and two
-  steps more, and the next slide's first pays `drift_hkd`. Mutation (`Q172`): the step multiplied
-  by 0 fails four checks by name.
-  ⚠️ Arriving with the clock nearly full IS an early arrival, so the loop's own delivery check
-  expects `time + early_hkd`.
-- 🔴 **The live tip is the skills alone, floored at zero; the time joins it at the door** (the
-  user's call, 2026-09-25: a tip that fell with the clock read as a penalty). `time_hkd` is 0
-  while carrying and priced once in `_deliver`, before the early arrival; `tip_hkd =
-  FareSystem.tip_of(time, skills)` after every award and at the door. `FareFace.tip_text` is the
-  bare digits for a second `SevenSegment` under the meter's, in `meter_lit` at `tip_digit_px`,
-  with `tip_caption` ("TIP" / 小費) beside it — the meter's face, never a green label. `verify_fares`
-  asserts the tip does not move over two seconds of clock. A penalty (`P3-50`) is an `Award`
-  with negative `hkd` — same receipt, minus sign,
-  `accent_negative` flash — and `tip_of` never goes below 0: the passenger docks the tip, never
-  the meter (`Q141`). 🚫 No penalty on the meter, no negative bank.
-- 🔴 **The penalties read ONE number off the car and tier it** (`P3-50`, `Q148`):
-  `VehicleController.take_impact_mps`, the speed INTO the wall on the tick of the hit — the
-  pre-step velocity's component along the contact normal, latched in `_integrate_forces` and
-  drained by `FareSystem._physics_process` every tick, carrying or not (empty, a hit is shown as
-  practice and docks nothing). Two bars in `skills.tres`:
-  under `bump_min_kph` (20) a TOUCH, free and unannounced, but it ends a slide (a car pinned on a
-  wall cannot farm the drift); at or over it a COLLISION, `Fare.Skill.BUMP`, docking `bump_hkd`
-  (2); at or over `crash_min_kph` (60) a CRASH docking `crash_hkd` (5). `crash_cool_s` (1 s)
-  makes one wall one dock. The bars are the skidpad's wall rows (`tools/skidpad.sh --only=wall`,
-  three angles at three run-ups) — a 10° brush never reaches 20, a 30° clip never reaches 60, a
-  head-on never misses it; change a bar only against a new matrix. `SkillTracker` refuses a crash bar
-  at or under the bump bar, and `setup` will not hail on it. `verify_fares`'s `penalty:` block holds every bar and the cooldown
-  from both sides, the touch that ends a slide, the tip floored, the meter unmoved, a zero price
-  and the folded bars as inert systems, and a halved price docking less. ⚠️ **Latched against
-  `_velocity_into_step`, never the state's velocity**: by `_integrate_forces` the solver has
-  taken the normal velocity out, and a 69.5 kph head-on read 1.6 off the state. ⚠️ **On a moving car it is the
-  closing speed, and only when the taxi is moving into the contact** (`Q175`): a 5 kph tap on a
-  slower car read 100+ kph. Graded on `--only=traffic`. 🚫 No speed-loss
-  detector (braking and `place_at` look like walls), no contact impulse (it measures the solve,
-  not the hit), no second wall list — the kerb riser is 0.15 m and the body clears it.
-  The face: a penalty pops the HURT emote (`emote_hurt.glb`, `taxi_hire.gd` on `hkd < 0`).
-- 🔴 **The books are `SessionTally`'s** (`P3-76`, `Q169`): `FareSystem.tally`, a fresh one at `reset`, which `skill_counts`, `deliveries` and `bails` read. An award goes on `counts`; its HK$ joins `banked` only at the door. `total_hkd()` must equal `earned_hkd` through a floor and a walk, and `verify_fares`' `tally:` holds it. A new `Fare.Skill` goes in `BONUSES` or `PENALTIES` (checked) and needs a row's height (`menu.md`).
-- 🔴 **A bail forfeits every award and keeps every award**: `tip_hkd` and `banked_hkd` are 0,
-  `awards` and `skills_hkd` stay on the fare so `FareFace.forfeit` can say what walked out.
-- ⚠️ **What listens to `skilled`**: `hud.gd` flashes `FareFace.award_text` in the gain's green;
-  `taxi_hire.gd` pops the grin (`PassengerEmote`, `vehicle/passenger_emote.gd`) and pops the rage
-  on `bailed`. A new consumer connects the signal; it never reads `awards` from `_process`.
-  `drift_tier_changed` (`P3-58`, `Q154`) is `SkillTracker.drift_tier` — -1, counting 0, then the
-  awards this slide has paid — emitted on a move only, paid or practised alike; `taxi_hire.gd`
-  hands it to `DriftSparks`. `verify_fares`'s `sparks:` block holds it.
-- 🔴 **Air pays at the LANDING, never per second in the air** (`P3-51`, `Q147`, the user's ask):
-  `SkillTracker._flight` meters seconds with every wheel off (`VehicleController.is_airborne`)
-  and on the first grounded tick pays `air_hkd` once the flight held `air_min_s`, again per
-  further `air_s`, only when `is_upright` on that tick — a roll is four wheels in the air too. A
-  flight that never lands (the harness resets a fallen car) pays nothing; the drift meter refuses
-  airborne ticks because a yawing car reads a slip. `verify_fares` drives `sample`'s `airborne` /
-  `upright` arguments through `_fly`; mutations: a zeroed `air_hkd`, a halved one on `_air_drive`.
-- 🔴 **The near miss and the close call are `NearMiss`'s** (`near_miss.gd`, `P3-2a`, `Q161`):
-  `FareSystem.sample` hands it the car's transform, its velocity and `FareSystem.obstacles_near`,
-  `ParkedLayer.near_all`'s bodies and `TrafficSystem.near_cars`' (`Q175`), and its awards go through `_award` like the tracker's. The rules are in
-  `.claude/rules/parked.md`; what matters here is that `setup` takes the car's plan half-extents
-  (`MeshContract.bounds` in the car's frame; `verify_fares` hands in a Crown Comfort's) and
-  refuses an inert detector, and `_board` resets it with the tracker.
-- 🔴 **交更 closes the loop, it does not end a fare** (`Q162`): `close()` hails no one, scans no
-  one (`_scan` is empty, so no ring or pin), turns away a passenger still BOARDING (a cancel), and
-  lets the one CARRYING ride to delivery or bail; `finished` fires once, when nobody is aboard.
-  `reset()` is a fresh run on the same pools — the reach table and the draw are the city's.
-  `verify_fares`'s `close:` block holds every path; the last fare's `finished` is the mutation.
-  🚫 No time added by a delivery: the shift's clock is the day's (`DayClock`).
-- 🔴 **The cabin's sounds are `TaxiHire`'s, on the loop's signals only** (`Q185`): the flag down at
-  `boarded` (the flagfall's beep waits for it) and up at `delivered` / `bailed`, and at the door
-  the card beep and a coin per `coin_hkd` of tip, at most `coin_max`. `verify_fares`' `cabin:`
-  lines; mutation: the cap removed. 🚫 No sound on a skill or a penalty for now (the user,
-  2026-11-06: built, heard, removed); 🚫 none like the meter's 2 kHz pip.
-- ⚠️ **The meter's beep is `TaxiHire`'s, on `meter_changed`** (`Q178`): `verify_fares`' `beep:` lines hold one
-  per unit and one at the boarding. It is rare because the 2 km flagfall charges nothing: 🚫 not a
-  reason to beep on anything but the reading. `tools/make_meter_beep.py` is byte-identical.
-  ⚠️ A near miss or close call names its obstacle in `Award.passed`, which `TrafficSystem.react_to` reads
-  to sound that car's horn; `verify_fares` checks it on the close call.
-- 🔴 **The style combo is a count, never money** (`P3-2b`, `Q205`, the user's design):
-  `StyleCombo` (`style_combo.gd`, pure) in `FareSystem.combo`. `_award` ENDS it on a penalty
-  (`BUMP` / `CRASH`; a free touch is no award and does not) and otherwise adds the award's skill —
-  paid or practised alike — and `note_combo`s the tally; `sample` ticks it AFTER the tick's
-  awards, and the tick an award landed on does not count down. 🔴 **The gap stands still while
-  `SkillTracker.holding()`** — a slide over the threshold, a run at speed, a flight — or the speed
-  skill, paid every 200 m, never passes ×1. `combo_changed` on each hit, `combo_ended(copy,
-  broken)` once; the HUD calls out `StyleCombo.shown()` (`combo_show_min`, 2) and the record keeps
-  every combo. A boarding, a delivery and a bail leave it running; `reset` drops it, its bests
-  already in the old tally. 🚫 It touches no tip, no meter, no `earned_hkd` — "no abstract
-  multiplier" above is the meter's rule and ×N sits beside it. `verify_fares`' `combo:` block;
-  mutations: the hold ignored, a penalty not ending it, half the gap, the best total never
-  weighed, `reset` keeping it, a zero `combo_gap_s` (inert).
-- 🚫 **Not here**: the fare combo (`P3-2b`; the session timer is `Q162`'s shift), cross-harbour and long haul with the tunnel
-  toll (`P3-1b`), operating hours (`Q14`).
+**Check**: `tools/check.sh` (runs `verify_fares`, a named block per rule below); run by hand the
+tool prints `ok` having checked nothing when a preload fails to compile. Mutation-check a new
+assertion (`Q72`); bars are asserted from BOTH sides. `TICK_S` 0.25 is exact in binary; keep it.
+`--fares=off` is free roam; `--fare-seed=<int>` fixes the draw for an A/B drive.
+
+## Meter and tip
+
+- **`tariff.tres` is TD's table**, cited with its effective date in `tariff.md`; a change is a
+  tariff revision. No abstract multiplier anywhere: the meter shows money.
+- **The meter is honest, the tip is the skill.** Only metres driven and seconds waited move the
+  reading; a shortcut lowers it and raises the tip. No penalty on the meter, no negative bank.
+- **"Or part thereof", two buckets, no speed bar**: a unit is charged when it BEGINS, either bucket
+  charging resets both, nothing for waiting inside the flagfall. `FareMeter` works in cents.
+- **Par is the legal profile** (`Q137`): allowance = legal route / `par_kph`, no floor by kind
+  (`Q203`). `par_kph` is the AI traffic's measured median run (recipe in `fares.md`); re-measure
+  after a change to `traffic.tres`' `cruise_of_limit` or the signal timings. Never the player's
+  profile.
+- **The live tip is the skills alone, floored at zero; the time joins at the door**
+  (`FareSystem.tip_of`; a tip falling with the clock read as a penalty). An early arrival pays in
+  `_deliver` too, so a full-clock delivery expects `time + early_hkd`.
+- **A bail forfeits the money and keeps the list**: `tip_hkd` and `banked_hkd` 0, `awards` and
+  `skills_hkd` stay for `FareFace.forfeit`.
+- **The books are `SessionTally`'s** (`Q169`): an award goes on `counts`, its HK$ joins `banked`
+  only at the door; `total_hkd()` equals `earned_hkd`. A new `Fare.Skill` goes in `BONUSES` or
+  `PENALTIES` and needs a row's height (`menu.md`).
+
+## Customers and pools
+
+- **The pools are the yaml's rules**: a stand is pickup and destination unless `cross_harbour`; a
+  PUDO point is what its `pickup` / `dropoff` say; a `poi` tram stop is neither; a street spot
+  (`fares.street`) is both where the legal router admits its edge. A fare's kind is its
+  destination's and prices nothing (`Q203`). `street_share` 0 is the off switch, the one key
+  `setup` does not refuse at zero.
+- **A few wait, each paired as it is drawn** (`Q203`): `pickups()` is the live set, and a
+  destination comes from one forward search (`RoadRouter.source_tree`, uncached) at `min_trip_m`.
+  Never a `prepare` for a pairing: it would evict the tree the car's route reads (`TREE_CACHE`).
+  Refused: drawing blind and routing each try (24 `prepare`s for a stranded kerb); an all-pairs
+  reach table (~390 street spots, seconds at load); drawing blind at the hail.
+- **A pickup that reaches nothing is stranded**: dropped as a pickup, kept as a destination,
+  counted in `stranded`. Found by the draw, so the set depends on the seed. "No route" is a pool
+  decision, never an assert; a new pattern is a finding about the node, not a reason to lower the
+  bar.
+- **The waiting stay near the car and stay put** (`Q203`): placed within `place_m`, swapped past
+  `retire_m` by `_turn_over` — one draw a sample (Causeway Bay strands 9 in a row at its far
+  corner), and a swap, never a removal alone. Customers do not follow the car.
+- **The start stand always has a customer** (`wait_at`, `Q203`); later runs draw the stand from
+  `published_pickups()` (`Q227`). A rule that empties `_pool` leaves every run on the boot stand,
+  silently.
+- The game starts `RoadSpawn.DEFAULT_SETBACK_M` short of the stand; `verify_spawn` fails a
+  `hail_radius_m` raised past it.
+- **A fare cannot start where the last ended**: `_armed` clears on every end and sets once a sample
+  finds no pickup in reach. `nearest_pending` and `withheld_pickups` skip those pickups, and rings
+  and pins hide them (`Q142`); a new marker of pending customers reads `withheld` too.
+- **A stop carries its building** (`Q142`): `place` is iB1000's `BUILDINGNAME` within
+  `fares.places.max_distance_m`; `Fare.Stop.place(language)` falls back to the description
+  (`test_fares.py::TestNearestPlace`).
+
+## Skills and penalties (`skills.tres` / `skills.md`, `SkillTracker`, `NearMiss`)
+
+- **Flat money per event, paid as it happens** (`Q145`): `tip = time + skills`, no multiplier.
+- **Empty, skills are shown and never paid**: an award goes out on `practised`, counts in
+  `skill_counts`, never in `earned_hkd`. `_tracker.reset()` at `_board` keeps a held slide off the
+  receipt.
+- **Drift** (`Q172`): counts after `drift_min_s`, pays every `drift_s`, each award `drift_step_hkd`
+  over the last within ONE slide; seconds, because `Q84` grades drift on dwell. Slip past
+  `REVERSED_SLIP_DEG` (90°) is reversing.
+- **The drift angle has one copy**, `HandlingProfile.drift_slip_threshold_deg`. The slip
+  (`FareSystem.slip_deg_of` → `SlipAngle.deg_of`) deliberately duplicates
+  `skidpad_ablation.gd::_slip_deg` (`Q84`): change the flattening or the floor in both.
+- **Speed is paid by the metre** (`speed_hold_m`, refused under `tariff.step_m`). No
+  `speed_hold_s`: the clock already pays time.
+- **Air pays at the landing** (`Q147`), only when `is_upright` on the first grounded tick.
+- **Penalties read one number** (`Q148`): `VehicleController.take_impact_mps`. Under `bump_min_kph`
+  a touch is free but ends a slide; then `BUMP`, then `CRASH`; `crash_cool_s` makes one wall one
+  dock. The bars are the skidpad's wall rows (`tools/skidpad.sh --only=wall`; `--only=traffic` for
+  a moving car, `Q175`): change one only against a new matrix. Refused: a speed-loss detector
+  (braking and `place_at` look like walls), the contact impulse, a second wall list.
+- **Near miss and close call** are `NearMiss`'s (`parked.md`): `setup` takes the car's plan
+  half-extents and refuses an inert detector. `Award.passed` names the obstacle for
+  `TrafficSystem.react_to`.
+- **The style combo is a count, never money** (`Q205`, `StyleCombo`): a penalty ends it, any other
+  award adds to it. The gap stands still while `SkillTracker.holding()`, or the speed skill never
+  passes ×1.
+
+## Session and consumers
+
+- **`close()` (交更) closes the loop, it does not end a fare** (`Q162`): hails and scans no one,
+  cancels a BOARDING passenger, lets a CARRYING one finish; `finished` fires once. `reset()` is a
+  fresh run on the same pools. A delivery adds no time: the shift's clock is `DayClock`'s.
+- **Readers use signals, never `_process`**: under `--fares=off` the system frees itself in
+  `_ready`. `hud.gd` and `fare_guide.gd` connect `sampled`, `delivered`, `bailed`,
+  `pickups_changed` and read `state`, `fare`, `pending`, `withheld`, `pickups()` inside them.
+  `pending` and `withheld` are one scan per sample (`_rescan`); a reader never rescans the pool.
+  Strings are `fare_face.gd`'s, a reader's target `FareFace.target_of`.
+- `skilled` → the HUD flash and `taxi_hire.gd`'s emote; `drift_tier_changed` → `DriftSparks`.
+- **Cabin sounds are `TaxiHire`'s, on the loop's signals** (`Q185`, `Q178`): flag down at `boarded`,
+  up at `delivered` / `bailed`, card beep and a coin per `coin_hkd` of tip up to `coin_max`, the
+  meter's beep on `meter_changed` only. No sound on a skill or penalty (built, heard, removed).
+- A zero field is refused with the file named (`TuningTable.any_zero`); no defaults in a profile.
+- Not here: cross-harbour and the tunnel toll (`P3-1b`), operating hours (`Q14`).

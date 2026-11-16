@@ -1,57 +1,18 @@
 # main.tscn
 
-Rationale for `game/scenes/main.tscn`. Each heading is the line the block sat above; `Overview` is the
-file as a whole. Why it lives here and not in the file: `Q119`.
+The boot scene: `Main` is the entry point, `World` holds the level, `GUI` holds what is drawn over
+it, so a level change swaps `World`'s children without touching the HUD.
 
-## Overview
-
-The boot scene, in the shape Godot's own guidance names: `Main` is the entry
-point, `World` holds the level, `GUI` holds what is drawn over it, and a level
-change swaps `World`'s children without touching the HUD (`Q119`). Until that
-change `main.tscn` instanced `city_drive.tscn` whole, with the HUD inside the
-level; the `P3-1`, `P3-2` and `P3-5` UI and the credits screen hard rule 6
-requires all land under `GUI`, which is why the split precedes them.
-
-`World` carries the one level there is. `city_drive.tscn` moved out of
-`scenes/dev/` in the same change, because it is what this scene boots and
-`PROGRESS.md` had already stopped calling it a dev scene; the dev previews,
-the skidpad and the grey box stay there.
-
-## `[node name="Main" type="Node"]`
-
-`main.gd` (`P5-24`): the entry point is the one node holding both `World` and
-`GUI`, so it is the one that hands the HUD its car — `level` and `hud` are
-typed exports pointing down into each. Before this the HUD found the first
-car in a group, a sibling reaching across the World / GUI boundary from below;
-now nothing under `GUI` searches for one, and a level change hands the next
-car in here. Both exports are checked for null with a warning, never a crash. `menu` is
-the third (`P6-1`): checked with `wanted()` and `is_instance_valid`, because
-under `--menu=off` it frees itself in a `_ready` that has already run.
-
-## `[node name="GUI" type="Node" parent="."]`
-
-After `World`, and that order is load-bearing: a sibling's subtree is readied
-and processed before the next sibling's, so everything under `GUI` finds the
-car already placed and its `speed_kph` already written for the tick.
-
-## `[node name="Hud" type="CanvasLayer" parent="GUI"]`
-
-The player's HUD (`P3-24`) — speed, the street you are on, and three reserved
-slots that `P3-5a` and `P3-5b` fill. Under `GUI`, after `World`, so the Taxi it
-reads already exists when it first looks, and on layer 10 so `DebugHud` (127)
-and its frame counter still win the corners when someone turns them on.
-
-⚠️ `--hud=off` frees it. That is for `P3-9` first — the authenticity test is a
-drive with the direction arrow disabled, and a permanent street plate is
-closer to a navigation aid than that test's premise assumes — and for clean
-art-review frames second.
-
-## `[node name="StartMenu" type="CanvasLayer" parent="GUI"]`
-
-The start menu (`P6-1`, `Q146`): start, options, credits, on layer 20 — over
-the HUD, under the dev overlay. Under `GUI` beside the HUD and never inside
-the level: `Main` parks the level while it is up (`DriveLevel.park`) and
-resumes it on `started`, and a language pick retires the HUD and readies a
-fresh one. `--menu=off` frees it in its own `_ready`, the way `--hud=off`
-frees the HUD, and `drive.sh` passes that for every scripted run. Its numbers
-are `tuning/menu.tres`, its strings `tuning/menu_text.json`.
+- `Main` (`main.gd`, `P5-24`): hands the HUD its car. `level`, `hud` and `menu` are typed exports
+  pointing down; nothing under `GUI` searches for a car. `level` and `hud` are null-checked with a
+  warning. `menu` is checked with `wanted()` and `is_instance_valid`, because under `--menu=off`
+  it frees itself in `_ready`.
+- `World/CityDrive`: the one level, `city_drive.tscn`.
+- `GUI`: after `World`, and the order is load-bearing: a sibling's subtree is readied and
+  processed first, so everything under `GUI` finds the car placed and its `speed_kph` written.
+- `GUI/Hud` (`hud.gd`, `P3-24`): layer 10, under `DebugHud` (127). `--hud=off` frees it, for
+  `P3-9`'s drive without navigation aids and for clean art frames.
+- `GUI/StartMenu` (`start_menu.gd`, `P6-1`, `Q146`): layer 20, over the HUD. `Main` parks the
+  level while it is up (`DriveLevel.park`) and resumes on `started`; a language pick retires the
+  HUD and readies a fresh one. `--menu=off` frees it, and `drive.sh` passes that for every
+  scripted run. Numbers in `tuning/menu.tres`, strings in `tuning/menu_text.json`.

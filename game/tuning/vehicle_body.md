@@ -1,116 +1,42 @@
 # vehicle_body.tres
 
-Rationale for `game/tuning/vehicle_body.tres`. Each heading is the line the block sat above; `Overview` is the
-file as a whole. Why it lives here and not in the file: `Q119`.
+The shared body material of every vehicle: the taxi, the traffic and the parked library.
+`tools/generated_scene_import.gd` maps the `vehicle_body` material name to this file. Lamp
+circuits are not here: they are per-instance state written by `vehicle_lamps.gd`, because one car
+braking must not brake the rest.
 
-## Overview
-
-The taxi's body material — clearcoat over a sky gradient.
-
-`tools/generated_scene_import.gd` maps the ETL's `vehicle_body` material name
-to this path and only this path, so this file is the switch: delete the entry
-there and the body falls straight back to the `BaseMaterial3D` it imported
-with before `P3-11c`, with no rebuild.
-
-Here rather than as shader defaults because CLAUDE.md hard rule 4 makes tuning
-data, not constants — and beside `golden_hour.tres`, because the sun these are
-judged under is tuned in the same directory.
-
-⚠️ **`clearcoat` and `clearcoat_roughness` are the paint's gloss since `Q215`,
-and they are the engine's lobe, not the painted gradient.** `P3-11c` mixed the
-gradient into the paint's albedo through `paint_reflect` 0.12 / `paint_face_on`
-0.06, which replaced red with sky and then lit the result like diffuse paint:
-`C*` 79.06 matte → 71.63 shipped at `taxi` t04.50. `CLEARCOAT` adds its
-reflection on top at a 4% head-on fresnel and leaves the albedo alone. On the
-menu orbit's frame in shade, red `C*` went 52.12 → 52.32 and `L*` 30.03 → 27.77.
-0.12 is a waxed coat (real clearcoat is 0.05–0.15); `paint_roughness` 0.55 is
-now the base coat under it. `clearcoat` 0 is the matte car and the **first**
-thing to try if `P3-9a` recognition scores poorly.
-
-`fresnel_power` now shapes the glazing and lenses only; paint takes the
-engine's Schlick fresnel.
-
-⚠️ **`glass_reflect` went 0.34 → 0.14 → 0.45, and the middle value is the one
-worth understanding.** At 0.34 against a single flat `sky_reflection` colour the
-backlight came back at `C* 21` and read as a panel painted blue, so it was cut
-to 0.14 — which the user then judged from the driver's seat as barely
-different, correctly. Both readings were right, and neither was about strength:
-a flat colour is a swatch at *every* value, faint at 0.14 and painted-on at
-0.34. `ART_DESIGN.md` had already recorded exactly this against the facades —
-"a single reflection colour is why glass read as a swatch rather than a mirror".
-With the sky *gradient* in (zenith / horizon / ground, chosen by the reflected
-ray's own elevation) the surface has structure to show, and it can carry 0.45
-without flattening — because what lands is no longer one colour.
-
-⚠️ **`lamp_emission` is above 1.0 because the glow threshold is 1.0.**
-`clean_daylight.tres` blooms on HDR over 1.0, so a lit lens under that is a
-brighter swatch and not a lamp — the bloom is what separates the red brake
-lens from the red bodywork it is seated in, which is the whole reason the
-circuits exist (`P3-11d`).
-
-⚠️ **Turning it up buys bloom and spends redness, and by 1.2 it is spending
-nothing else.** The tonemap is ACES and the lens's red channel is clipped at
-255 from 1.2 upward, so every further unit lands on green and blue — a lamp
-that goes whiter rather than brighter. Measured on the high-level strip, same
-294 px, braking at `t03.30`: ablated `L* 2.29 / C* 9.35`, then 1.2 →
-`67.04 / 56.44`, **1.6 → `72.72 / 44.34`**, 2.3 → `79.17 / 31.81`. Shipped at
-the knee. Going up is how the tail cluster becomes the white tail lamp
-`ART_DESIGN.md` has refused twice already.
-
-The circuits themselves are **not** here — they are per-instance state written
-by `scripts/vehicle/vehicle_lamps.gd`, because this file is shared by every
-vehicle and one car braking must not brake the rest of the roster.
-
-Judged on the two `taxi` audit frames — `t01.20` in shade, `t04.50` in sun —
-per `ART_DESIGN.md`'s viewpoint table.
-
-## cabin_light, cabin_glow, cabin_glow_dim
-
-A saloon lit behind its windows at night (`Q177`), multiplied by the rig's `night_lights`, so it is
-the plain glazing by day. `cabin_glow` 0.25 is the bus and the tram, `cabin_glow_dim` 0.12 the
-minibus, whose saloon is dimmer on the street (the user, 2026-11-01). Both sit well under the 1.0
-glow threshold: a lit room, not a lamp. 0.9 and 0.4 were shot first and refused as too bright, and
-the first colour, `(1, 0.93, 0.76)`, read as a cream panel rather than a light.
-
-## ink_width_m, ink_max_px, ink_darkness, ink_speed_thin, ink_speed_fade
-
-The detail lines (`P3-84`, `Q196`, the user's report, 2026-11-11: "there is no lines in vehicle
-details"). The city's outline reads depth, so on a vehicle it draws the silhouette and the folds
-and nothing else: a window, a livery band or a lens is a change of colour on one flat panel.
-`tools/vehicle_ink.py` marks those edges in the mesh and this shader draws them.
-
-- `ink_width_m` 0.02 is a width on the vehicle, in metres, so the line is bold on a near car and
-  thins with distance — the user's first question was whether vehicles should have lines bolded by
-  distance. Under a pixel it is held a pixel wide and faded by its true width. `ink_max_px` 4.0
-  stops it swelling on a car against the lens.
-- `ink_darkness` 0.35 scales the surface's own colour, as the city's line does at 0.5. Darker than
-  the city's because the line lies inside the detail: a 0.5 line on dark glass does not read.
-- `ink_speed_thin` 0.33 / `ink_speed_fade` 0.2 take the same share off the line at the player's
-  full speed as `cel_outline.tres` takes off the city's (1.5 px to 1.0 px, 80% strength), on the
-  same `outline_speed` global. It is the player's speed, not each vehicle's own.
-
-Rendered at 0.012 / 0.5, 0.02 / 0.35 and 0.03 / 0.2 beside no line; 0.02 / 0.35 is the middle of
-that sheet and ⚠️ **not yet the user's pick**. At 0.012 the line is barely there; 0.03 is the only
-one that still reads on a tram at 115 kph. A black panel takes no darker line at any weight.
-
-⚠️ `global uniform float outline_speed` must be declared OUTSIDE a `group_uniforms` block. Inside
-the `ink` group it compiled without an error and the city's façades drew with wrong colours.
-
-## relief_groove_m, relief_groove_slope, relief_pillow, relief_edge_m, relief_edge_slope
-
-The pressed panels (`P3-87`, `Q232`, the user's ask 2026-11-17: "some basic normal map for
-vechicles such that bus side is not one flat surface"). No texture: the shader tilts `NORMAL`.
-
-- `relief_groove_m` 0.02 / `relief_groove_slope` 1.2: a joint's half-width and its walls' slope,
-  at every multiple of the pitch `tools/make_parked.py` gives a kind (`joints_m`, `crease_y_m`,
-  `box_ribs_m`). 0.6 was shot first and the joint did not read past a bus length.
-- `relief_pillow` 0.04: how far a panel between two joints bows, as the slope at its edges.
-  ⚠️ The one term no real vehicle has — it is what a far bus keeps when the joints go under a
-  pixel. 0.08 read as quilting; 0 is flat sheet between the joints.
-- `relief_edge_m` 0.03 / `relief_edge_slope` 0.6: every edge the ink is drawn on falls away into
-  it, so a pane sits in its frame and a frame stands on its wall. Wider than the 2 cm ink, or the
-  line would cover it.
-
-Under a pixel and a half a groove or a seat is held that wide and its slope cut to match. Every
-slope at 0 is the vehicle before `Q232`. `relief_pillow` 0.04 is the user's pick (2026-11-17) of
-off, joints alone, 0.04 and 0.08; ⚠️ the groove and the seat are the model's, not yet his.
+- `sky_zenith`, `sky_horizon`, `ground_reflection`: the painted sky the glazing and lenses
+  reflect, chosen by the reflected ray's elevation. A single flat colour read as a painted swatch
+  at every strength.
+- `glass_reflect = 0.45`, `glass_face_on = 0.25`, `fresnel_power = 6.5`, `glass_roughness = 0.14`:
+  the glazing. `fresnel_power` shapes glass and lenses only; paint takes the engine's fresnel.
+- `lamp_roughness = 0.35`, `lamp_reflect = 0.06`: the lenses unlit.
+- `lamp_emission = 1.6`: over 1.0 because the glow threshold is 1.0; the bloom is what separates a
+  red brake lens from red bodywork (`P3-11d`). Not higher: the red channel clips from 1.2 up, so
+  more goes to green and blue and the lamp whitens (`C*` 56.4 at 1.2, 44.3 at 1.6, 31.8 at 2.3).
+- `paint_roughness = 0.55`, `clearcoat = 1.0`, `clearcoat_roughness = 0.12` (`Q215`): the paint's
+  gloss is the engine's clearcoat lobe over a base coat, which leaves the albedo's red alone.
+  Mixing the sky into the albedo cost chroma. `clearcoat` 0 is the matte car and the first thing
+  to try if `P3-9a` recognition scores poorly.
+- `sun_toward`, `glint_strength = 0.4`, `glint_sharpness = 24.0`: the sun's glint on glass and
+  lenses. `sun_toward` is fed at runtime by `sun_glint.gd` from the rig; the stored value is a
+  placeholder. Not on paint: the clearcoat has its own sun lobe.
+- `cabin_light`, `cabin_glow = 0.25`, `cabin_glow_dim = 0.12` (`Q177`): a saloon lit behind its
+  windows, times the rig's `night_lights`. 0.25 is the bus and the tram, 0.12 the minibus (the
+  user's call). Well under the glow threshold: a lit room, not a lamp. 0.9 and 0.4 were too
+  bright.
+- `ink_width_m = 0.02`, `ink_max_px = 4.0`, `ink_darkness = 0.35`, `ink_speed_thin = 0.33`,
+  `ink_speed_fade = 0.2` (`P3-84`, `Q196`): detail lines on the edges `tools/vehicle_ink.py`
+  marks, since the city's depth outline draws only silhouettes and folds. Width is in metres on
+  the vehicle (held at a pixel minimum and faded, capped at `ink_max_px`). Darkness scales the
+  surface's own colour. The speed pair matches `cel_outline.tres` on the `outline_speed` global.
+  The model's pick from a sheet; the user's is owed.
+  - `global uniform float outline_speed` must be declared outside any `group_uniforms` block.
+    Inside one it compiled and the façades drew with wrong colours.
+- `relief_groove_m = 0.02`, `relief_groove_slope = 1.2`, `relief_pillow = 0.04`,
+  `relief_edge_m = 0.03`, `relief_edge_slope = 0.6` (`P3-87`, `Q232`): pressed panels by tilting
+  `NORMAL`, no texture. Grooves sit at the pitches `tools/make_parked.py` gives a kind
+  (`joints_m`, `crease_y_m`, `box_ribs_m`). `relief_pillow` bows a panel between joints so a far
+  bus keeps some shape; 0.04 is the user's pick (0.08 read as quilting). The edge pair seats a
+  pane in its frame and must be wider than the ink. Every slope at 0 is flat sheet. The groove and
+  edge values are the model's; the user's pick is owed.

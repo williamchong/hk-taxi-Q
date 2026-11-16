@@ -14,56 +14,32 @@ paths:
 
 # The fence and the car bar — before marking work done
 
-Moved verbatim from the root `CLAUDE.md`, which keeps the trigger and points here.
-
-- **`pipeline/fence.py`, the `clearance` or `fence` config blocks, or any change to `RoadGraph`'s
-  car bar: paste `fence.json`'s `fenced_edges` (with its count), `components`, `mouths`,
-  `ends_behind_another_fence`, `ends_with_no_way_in` and `barriers`, before and after — run
-  `tools/reachability.py --refuse <the fence set>` and paste its table, and A/B render one fenced
-  mouth at a fixed camera.** 🔴 **The fence is a SECOND bar over the SAME measurement and the two may
-  never be merged** (`Q19`): `is_passable` reads `clear_width_m` at the lane (3.20 m) and `fits_car`
-  reads it at the car (1.695 m, a Crown Comfort's width, since 2026-10-05; 1.80 m before), so re-pointing either at the other sends traffic down `e207`'s
-  1.95 m or fences the player out of `e781`'s 3.50 m. `verify_road_graph.gd`'s `_check_car_bar`
-  asserts an edge exists *between* the bars, because a region where every blocked edge is also
-  fenced is what a merge looks like from the inside — ⚠️ **mutation-check it rather than reading its
-  pass** (`Q72`).
-  🔴 **`ends_behind_another_fence` and `ends_with_no_way_in` are NOT the same counter and merging
-  them makes both meaningless.** The first is `Q19`'s pocket — arms exist and every one is fenced,
-  so a barrier there would stand behind a barrier; the second is a dead end, a street clipped by the
-  region, where nobody can arrive at all. Conflated, the first run reported 13 pockets over 14
-  *disjoint* components. ⚠️ The counters count **ends**, so a node shared by two fenced edges counts
-  twice.
-  🔴 **The prop COLLIDES, as a BOX over its `-col` extent (`Q159`), never the trimesh** — that is
-  open under and between the rails for a bumper to snag in. The generated railing classes collide
-  too since `Q159`, but through the placer; their asset stays collider-free and
-  `verify_railings.gd` asserts that. ⚠️ **Its material is `barrier_vertex`, never `barriers`** — that name dispatches the railing
-  class to `tuning/barriers.tres`, and sharing it hands this prop a fence's shader and fails that
-  tool while both halves render. ⚠️ **`-col`, never `_col`.**
-  🔴 **The prop draws as ONE `MultiMesh` and its colliders are separate bodies — do not "simplify"
-  it back to instantiating the scene per placement.** That build was measured at **+36 draw calls**
-  (81-92 against a 55-57 baseline) on a layer every other generated class ships in one; the
-  MultiMesh is **pixel-identical** at +1. Since `P2-6` it is one `MultiMesh` a plan cell of
-  `prop_cells.tres` (`PropBatch.batches`): one region-wide box was never culled, and both shadow
-  cascades drew every barrier from anywhere — 121k primitives at every view. It casts no shadow since
-  the same pass, nor do the railings: a sunlit frame could not tell either gone. ⚠️ **The split opens a gap `verify_fence.gd` cannot see** —
-  it grades the `.glb`'s own `-col` import, so a placer that stopped building bodies stays green and
-  renders perfectly. `fence.gd` prints its collider count for that reason; keep it, and read it — it counts shapes, one
-  a barrier, in one body a plan cell since `Q217` (`PropBatch.boxes`).
-  🔴 **`clipped_edges` is a THIRD population (`Q143`) and joins neither list.** An end is clipped
-  when its node has one open arm, no `foreign_edges` run touches it (the neighbour's way in is
-  never closed), and the polyline end lies within `fence.clipped_within_m` of the rectangle's line
-  **from the inside** — the far end of an owned crossing run stands on the neighbour's ground and
-  the first build closed five of them. Paste `clipped_edges` / `clipped_ends` / `clipped_no_width`
-  before and after, and **mutation-check `verify_fence.gd`'s re-derivation** (drop an edge, add an
-  interior one, shrink `region_extent_m`) rather than reading its pass. ⚠️ `region_extent_m` is
-  `Config.region_high`, never `bounds_game`.
-  ⚠️ **`fence.unit_width_m` must equal `tools/make_barrier.py`'s `UNIT_WIDTH_M`** — a row is tiled
-  from a standard unit and never one barrier scaled, because an x-scale to a 10.24 m mouth stretches
-  the posts with it. `etl/tests/test_fence.py` binds the two.
-  🔴 **Do NOT re-add a vertical term to the `clearance:` block.** `Q19` prescribed one; `P3-29`
-  built, measured and withdrew it — the 0.18-0.30 m band is the one `Q23`'s bumper floor exists to
-  suppress, so it fences three climbing ramps and misses `e99`, the edge it was prescribed for. The
-  block's closed-key-set check refuses it and `test_a_vertical_bar_added_here_is_rejected` is the
-  ratchet. ✅ That band's measurement is `tools/ground_clearance.py`'s `structure_class` extension,
-  **shipped 2026-09-02** and graded rather than gated — 330 cells / 323.4 m² / 25 level-0 edges. See
-  its own bullet above. Numbers in `Q19`.
+- **`pipeline/fence.py`, the `clearance` or `fence` blocks, `RoadGraph`'s car bar**:
+  `tools/battery.py fence --region <r> --before <root>`. From `fence.json` compare `fenced_edges`
+  (with its count), `components`, `mouths`, `ends_behind_another_fence`, `ends_with_no_way_in`,
+  `barriers`, `clipped_edges`, `clipped_ends`, `clipped_no_width`. Run `tools/reachability.py
+  --region <r> --refuse <fence set>` and paste its table. A/B render one fenced mouth at a fixed
+  camera.
+- Two bars over one measurement, never merged (`Q19`): `is_passable` reads `clear_width_m` at the
+  lane (3.20 m), `fits_car` at the car (`car_width_m`, 1.695 m). Merged either way, traffic is sent
+  down `e207`'s 1.95 m or the player is fenced out of `e781`'s 3.50 m. `verify_road_graph.gd`'s
+  `_check_car_bar` asserts an edge exists between the bars; mutation-check it.
+- `ends_behind_another_fence` (a pocket: every arm fenced) and `ends_with_no_way_in` (a dead end)
+  are different counters. Both count ends, so a shared node counts twice.
+- `clipped_edges` is a third population (`Q143`): one open arm, no `foreign_edges` run at the node,
+  and the polyline end within `fence.clipped_within_m` of the rectangle's line from the inside.
+  Mutation-check `verify_fence.gd`'s re-derivation (drop an edge, add an interior one, shrink
+  `region_extent_m`). `region_extent_m` is `Config.region_high`, never `bounds_game`.
+- Measured shut (`P3-29`): no vertical term in the `clearance:` block. Built and withdrawn — the
+  0.18–0.30 m band fences three climbing ramps and misses `e99`.
+  `test_a_vertical_bar_added_here_is_rejected` is the ratchet. That band is measured by
+  `tools/ground_clearance.py`'s structure half, graded and not gated.
+- The prop collides as a box over its `-col` extent (`Q159`), never the trimesh (open between the
+  rails). `-col`, never `_col`. Its material is `barrier_vertex`, never `barriers` (that name
+  dispatches the railing class's `.tres`).
+- The prop draws as one `MultiMesh` per plan cell of `prop_cells.tres` (`PropBatch.batches`) with
+  colliders as one body a cell (`PropBatch.boxes`, `Q217`); per-placement scenes cost +36 draw
+  calls. It casts no shadow. `verify_fence.gd` grades the `.glb`'s `-col` import, not the placer,
+  so keep and read `fence.gd`'s printed collider count.
+- `fence.unit_width_m` must equal `tools/make_barrier.py`'s `UNIT_WIDTH_M` (bound in
+  `test_fence.py`): a row is tiled from a unit, never one barrier scaled.

@@ -1,69 +1,24 @@
 # boxjunctions.tres
 
-Rationale for `game/tuning/boxjunctions.tres`. Each heading is the line the block sat above; `Overview` is the
-file as a whole. Why it lives here and not in the file: `Q119`.
+Rationale for `game/tuning/boxjunctions.tres` (`Q119`).
 
-## Overview
+Material of the yellow box junctions, drawn as their own geometry (`P3-18`, `Q53`).
+`game/tools/generated_scene_import.gd` maps the ETL's `boxjunctions` material name to this path, and
+`verify_boxjunctions.gd` checks the dispatch against the path, not the shader.
 
-Yellow box junctions, drawn as their own geometry (`P3-18`, `Q53`).
+`marking_paint.gdshader` is shared with the arrows and the stop lines (`Q71`) and defaults to
+white, so this file is the only thing that makes the boxes yellow.
 
-`tools/generated_scene_import.gd` maps the ETL's `boxjunctions` material name
-to this path and only this path, so this file is the switch: delete the entry
-there and the boxes fall back to the `BaseMaterial3D` they imported with,
-which draws the right hatching in whatever grey the importer picks.
+- `paint_colour`: a deliberate duplicate of `road_markings.tres`'s `yellow_colour` (and
+  `road_markings.gdshader`'s default), kept out of `hong_kong.yaml`'s `materials:` by `Q53`. Change
+  them together.
+- `paint_roughness`: as `arrows.tres`.
+- `paint_night_glow` 0.6 (`Q160`): the paint burns its own colour at this strength times the rig's
+  `night_lights`, 0 by day. One value across `road_markings.tres`, `roadmarks.tres`, `arrows.tres`
+  and `boxjunctions.tres`.
+- No `paint_opacity` and no fade, for `arrows.md`'s reasons. The hatch is geometry, from
+  `pipeline/boxjunctions.py` and `hong_kong.yaml`'s `boxjunctions:` block.
 
-Here rather than as shader defaults because CLAUDE.md hard rule 4 makes tuning
-data, not constants — and beside `road_markings.tres` and `arrows.tres`,
-which is the whole point of the file.
-
-🔴 **The shader is shared, so this file is the only thing that makes the boxes
-yellow** (`Q71`). `marking_paint.gdshader` serves the arrows and the stop lines
-too, and its default is the *white* those two paint — so where the other two
-`.tres` restate a default, this one overrides it. `verify_boxjunctions.gd`
-checks the dispatch against *this path* rather than against the shader, which
-is what still catches a box junction handed the wrong material.
-
-⚠️ **`paint_colour` is the third authored copy of the marking yellow, and the
-duplication is the decision** — the same paragraph `arrows.tres` carries for
-the white. `Q53` kept the marking colours out of `hong_kong.yaml`'s
-`materials:` table, outside `Q33`'s exposure rule, because paint is not
-cladding, and predicted that a road colour authored in a third place would be
-the problem; this is that place for the yellow, put next door so the copies
-can be read side by side. There is no mechanism in Godot to share a value
-between two `.tres` files; what there is instead is that a mismatch shows up
-in a single frame, because a box a different yellow from the no-stopping line
-painted along its own kerb is the first thing anyone would notice.
-
-  road_markings.gdshader  yellow_colour (default) = Color(0.86, 0.68, 0.13, 1.0)
-  road_markings.tres      yellow_colour           = Color(0.86, 0.68, 0.13, 1.0)
-  — and this file is the third. `Q71` removed the fourth: `boxjunctions.gdshader`
-    carried a yellow default of its own until its shader was merged away.
-
-⚠️ **`paint_opacity` is deliberately NOT copied across**, for `arrows.tres`'s
-stated reason: next door the 0.85 is asphalt showing through paint mixed into
-one opaque surface; here it would be transparency on a lifted second surface.
-
-⚠️ **Nothing here is a fade, and nothing here is the hatch.** The stripe
-width, spacing and direction are geometry, decided by `pipeline/boxjunctions.py`
-from `hong_kong.yaml`'s `boxjunctions:` block and the publisher's own
-`ANGLE1`/`ANGLE2` — this file only says what colour the paint is.
-
-Judged at the `street` and `kerb` viewpoints per `ART_DESIGN.md`'s table,
-against the kerbside yellows `P3-13` draws beside them: the thing this has to
-survive is being seen next to the restriction lines it matches.
-
-## Shared with the pedestrian crossings (`P3-35g2`)
-
-`crossings.glb`'s light-signal crossing stripes (`crossings_signal`) take this material too, by
-`generated_scene_import.gd`'s `SHADERS` table: they are the same yellow road paint, and one paint has
-one dial. A change to `paint_colour` here moves them, and `verify_crossings.gd` holds the pairing
-per kind.
-
-## `shader_parameter/paint_night_glow = 0.6`
-
-The paint lit at night (`Q160`, the user's ask: "we should try light up the road marking"): the
-marking burns its own colour at this strength times the rig's `night_lights`, 0 by day. One value
-across `road_markings.tres`, `roadmarks.tres`, `arrows.tres` and `boxjunctions.tres`, for the
-reason their whites are one value — a line brighter than the arrow beside it is the first thing
-anyone would see. 0.6 reads as retroreflective paint under a headlamp; the first frames ran 1.5,
-which with the cyan outline was the look the user called too sci-fi.
+`crossings.glb`'s light-signal crossing stripes (`crossings_signal`) take this material too
+(`P3-35g2`, `generated_scene_import.gd`'s `SHADERS` table): a change to `paint_colour` moves them,
+and `verify_crossings.gd` holds the pairing.

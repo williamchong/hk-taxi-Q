@@ -1,20 +1,16 @@
 # dusk.tres
 
-Rationale for `game/tuning/dusk.tres`. Each heading is the line the block sat above; `Overview` is the
-file as a whole. Why it lives here and not in the file: `Q119`.
+Rationale for `game/tuning/dusk.tres` (`Q119`).
 
-## Overview
+The 18:00 look (`Q160`), one of those `day_to_night.tres` blends through. A copy of
+`clean_daylight.tres` with only the blended values moved.
 
-One of the looks `day_to_night.tres` blends the rig through (`Q160`); `day_to_night.md` has the
-table and the order. The low warm sun: a yellow horizon under a grey-blue zenith, the fog thick with it (`fog_sun_scatter` 0.25).
-
-**Yellow since `Q235`** (the user's ask, 2026-11-17), where it was orange: the horizon, fog, ambient,
-key light and `sky_light` moved together so the evening is told from the blue dawn by colour, the
-middle of three strengths rendered beside the orange (`build/driver/dawn_dusk/options.png`,
-gitignored). ⚠️ The model's pick of the three; the user has not chosen.
-
-A copy of `clean_daylight.tres` with only the blended values moved. ⚠️ **Only what
-`LightingRig.BLENDED` and `BLENDED_SKY` name is ever read from this file** — the ambient, the
-fog, the glow's intensity, the saturation and the sky's four colours. Its switches, its tonemapper
-and its glow levels are the day's and are carried here unread, so changing one of them in this file
-changes nothing; a property that should move with the hour is added to those lists first.
+- Only what `LightingRig.BLENDED` and `BLENDED_SKY` name is read from a keyframe environment: the
+  ambient, the fog, the glow's intensity, the saturation and the sky's four colours. The switches,
+  tonemapper and glow levels are the day's, carried unread. A property that should move with the
+  hour is added to those lists first.
+- Yellow (`Q235`, the user's ask): the horizon, fog and ambient, under a grey-blue zenith, so the
+  evening is told from the blue dawn by colour. The strength is provisional: the middle of three
+  rendered, and the user has not chosen.
+- `fog_sun_scatter` 0.25: the fog thick with the low sun.
+- `radiance_size = 0` on the `Sky`: required of every keyframe environment (`day_to_night.md`).

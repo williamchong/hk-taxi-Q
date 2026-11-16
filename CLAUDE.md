@@ -105,10 +105,9 @@ Common emoji for this project:
   the build, so this is enforced, not advisory.
 - Generated assets go to `game/assets/generated/` and are **gitignored** — they are build output.
 - **Rationale for a `.tres`, `.tscn`, `project.godot` or `export_presets.cfg` goes in prose beside
-  the file, never in it** (`Q119`): a resource's in a sidecar (`handling.md` beside
-  `handling.tres`), the config files' in `docs/ARCHITECTURE.md`. Godot's writer drops comments and
-  default values, so the files are committed in the writer's own form and an editor save is a
-  no-op. `check.sh` refuses a `;` line in a resource and requires the sidecar.
+  the file, never in it** (`Q119`): a resource's in a sidecar (`tyre.md` beside `tyre.tres`), the
+  config files' in `docs/ARCHITECTURE.md`. Godot's writer drops comments and default values, so the
+  files are committed in the writer's own form and an editor save is a no-op. `check.sh` refuses a `;` line in a resource and requires the sidecar.
   ⚠️ A headless `--import` re-tabs the tracked `game/assets/authored/greybox_wanchai.json`
   (`Q115`): `git status` after `check.sh`, and `git checkout` it.
 - Hand-authored assets go to `game/assets/authored/` and **are** committed.
@@ -133,8 +132,9 @@ Common emoji for this project:
   the import, the GDScript warnings sweep and the verify tools. **Do not run those by hand
   and read the output** — Godot exits `0` even when a script fails to parse, so only the script's
   exit code means anything. See `docs/ARCHITECTURE.md` "Checks".
-- Update `docs/PROGRESS.md` — task status, metrics, risks, and the questions index.
-- Record any new decision, or any question that closes, in `docs/DECISIONS.md`, keyed by its ID.
+- Update `docs/PROGRESS.md` — task status, metrics, risks, and the open questions.
+- Record any new decision, or any question that closes, in `docs/DECISIONS.md`, keyed by its ID —
+  a `**Status.**` line and a few lines: the decision, the reason, the deciding number. No narrative.
 - **Bundle size is measured from a PCK, never summed from source files.** That rule has been wrong
   in both directions once each.
 

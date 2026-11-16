@@ -14,97 +14,51 @@ paths:
 
 # Lamp posts — before marking work done
 
-Moved verbatim from the root `CLAUDE.md`, which keeps the trigger and points here.
+The stage grades itself: every failure renders as a well-drawn lamp post or as nothing.
 
-- **`pipeline/lamps.py`, the `lamps` config block, or any lamp-post change: paste `lamps.json`'s two
-  partitions, `min_kerb_clearance_m`, `shift_m` (with its `n`), `lantern_overhang_m`,
-  `lanterns_past_centreline`, `spacing_surveyed_m` vs `spacing_drawn_m`, `gaps_over_report_m` and
-  `facing_away`, before and after — and A/B render one street at a fixed camera.** There is no
-  separate grader and there should not be: the stage grades itself, because every way this breaks
-  renders as a perfectly drawn lamp post or as nothing.
-  🔴 **`min_kerb_clearance_m` is the invariant the user asked for — no column stands in the road —
-  and it comes from TWO refusals, not from `max_shift_m`.** `_register` clears a column's own host
-  kerb; a second pass re-snaps the *placed* point against every edge and refuses it where 1.6x
-  ribbons overlap. Deleting that pass leaves both partitions closing, `facing_away` at 0 and
-  `check.sh` green, with columns standing in junction mouths. It is **not** a tautology: a foot
-  reconstructed from `offset_m` rather than read off the polyline drives it negative (`signs.py`'s
-  recorded 10.6 m defect). ⚠️ **Do not "fix" it by iterating the push** — measured on the SIGNS
-  and cited as precedent, not measured here: 9.7% plateau, worst shift 5.52 → 16.77 m (`Q78`), where
-  this layer's own `shift_m` max is 6.7329. The lamps sweep was never run and the argument is
-  borrowed; say so rather than quoting another layer's numbers as this one's.
-  🔴 **There must be NO `arms_against_kerb` counter.** The arm direction is derived from the kerb
-  side, so such a counter reads 0 by construction — `Q72`'s tautology, which certified a whole
-  region's signs as correct while every one faced the wrong way. `lantern_overhang_m` and
-  `lanterns_past_centreline` are what ship, and the second is reachable by raising `arm_reach_m`,
-  which is the test a counter here has to pass. The facing itself **cannot** be graded against
-  anything published (`Q62`) — the evidence is an A/B render at one fixed camera, shot twice and
-  `cmp`'d.
-  🔴 **The prism ring is NOT reversed here, and `signs._draw_pole` reverses its own, as the removed
-  `signals._draw_post` did.** Both carry a paragraph calling the reversal "the whole correctness of this
-  function" and both are right about their own frame; `lamps._strut` builds an explicit one with
-  `u x v == axis`, because a bracket arm is not vertical. Inheriting their fix inverted **25,116 of
-  35,880** triangles. Do not "restore consistency".
-  ⚠️ **`shift_m` is recorded over refusals as well as keeps, and `n` exceeding `drawn` is how you
-  tell** (`Q58`'s trap); `Q78`'s outward-only clamp applies here and deliberately **not** in
-  `railings.py` — a fence is a run, a lamp post is not.
-  ⚠️ **A widening change is a lamp-position change**: `surface.floor_default_m` moves the drawn kerb and
-  therefore moves every column, silently and plausibly.
-  ⚠️ **The spacing pair is this layer's own failure mode and no other layer here has it** — a lamp
-  row's regularity *is* its content, so a refusal is a hole where a missing sign is invisible. Quote
-  both distributions; the *difference* is the finding.
-  ⚠️ **The colour is in `materials:` and answers to `Q33`** — `signs.colours`' exemption does not
-  transfer, because a lamp post is not a printed specification and is one colour. ⚠️ **A lamps change
-  is also a shader change, and its shader is shared with the signs** — `check.sh`
-  exits 0 on a shader that fails to compile, so render and `grep -i "shader error"`, and look at
-  both layers. 🔴 **The lantern is lit AT NIGHT ONLY** (`Q160`, the user's
-  instruction, reversing `Q82`): `lantern_glow` is multiplied by the rig's `night_lights`, the ETL
-  marks the housing's luminous faces with `COLOR_0` alpha 0 (`library_lit_vertices`, 20 a kind), and
-  `lamp_pools.tres` throws the pool on the road. Do not raise `sheeting_glow` to "make the lamps
-  read" — that lights the whole column, at noon. A lamps change now owes a frame at
-  `--time-of-day=1` beside the daylight one.
-  ⚠️ **`verify_lamps.gd`'s upright bar grades the IMPORTED mesh, and the two used to differ.** Godot
-  quantises imported vertex positions over each mesh's **own AABB** — 0.025 m across `lamps.glb`'s
-  1,646 m, against a 0.06 m bracket arm — until `Q82` turned compression off project-wide, at
-  **+2.002%** of PCK and **0** extra draw calls. 🔴 **It
-  is `[importer_defaults]` in `project.godot` and `check.sh`'s `settings` step pins its value**,
-  because `game/assets/generated/` is gitignored and a per-asset `.import` does not survive a clone.
-  An editor save drops it silently and every generated mesh then imports geometry the ETL did not
-  build. 🔴 **And `[importer_defaults]` seeds only a NEW `.import`** — changing the key does not
-  migrate assets that already have a sidecar, and `check.sh` cannot see a stale one. Delete the
-  sidecars and re-import, then re-measure. Do not "tighten" the bar toward a measured value either — it is a lay-flat detector.
-  Numbers in `Q82`.
-- 🔴 **No column through a deck or a roof** (`Q199`, the user's report 2026-11-11): paste `on_deck`,
-  `shortened` and `under_structure` both regions, before and after, and shoot the Marsh Road ramp —
-  `--spawn-at=734,12.3,407 --spawn-facing=743,12,457 --fares=off --traffic=off --trams=off`, day and
-  `--time-of-day=1`. The layer publishes no elevation, so **a deck's lamp is an inference**: surveyed
-  inside an elevated edge's drawn ribbon (or within `outset_m` of its kerb), it is hosted to the deck
-  and stands at the deck's height. ⚠️ **A deck column takes `deck_outset_m`, pulled in as well as
-  pushed out — the one inward move here, and not `Q78`'s case**: the slab ends just past its kerb,
-  and at `outset_m` 53 of 81 deck columns stood on air. ⚠️ Tunnels are off-grade and are NOT decks
-  (`elevation_level > 0` only). Everything else with a drawn face between `overhead_clear_m` and the
-  column's top over its foot (`trees.shipped_faces`, the trees' instrument) is stood SHORTER, its
-  top `soffit_gap_m` under the lowest face (the user's call: a hole in the row is worse), and
-  refused only under `min_column_height_m` — never pushed again. ⚠️ **Shorter is the STAND's `Y`
-  scale, not a second mesh**: reach, radius and the post collider's plan stay the kind's, the arm's
-  drop and the lantern's depth shrink with it, and `lamp_pools.gd` takes the pool's drop off the
-  stood lantern so it still reaches the road. Shoot a short row too —
-  `city_preview.tscn --camera=1535,9,400 --look=1575,7,450`, day and night. ⚠️ So `lamps` now runs after `carve`, and a `materials:` ground
-  colour change moves `under_structure` as it moves the trees'. ⚠️ Open: a handful of deck columns
-  stand at the slab's edge with the foot just off it (the ribbon's kerb is past the drawn slab
-  there); `min_kerb_clearance_m` fell to 0.04 / 0.10 because a deck column stands 0.1 m out by design.
-- 🔴 **A THIRD refusal since `Q237`: the placed foot against the asphalt itself**
-  (`drawnroad.drawn_carriageway`, R less its islands — the trees' instrument). The two ribbon tests
-  ask a kerb station, and inside a junction that is a share (`Q57`): two columns in the PERCIVAL
-  STREET mouth read 0.48 m and 2.33 m past a kerb while standing 2.3 m and 3.4 m in the road. It is
-  counted in `in_carriageway`, with `in_carriageway_area` (16 / 3) the part only the polygon caught —
-  paste both. ⚠️ A deck's column is exempt, and an island is not road. ⚠️ Anything that moves R or
-  its islands (`region`) now moves which columns stand.
-- **`prop_cells.tres` (`layers`, `cell_m`, `range_m`) or `city_layer._batches`: the throttle route
-  and `--spawn-fare=wan_chai/f_045`, overlays, HUD and fares off, `prims` and `draws` before and
-  after, and the five fixed cameras in `Q135` `P3-67` shot twice a side** (`P3-67`). ⚠️ The lamps are a
-  `MultiMesh` per 300 m cell since then, hidden past 400 m measured to the CELL's centre, not the
-  lamp. ⚠️ `prims` baselines shift with which capture macOS stalled; compare runs whose `pos` column
-  matches. 🚫 The signs do not join the list: 23 library meshes a cell, +65 to +94 draws.
-- **The columns collide** (`Q191`): `region.tscn`'s `posts` stands a cylinder read off the library
-  mesh's foot, so a kind must stay drawn standing on its origin (`y` = 0) or it stands nothing and
-  `verify_lamps`' `check_posts` fails. Never a collider in `lamps.glb` itself.
+- **`pipeline/lamps.py`, the `lamps` block, any lamp change**: `tools/battery.py lamps --region
+  <r> --before <root>`, both regions. From `lamps.json` compare the two partitions,
+  `min_kerb_clearance_m`, `shift_m` (with `n`), `lantern_overhang_m`, `lanterns_past_centreline`,
+  `spacing_surveyed_m` against `spacing_drawn_m`, `gaps_over_report_m`, `facing_away`, `on_deck`,
+  `shortened`, `under_structure`, `in_carriageway`, `in_carriageway_area`. A/B render one street
+  at a fixed camera, twice a side, by day and at `--time-of-day=1` (`Q62`: the facing cannot be
+  graded against anything published).
+- **No column in the road** is `min_kerb_clearance_m`, resting on three refusals: `_register`
+  clears the host kerb; a second pass re-snaps the placed point against every edge (delete it and
+  every counter stays green with columns in junction mouths); and the foot is tested against the
+  asphalt itself (`drawnroad.drawn_carriageway`, `Q237`), because a kerb station inside a junction
+  is a share (`Q57`). Deck columns are exempt. A change to R or its islands moves which columns
+  stand. Do not iterate the push (`Q78`, measured on the signs: worst shift 5.52 → 16.77 m).
+- No `arms_against_kerb` counter: the arm is derived from the kerb side, so it reads 0 by
+  construction (`Q72`). `lanterns_past_centreline` is reachable by raising `arm_reach_m`.
+- `lamps._strut`'s prism ring is not reversed, unlike `signs._draw_pole`'s: a bracket arm is not
+  vertical. Copying the reversal inverted 25,116 of 35,880 triangles.
+- `shift_m` is recorded over refusals too (`n` > `drawn`, `Q58`). The outward-only clamp (`Q78`)
+  applies here and not in `railings.py`.
+- A widening moves the drawn kerb and every column. Quote both spacing distributions: a refusal
+  is a hole in a row.
+- **Decks and roofs** (`Q199`): no elevation is published, so a lamp inside an elevated edge's
+  drawn ribbon (or within `outset_m` of its kerb) is hosted to the deck and takes `deck_outset_m`,
+  pulled in as well as pushed out (at `outset_m` 53 of 81 stood on air). Tunnels are not decks.
+  Under any other drawn face between `overhead_clear_m` and its top (`trees.shipped_faces`), a
+  column is stood shorter (`soffit_gap_m`) and refused only under `min_column_height_m`. Shorter
+  is the stand's `Y` scale, not a second mesh. `lamps` runs after `carve`, and a `materials:`
+  ground colour moves `under_structure`. Frames: `--spawn-at=734,12.3,407
+  --spawn-facing=743,12,457 --fares=off --traffic=off --trams=off`, and `city_preview.tscn
+  --camera=1535,9,400 --look=1575,7,450`. Open: a few deck columns stand just off the slab.
+- **Light** (`Q160`): the lantern is lit at night only — `lantern_glow` times the rig's
+  `night_lights`, on faces the ETL marks with `COLOR_0` alpha 0 (`library_lit_vertices`);
+  `lamp_pools.tres` throws the pool. Do not raise `sheeting_glow`: it lights the whole column at
+  noon.
+- The colour is in `materials:` (`Q33`). The shader is shared with the signs: render both and
+  `grep -i "shader error"`.
+- **Import** (`Q82`): mesh compression is off in `project.godot`'s `[importer_defaults]`, pinned by
+  `check.sh`'s `settings` step. It seeds only a new `.import`: delete the sidecars and re-import
+  after changing it. `verify_lamps.gd`'s upright bar is a lay-flat detector; do not tighten it.
+- **`prop_cells.tres` (`layers`, `cell_m`, `range_m`), `city_layer._batches`** (`P3-67`): the
+  throttle route and `--spawn-fare=wan_chai/f_045` with overlays, HUD and fares off; `prims` and
+  `draws` before and after, from runs whose `pos` column matches; the five fixed cameras in
+  `Q135`. Lamps are a `MultiMesh` per cell, hidden by distance to the cell's centre. The signs do
+  not join the list (+65 to +94 draws).
+- **Colliders** (`Q191`): `region.tscn`'s `posts` stands a cylinder off the library mesh's foot, so
+  a kind must be drawn standing on its origin (`check_posts`). Never a collider in `lamps.glb`.

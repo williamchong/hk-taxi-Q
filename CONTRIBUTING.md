@@ -34,59 +34,43 @@ governed by (it is not ours to license).
 ## Before you open a PR
 
 ```bash
-# Python
-ruff check . && ruff format --check .      # from the repo root, not etl/ — the root
-                                           # ruff.toml extends the ETL rules to tools/*.py
-cd etl && pytest && cd ..                   # `pytest -n auto` runs it across your cores
+# Python — ruff from the repo root, not etl/: the root ruff.toml extends the ETL rules to tools/*.py
+.venv/bin/ruff check . && .venv/bin/ruff format --check .
+(cd etl && ../.venv/bin/pytest)             # `pytest -n auto` runs it across your cores
 
 # Godot — the only route that fails on error; the target scene must also run
 tools/check.sh
 ```
 
-⚠️ **Git LFS is required, before the clone.** The authored binaries are LFS objects (`P5-27`); a
-clone without `git-lfs` holds pointer files; `tools/check.sh`'s import logs FreeType failing on the
-font and its first `FAIL` is `verify_vehicle`'s *no node in taxi.tscn runs vehicle_lamps.gd*, because
-the taxi body is a pointer and the mesh never instances. `brew install git-lfs && git lfs install`, then `git lfs pull` in
-a clone already made.
+- **Git LFS is required, before the clone.** The authored binaries are LFS objects (`P5-27`); a
+  clone without `git-lfs` holds pointer files and `tools/check.sh` fails on them.
+  `brew install git-lfs && git lfs install`, then `git lfs pull` in a clone already made.
+- **Do not run the Godot steps by hand and read the output.** Godot exits `0` even when a script
+  fails to parse, so only `tools/check.sh`'s exit code means anything. `VERIFY_GENERATED=0` skips
+  the verify tools that need a built city; CI runs it that way.
+- **A headless import re-tabs the tracked `game/assets/authored/greybox_wanchai.json`** (`Q115`).
+  Run `git status` after `check.sh` and `git checkout` that file.
+- **`pytest` passes more on your machine than in CI, and the difference is `etl/sources/`.** That
+  tree is gitignored and CI never fetches, so a test that reaches a fetched artefact must skip
+  itself. The trap is a test that reaches one through a stage without meaning to (`Q19`). Run the
+  CI condition before you push; it should pass as a plain run does, bar the tests that skip:
 
-⚠️ **Do not run the Godot steps by hand and read the output.** Godot exits `0` even when a script
-fails to parse, so only `tools/check.sh`'s exit code means anything. This has produced a green check
-that checked nothing more than once.
+  ```bash
+  cd etl && ../.venv/bin/python -c "
+  import pathlib, sys, tempfile
+  import pytest
+  import pipeline.fetch as fetch
+  fetch.SOURCES_ROOT = pathlib.Path(tempfile.mkdtemp())
+  sys.exit(pytest.main(['-q']))
+  "
+  ```
 
-⚠️ **`pytest` passes more on your machine than it does in CI, and the difference is `etl/sources/`.**
-That tree is gitignored and `.github/workflows/ci.yml` deliberately never fetches, so a test that
-reaches a fetched artefact passes for you and fails for everyone else. The convention is that such a
-test skips itself — `requires a fetched sheet index` — and the trap is a test that reaches one
-*through a stage* without meaning to. Run the CI condition before you push:
-
-```bash
-cd etl && python -c "
-import pathlib, sys, tempfile
-import pytest
-import pipeline.fetch as fetch
-fetch.SOURCES_ROOT = pathlib.Path(tempfile.mkdtemp())
-sys.exit(pytest.main(['-q']))
-"
-```
-
-It should pass exactly as a plain run does, bar the handful that skip themselves; a **failure** there
-is a test coupled to your own build. `carve.build_region` took a whole `Placement` for its `out_dir`
-alone, so refusing to carve an already-carved bundle needed a fetched sheet index — which left CI red
-for eight runs, and nobody running the suite locally could see it (`docs/DECISIONS.md` `Q19`).
-
-If you changed the ETL, the pipeline must run end to end on the Wan Chai config.
-
-**Then there are the graders, and `CLAUDE.md`'s "Before marking work done" is the index** — a table
-of triggers, each naming the `.claude/rules/<name>.md` that says which file you touched, which tool
-that owes and the numbers to paste. Read it there;
-a second copy of it here goes stale against it.
-
-What the list is *for* is not obvious from any single row: **`tools/check.sh` cannot see any of it.**
-A yellow line on the wrong kerb, a fence standing in the road, a sign face drawn in negative, an
-arrow turned 180° — every one of them renders perfectly, and the only thing that catches them is a
-measurement pasted into a doc where the next person can see it go stale. That is why the graders exit
-0 whatever they find: they **grade**, they do not gate, and a widening gap is a finding to go and
-look at rather than a bar to retune against.
+- **ETL changes:** the pipeline must run end to end on the Wan Chai config.
+- **Graders:** `tools/check.sh` cannot see a yellow line on the wrong kerb or a fence standing in
+  the road; a measurement does. `CLAUDE.md`'s "Before marking work done" is the index: a table of
+  triggers, each naming the `.claude/rules/<name>.md` that says which tool a change owes.
+  `tools/battery.py --list` carries the same triggers with their commands. Its exit code says every
+  item ran, not that a number held.
 
 ---
 
@@ -102,12 +86,12 @@ look at rather than a bar to retune against.
 - **Comments state what is true, not what changed.** A comment carries the claim and the refusal —
   *"never hold these apart"* — not the edit that produced it: *"this used to be two maps"*. Where the
   reasoning is a decision, cite its ID and let [`docs/DECISIONS.md`](docs/DECISIONS.md) hold the
-  evidence, keeping one number locally so the refusal sticks. ⚠️ **A `schema_version` history is the
+  evidence, keeping one number locally so the refusal sticks. **A `schema_version` history is the
   exception**: a bump means a reader would be *wrong* to keep its old interpretation (`CLAUDE.md` hard
   rule 5), which cannot be stated without naming the old one.
 - **Generated assets are build output.** Never commit anything under `game/assets/generated/`,
   `etl/out/` or `etl/sources/`.
-- 🔴 **Rationale for a resource goes in its sidecar, never in the file.** Godot rewrites every
+- **Rationale for a resource goes in its sidecar, never in the file.** Godot rewrites every
   `.tres`, `.tscn`, `project.godot` and `export_presets.cfg` on save and drops comments, so each
   resource's argument lives in `<name>.md` beside it and the config files' in
   [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md). `tools/check.sh` refuses a `;` line in a resource

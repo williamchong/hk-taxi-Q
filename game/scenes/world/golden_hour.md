@@ -1,88 +1,26 @@
 # golden_hour.tscn
 
-Rationale for `game/scenes/world/golden_hour.tscn`. Each heading is the line the block sat above; `Overview` is the
-file as a whole. Why it lives here and not in the file: `Q119`.
+The alternative rig: a low warm sun (30°) over `tuning/golden_hour.tres`. Same shape as
+`clean_daylight.tscn`, which is the one the game and the dev scenes instance. No `cycle`, and
+`phone_scale_3d` is unset (1.0). `exposure_anchor`, `phone_shadow_max_distance_m` and `CelOutline`
+are as in `clean_daylight.md`; keep the two rigs alike.
 
-## Overview
+## `Sun`
 
-The one lighting setup, per docs/ART_DESIGN.md "Lighting": golden hour by
-default. A low warm sun flatters flat shading, separates building faces
-without any texture work, and gives long readable shadows.
+`directional_shadow_mode = 1` is `SHADOW_PARALLEL_2_SPLITS` (the scene stores the bare integer).
+Godot's default is four cascades.
 
-Instanced by every scene that needs to be looked at, rather than each one
-carrying its own Environment — two dev scenes lit differently means the city
-gets judged twice under two looks, neither of them the shipping one.
+| Cascades | Primitives at t = 1 / 3 / 6 s from the HKCEC spawn |
+|---|---|
+| 4 (default) | 244,888 / 215,071 / 263,077 |
+| 2 | 159,739 / 132,845 / 155,032 (−35%) |
+| 1 | 110,644 / 93,206 / 112,142 (−55%), unusable |
 
-The Environment is a .tres so the values stay tuning data (CLAUDE.md rule 4).
+One cascade has an artefact at every `max_distance`: at 150 m shadows fade out while the camera
+draws to 400 m; at 250 m the HKCEC shadow bands on the map's own texels; at 400 m it disappears
+because the caster falls outside the ortho volume. `directional_shadow_fade_start` is a fraction
+of the distance (0.8), so shortening it moves the fade band too. Two cascades removes all three.
 
-## `[node name="Sun" type="DirectionalLight3D" parent="."]`
-
-`directional_shadow_mode = 1` is SHADOW_PARALLEL_2_SPLITS. A .tscn stores the
-enum as a bare integer, so the name has to live here or the value is
-unreadable. It was unset, and Godot's default is 2 — four PSSM cascades.
-
-Per-second primitives on a `drive.sh` run from the HKCEC spawn:
-
-            t=1      t=3      t=6
-  4 casc  244,888  215,071  263,077   <- the default this replaces
-  2 casc  159,739  132,845  155,032   -35%
-  1 casc  110,644   93,206  112,142   -55%, and unusable, see below
-
-⚠️ One cascade is what ART_DESIGN.md "Lighting" specifies for the desktop
-tier, and it was tried first. It has a distinct artefact at every distance:
-
-  150 m  shadows fade out 120-150 m while the camera draws to 400 m, so the
-         far half of a long street is flatly lit with a visible cutoff
-  250 m  the HKCEC shadow across Expo Drive East comes out visibly banded —
-         the shadow map's own texels through the filter, at 0.092 m each
-  400 m  the HKCEC shadow disappears entirely; the caster is behind the
-         camera and falls outside the ortho volume's near plane
-
-The distance ones are one artefact, not two: `directional_shadow_fade_start`
-is a *fraction* of max_distance (0.8), so shortening the distance moves the
-fade band with it. Two cascades gives a fine near split and a coarse far one,
-which is what removes all three at once.
-
-400 m rather than the old 600 because it is exactly the chase camera's far
-plane in city_drive.tscn and the streamer's unload distance — past it nothing
-is drawn, so shadow reach and draw distance now end together. Distance costs
-nothing either way: 150, 250, 400 and 600 measure bit-identically.
-
-shadow_bias, shadow_normal_bias, pancake_size, blur and fade_start are left at
-engine defaults — peter-panning was the artefact to expect, since Godot scales
-directional bias by cascade extent, and a matched pair with the car in open
-sun shows its shadow still attached. Shots in build/driver/. See PROGRESS.md.
-
-## `phone_shadow_max_distance_m = 100.0`
-
-On a phone the sun's shadows reach 100 m, not the `Sun`'s 400 (`P2-6`, the user's pick
-2026-11-14); `LightingRig.fit_shadow` writes it at `_ready`, and nowhere else is touched. Both
-cascades stay. The shadow map is one size whatever it covers, so the first cascade's 10% is 10 m
-of ground, not 40: on the desktop's 4096 map the near shadows came out crisper than at 400 m, and
-the 2048 map a phone uses (Godot's `.mobile` default) needs that more. Measured at 4a41de7c on the
-desktop, traffic on: −26 / −24 / −29 draws and −17% / −17% / −16% primitives at the start line,
-Hennessy Road and Times Square. One cascade at 100 m saved more primitives (−33% to −37%) for
-fewer draws (−18 to −20), and the user took the draws and the sharper look.
-
-⚠️ The cost is `golden_hour.md`'s 150 m artefact at 100: `directional_shadow_fade_start` is 0.8 of
-the reach, so shadows fade out 80–100 m ahead and a long sunlit street is flat past that. Graded
-by eye on the handset, not here. Both rigs carry it, for the reason the `Sun` block gives.
-
-## `[node name="CelOutline" type="MeshInstance3D" parent="."]`
-
-The ink line of the cel look (`P3-64`, `Q158`): a 2 x 2 quad that `cel_outline.gdshader` puts
-straight onto the screen, numbers in `tuning/cel_outline.tres`. In the rig because the rig is what
-every scene worth looking at instances, so one switch inks all of them. **`visible` is the switch**:
-shown since 2026-10-07, the user's pick; hidden restores the unlined look. `extra_cull_margin` keeps the quad from being
-frustum-culled at its true position (it has none), and `cast_shadow = 0` keeps it out of the shadow
-pass. Both rigs carry it alike, for the reason the `Sun` block gives.
-
-## `phone_scale_3d` — unset, so 1.0
-
-The share of the window the 3D scene is drawn at on a phone (`P2-6`); `LightingRig.fit_scale`
-writes the viewport's `scaling_3d_scale` at `_ready` on a phone only, and the HUD keeps the
-window's resolution. **Shipped at 1.0, which writes nothing** — the dial exists so a handset that
-runs out of fill rate can be answered from data, and no handset has been measured yet. Godot's
-writer drops a value at its default, so the scene file does not name it. Set it under 1 only
-with a `--perf-log` run on the device before and after, and a frame to judge the softening by:
-0.75 is 56% of the pixels.
+`directional_shadow_max_distance = 400.0` is the chase camera's far plane and the streamer's
+unload distance. Distance itself costs nothing (150 to 600 measured identical). Bias, pancake,
+blur and fade are engine defaults.

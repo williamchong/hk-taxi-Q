@@ -1,127 +1,46 @@
 # road_markings.tres
 
-Rationale for `game/tuning/road_markings.tres`. Each heading is the line the block sat above; `Overview` is the
-file as a whole. Why it lives here and not in the file: `Q119`.
+The road surface's own shader paint (`P3-12`): today only the kerbside double yellows.
+`tools/generated_scene_import.gd` maps the ETL's `road_markings` material name to this file. One
+resource for the whole region.
 
-## Overview
+## Switches
 
-The road's markings — lane lines, centre lines, kerbside yellows (`P3-12`).
+- `draw_lane_lines = 0.0`, `draw_centre_line = 0.0` (`Q132`, the user's call): where TD surveys no
+  line none is drawn. `roadmarks.py` draws TD's `RM1101`–`RM1105` and `RM1002`/`RM1003` as
+  geometry. Do not switch back on to fill a silent street: those are surveyed streets with no
+  centre line, and an invented line runs through hatching, zigzags and yellow boxes.
+- `draw_pair_join = 0.0` (`Q118`, `Q125`): `roadmarks.py` draws the surveyed `RM1001` double line
+  and the inferred join as geometry. On here it would be a second line at 28 cm beside the
+  survey's 15, and a shader cannot yield for part of an edge.
+- `draw_bus_lane = 0.0` (`Q192`, the user's call): `BUS_ONLY_LANE` says a bus lane exists on the
+  route, not where its line runs; on Hennessy Road it painted a 0.46 m bar 1.7 m inside the
+  traffic lane. `roadmarks.py` draws TD's `RM1006`/`RM1007`. The router still reads the flag off
+  the graph.
+- `draw_double_yellow = 1.0`: the one marking with no source behind it. Near universal in urban
+  Wan Chai, still an invention. The first thing to turn off if a recognition round reports
+  markings as wrong.
 
-`tools/generated_scene_import.gd` maps the ETL's `road_markings` material name
-to this path and only this path, so this file is the switch: delete the entry
-there and the surface falls straight back to the `BaseMaterial3D` it imported
-with before `P3-12`, with no rebuild.
+`line_width`, `centre_width`, `centre_gap`, `bus_width`, `dash_length_m` and `dash_gap_m` reach
+nothing while their switches are 0. The lane coordinate, `lanes_painted`, `centre_at` and the
+`bus_lane` bit stay in the codec for a region that switches them on.
 
-Here rather than as shader defaults because CLAUDE.md hard rule 4 makes tuning
-data, not constants — and beside `golden_hour.tres`, because the low sun these
-are judged under is tuned in the same directory. Loaded as **one** resource for
-the whole region: the road surface is a single primitive.
+## Values
 
-⚠️ **The widths are in lane widths, not metres, and they are wider than life.**
-A truthful line is under a pixel at the distance the player is actually looking,
-and the honest version simply vanished. The pitch values are the opposite case:
-V is metres, so `dash_length_m` and `dash_gap_m` are the real thing and want no
-fudge.
-
-🔴 **A U-lane is NOT `lane_width_m`, and this block said it was.** U is
-normalised to the ribbon *as drawn*, so one U-lane is `2 * half_width / lanes`
-— **5.12 m** across this region (p10 4.16, p90 5.12) against the 3.20 m
-`lane_width_m` authors. This used to read "0.031 is a real 10 cm line at this
-region's 3.2 m lane … it ships at 0.05 — a 16 cm line", which understated every
-width here by the 1.6x widening. `line_width` 0.05 is a **26 cm** line;
-`centre_width` 0.055 is **28 cm**. `surface.py::_u_metres` is the same
-correction on the ETL side, and `P3-12` records what confusing the two cost.
-
-⚠️ **The centre line is TD's DOUBLE white line and its two numbers are the
-sheet's.** `CT174/51-5(1)F` gives RM1001 DOUBLE LINES `LINE WIDTH = 150,
-LINES SPACING = 100`, and LINES SPACING is the **clear gap, not a pitch** —
-`centre_gap` is that gap, held at exactly the sheet's 100/150 of `centre_width` (0.0367) so
-the shape stays TD's whatever legibility does to the scale. Both are 1.88x life
-size, which is `line_width`'s exaggeration and not a second decision.
-
-🔴 **The centre line between two opposed flows is no longer drawn here, and
-`draw_pair_join` stays 0.0** (`Q118`, then `Q125`). TD publishes the real thing —
-RM1001 DOUBLE LINES, **5,745 m of it at grade in this region** — so `roadmarks.py`
-draws that as geometry, and since `Q125` it also draws the *inferred* join, as the
-same mark, along the stretches no surveyed line covers. ⚠️ **Do not switch
-`draw_pair_join` back on**: it would be a second line beside the first, at **28 cm**
-against the survey's 15, and a shader cannot yield for part of an edge — 24 of the
-region's 95 opposed pair **ends** — the population this codec field carries — are only *partly*
-surveyed. `centre_at` stays in the codec
-for a region whose survey is thinner.
-
-🔴 **`draw_lane_lines` and `draw_centre_line` are both 0.0 since `P3-34` (`Q132`), on
-the user's call: TD's codes are the truth, and where TD surveys no line none is
-drawn.** `roadmarks.py` draws `RM1101`/`RM1102` lane lines, `RM1103` centre lines,
-`RM1104`/`RM1105` warning lines and the `RM1002`/`RM1003` broken double whites as
-geometry, at the sheet's own widths and modules. What the two switches painted was
-`P3-12`'s invention: a double continuous line — an instruction, *no overtaking* — down
-every two-way ribbon with an even lane count, where TD surveys a **broken** line on
-80-90% of the divider it surveys at all; and lane dashes cut from `lanes_painted`,
-which followed the territory's rails and so zigzagged with them (`e124`).
-⚠️ **Do not switch either back on to fill a street with no lines**: measured, the
-silent streets are surveyed streets with no centre line — JARDINE'S CRESCENT carries
-its kerbside yellows and nothing else — and where the middle *is* occupied it is by
-hatching, zigzags or a yellow box that an invented line would run through.
-⚠️ `line_width`, `centre_width`, `centre_gap`, `dash_length_m` and `dash_gap_m` now
-reach only a region that switches these back on; the lane coordinate, `lanes_painted`
-and `centre_at` stay in the codec for that region.
-
-🔴 **`draw_bus_lane` is 0.0 since 2026-11-09 (`Q192`), on the user's call, for the
-same reason as the two above.** It painted a `bus_width` line at `U = 1` of every edge
-whose route `BUS_ONLY_LANE` flags — a flag that says a bus lane exists along the route,
-not where its line runs. U-lanes are the drawn ribbon over `lanes`, tram lane included,
-so on HENNESSY ROAD (edge 237, 10.3 m drawn, `lanes` 2) it was a **0.46 m** bar 1.7 m
-inside the traffic lane, beside TD's bus-stop box and with no surveyed bus-lane line
-within 282 m. `roadmarks.py` now draws TD's own `RM1006` BUS LANE and `RM1007` BUS
-LANE CONTINUATION at the sheet's 250 mm. ⚠️ `bus_width` reaches nothing while this is
-0.0, and the `bus_lane` bit stays in the codec — the router reads the flag off the graph.
-
-⚠️ **`fade_m` is not only cosmetic, and it is the one value here that is priced
-rather than chosen.** A junction cap overlaps its arms rather than abutting
-them — 6,051 m² of 52,985 m² of cap area, 210 of 1,398 trimmed ends — and that
-overlap is invisible today only because cap and carriageway are the same colour
-in one material. Markings drawn under it read as a patch. So the fade has to
-reach at least as far back as the cap does, and that was measured per arm end
-across the region rather than guessed:
-
-  overlap depth   p50 0.00   p90 1.17   p95 2.36   p99 3.62   worst 4.21 m
-  overlapped at all: 203 of 1,398 ends (14.5%), reproducing the published 210
-
-**6 m clears every end with 42% margin.** It shipped at 9 for one round, from
-no measurement at all, and the cost of that is the other direction of the same
-dial: an edge shorter than twice the fade never carries a full marking, and the
-region's edges are short — p10 is 4.0 m, p25 is 12.5 m.
-
-  fade   edges with no marking at all   share of carriageway area
-  9 m    169 of 797  (21.2%)            8.7%
-  6 m    121 of 797  (15.2%)            6.0%   <- ships
-  5 m    104 of 797  (13.0%)            5.2%
-
-Going below 5 m starts eating into the measured worst case, and the overlap
-figure is a derivation from the published trims rather than the hull's own
-reach — so the margin is doing real work. Some of that 15.2% is *correct*: a
-4 m link between two junctions is a junction mouth, and real roads do not mark
-one. The real fix for the rest is a non-convex cap, which is polygon clipping
-and is not built. `Q53`.
-
-⚠️ **`draw_double_yellow` is the one marking here with no source behind it.**
-Every other line is either geometry (a lane boundary) or a published flag —
-`TRAVEL_DIRECTION`, `BUS_ONLY_LANE`. A kerbside waiting restriction is neither.
-It is near universal in urban Wan Chai, which is the argument for drawing it,
-and it is still an invention on streets `P3-9a`'s drivers know. On its own
-switch for exactly that reason: this is the first thing to turn off if a
-recognition round reports the markings as wrong rather than as missing.
-
-Judged at the `street` and `kerb` viewpoints per `ART_DESIGN.md`'s table, and
-at a junction approach — the fade is what wants looking at, and the question is
-whether the lines stop where a driver expects rather than whether they stop.
-
-## `shader_parameter/paint_night_glow = 0.6`
-
-The paint lit at night (`Q160`, the user's ask: "we should try light up the road marking"): the
-marking burns its own colour at this strength times the rig's `night_lights`, 0 by day. One value
-across `road_markings.tres`, `roadmarks.tres`, `arrows.tres` and `boxjunctions.tres`, for the
-reason their whites are one value — a line brighter than the arrow beside it is the first thing
-anyone would see. 0.6 reads as retroreflective paint under a headlamp; the first frames ran 1.5,
-which with the cyan outline was the look the user called too sci-fi.
+- Widths are in U-lanes, not metres, and wider than life: a truthful line is under a pixel at
+  driving distance. A U-lane is `2 * half_width / lanes` of the ribbon as drawn, not
+  `lane_width_m` (`surface.py::_u_metres`). The `_m` values are V, in real metres.
+- `line_colour`, `yellow_colour`: the marking white and yellow, each copied in several files
+  (`roadmarks.md` has the ledger).
+- `paint_opacity = 0.85`: asphalt showing through paint, mixed into one opaque surface.
+- `yellow_inset = 0.09`, `yellow_gap = 0.06`, `yellow_width = 0.035`: the double yellow's place
+  and shape at the kerb.
+- `centre_gap = 0.0367`: TD's RM1001 clear gap, held at 100/150 of `centre_width`
+  (`CT174/51-5(1)F`).
+- `fade_m = 6.0`, `fade_softness_m = 3.0`: markings fade out before a junction. A cap overlaps its
+  arms (worst 4.21 m, p99 3.62 m), and paint under the overlap reads as a patch, so the fade must
+  reach past it; 6 m clears every end. Longer costs short edges their markings: an edge under
+  twice the fade carries none (15.2% of edges at 6 m, 21.2% at 9 m). `Q53`.
+- `paint_night_glow = 0.6`: paint emits its own colour times the rig's `night_lights` (`Q160`).
+  One value across this file, `roadmarks.tres`, `arrows.tres` and `boxjunctions.tres`. 1.5 read
+  as sci-fi to the user.

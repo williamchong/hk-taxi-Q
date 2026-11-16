@@ -4,121 +4,99 @@ An arcade taxi game set in Hong Kong, built from Hong Kong government open geoda
 
 Real road topology from the Transport Department's Road Network. Real building massing from the
 Lands Department's 3D Visualisation Map and iB1000 topographic map. Wan Chai and Causeway Bay,
-reconstructed to the point where a Hong Kong driver can navigate it from memory — then widened,
-ramped, and tuned until it's fun to drive badly.
+reconstructed to the point where a Hong Kong driver can navigate them from memory, then tuned until
+it's fun to drive badly.
 
-> **Status:** Phases 0 and 1 complete; Phase 2 is an on-device review away from its gate (it needs a
-> handset), and Phase 3's first build is shipped and plays in a browser. One command turns the
+> **Status:** playable on desktop, in a browser and on an iPhone. One command turns the
 > government's datasets into a drivable city: building tiles, a road graph with turn restrictions,
-> a drivable road surface, fare nodes, and the markings, tram rails, railings, traffic signs and
-> lamp posts the government publishes. Live figures are in [`docs/PROGRESS.md`](docs/PROGRESS.md).
-
----
+> a road surface, fare nodes, and the markings, tram rails, railings, signs, signals, lamp posts and
+> trees the government publishes. Fares, traffic, trams, a day-to-night cycle and a start menu are
+> built. Live status is in [`docs/PROGRESS.md`](docs/PROGRESS.md).
 
 ## The idea
 
-Most city-driving games either hand-build a fictional city or drape photogrammetry over a real one.
 Hong Kong publishes its buildings as **untextured extruded footprints** and its roads as a
-**navigable graph with turn restrictions and one-way directions** — both free for commercial use.
-
-Extruded untextured footprints are, structurally, already low-poly buildings. So the art style isn't
-applied on top of the data; it's the shape the data already has. That's what makes a project this
-size tractable.
+**navigable graph with turn restrictions and one-way directions**, both free for commercial use.
+Extruded untextured footprints are already low-poly buildings, so the art style is the shape the
+data already has.
 
 The design goal is narrow and testable:
 
 > Hand the build to a Hong Kong driver, turn off the minimap and the direction arrow, and name a
 > destination. If they can drive there from memory, using the correct one-way streets, it works.
 
----
-
 ## Stack
 
 | | |
 |---|---|
-| Engine | Godot 4.7, GDScript, Jolt physics |
+| Engine | Godot 4.7, GDScript, Jolt physics, Mobile renderer |
 | Pipeline | Python 3.11+ — `pyogrio` (ships its own GDAL), `shapely`, `pyproj`, `numpy` — see `etl/pyproject.toml` |
-| Targets | iOS, Android, desktop/Steam; web export for a demo slice |
+| Targets | iOS, Android, desktop; web export for a demo slice |
 | Region | Wan Chai → Causeway Bay, ~1.5 km² |
-
----
 
 ## Layout
 
 ```
 hk-taxi-Q/
 ├── CLAUDE.md      # agent instructions — locked decisions and hard rules
-├── docs/          # architecture, design, plan, progress
+├── docs/          # architecture, design, plan, progress, decisions
 ├── etl/           # Python: HK open geodata → game assets (build time)
 ├── game/          # Godot project
-└── tools/         # dev, check and export scripts
+├── tools/         # check, export, sync and grading scripts
+└── fastlane/      # App Store listing text
 ```
 
 The ETL runs **at build time only**. The game ships static assets and makes no network calls.
 
----
-
 ## Getting started
 
-You need [Godot 4.7](https://godotengine.org/) — on macOS, `brew install --cask godot` — **and
-[Git LFS](https://git-lfs.com/) before you clone** (`brew install git-lfs && git lfs install`): the
-authored `.glb`, `.png` and `.ttf` under `game/assets/authored/` are LFS objects, and a clone made
-without it holds pointer files that `tools/check.sh` fails on at its first asset check. A clone
-already made without it is repaired by `git lfs install && git lfs pull`. You also need
-Python 3.11+.
+You need [Godot 4.7](https://godotengine.org/) (`brew install --cask godot` on macOS), Python 3.11+,
+and [Git LFS](https://git-lfs.com/) **before you clone** (`brew install git-lfs && git lfs install`).
+The authored `.glb`, `.png` and `.ttf` files are LFS objects; a clone made without it holds pointer
+files and `tools/check.sh` fails. Repair one with `git lfs install && git lfs pull`.
 
-**Build the city.** The first run downloads and caches the source data; after that a region
-rebuilds in well under a minute. Output is a gitignored build artefact, so a fresh clone has none
-of it until you do this:
+**Build the city.** The first run downloads and caches the source data (a few hundred MB a region). The
+output is gitignored, so a fresh clone has no city until you do this:
 
 ```bash
 python3 -m venv .venv && .venv/bin/pip install -e "etl/[dev]"
 
-cd etl && ../.venv/bin/python -m pipeline --region wan_chai && cd ..
-tools/sync_generated.sh          # copies exactly what city.json names
+cd etl
+../.venv/bin/python -m pipeline --region wan_chai --jobs 4
+../.venv/bin/python -m pipeline --region causeway_bay --jobs 4
+../.venv/bin/python -m pipeline.join --region-a wan_chai --region-b causeway_bay
+cd ..
+tools/sync_generated.sh wan_chai causeway_bay   # copies exactly what each city.json names
 ```
 
-**Look at it.** Open the project (`open -a Godot --args --path "$PWD/game"`) and press **F6** on
-`scenes/dev/city_preview.tscn` to fly around the city, or `scenes/main.tscn` to drive it.
-**F3** cycles the debug overlay — off, then a position and frame-rate block, then the road graph's
-readout and chevrons. It starts off; see `docs/ARCHITECTURE.md` "The debug overlay".
+Wan Chai alone also works: build it and run `tools/sync_generated.sh wan_chai`. See
+[`etl/README.md`](etl/README.md).
 
-**Check it.** The ETL cannot assert engine-side facts about its own output, so headless `verify_*.gd` tools do. The import step is required, not optional — it builds the gitignored `game/.godot/`, without
-which the freshly synced `.glb` files have no import sidecars:
+**Look at it.** Open the project (`open -a Godot --args --path "$PWD/game"`) and press **F5** to
+play `scenes/main.tscn`, or **F6** on `scenes/dev/city_preview.tscn` to fly around the city.
+**F3** cycles the debug overlay (`docs/ARCHITECTURE.md` "The debug overlay").
+
+**Check it.**
 
 ```bash
+.venv/bin/ruff check . && .venv/bin/ruff format --check .   # from the repo root
+(cd etl && ../.venv/bin/pytest -n auto)
 tools/check.sh
 ```
 
-That runs `gdformat`, the project-settings and tuning-rationale tripwires, the import (~8 s cold),
-a GDScript warnings sweep and the verify tools, and is the **only** route that fails on error. Godot exits `0` whatever happens — including when a script
-fails to parse — so the script reads its output and supplies the exit code the engine will not.
-Running the steps by hand and eyeballing them is how a broken check passes.
+`tools/check.sh` runs `gdformat`, the settings and tuning-sidecar checks, the import, a GDScript
+warnings sweep (warnings are errors, untyped declarations included) and the headless `verify_*.gd`
+tools. Use its exit code: Godot itself exits `0` even when a script fails to parse. With no city
+built, `VERIFY_GENERATED=0 tools/check.sh` skips the tools that need one. CI runs it that way,
+beside `ruff` and `pytest`, so the generated-asset contracts are yours to run locally.
 
-The warnings sweep is the GDScript linter: engine warnings are set to *error* in `project.godot`,
-including untyped declarations. See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) "Checks".
+Grading tools in `tools/` measure a built region under `etl/out/` against the shipped tiles.
+`.venv/bin/python tools/battery.py --list` says which change owes which.
 
-GitHub Actions runs the same script on every push and pull request, alongside `ruff` and `pytest`. It
-**skips the generated-asset verify tools** — a fresh checkout has no generated assets to check, and
-building them in CI would mean re-downloading the source data every push. The verify tools that
-need no built region run there anyway. So the asset contracts are yours to run locally after a pipeline
-build; everything else CI catches for you.
-
-Grading tools sit beside the suite and are run by hand after a build, because they need a built
-region under `etl/out`. `tools/battery.py --list` says which change owes which; two of them:
+**Export and play it in a browser.** Needs Godot's export templates.
 
 ```bash
-.venv/bin/python tools/deck_error.py --generated etl/out/wan_chai
-.venv/bin/python tools/overhang.py   --generated etl/out/wan_chai
-```
-
-They measure the drawn carriageway against the *shipped* tiles and share no code with the pipeline
-that produced them — a stage cannot mark its own work.
-
-**Export and play it in a browser.**
-
-```bash
-tools/export.sh              # macOS + web; needs export templates installed
+tools/export.sh              # macOS + web; or one of macos|web|android|ios
 tools/serve_web.py           # then open http://127.0.0.1:8060
 ```
 
@@ -132,11 +110,9 @@ IOS_TEAM_ID=<team> tools/ios.sh device       # build, install and launch on the 
 IOS_TEAM_ID=<team> tools/ios.sh testflight   # archive and upload to TestFlight
 ```
 
-The App Store listing is text in `fastlane/metadata/`; `tools/store_screenshots.sh` takes its
+The App Store listing is text in `fastlane/metadata/`. `tools/store_screenshots.sh` takes its
 screenshots and `fastlane metadata` sends both, with an App Store Connect API key in the
 environment (see `fastlane/Fastfile`).
-
----
 
 ## Documentation
 
@@ -152,28 +128,22 @@ environment (see `fastlane/Fastfile`).
 | [`docs/DECISIONS.md`](docs/DECISIONS.md) | Why anything is the way it is, keyed by `Q` or task ID |
 | [`LICENSING.md`](LICENSING.md) | Which licence covers what, and why the generated data is not ours to relicense |
 | [`CONTRIBUTING.md`](CONTRIBUTING.md) | Checks to run, commit style, and the inbound-MIT licensing of contributions |
-
----
+| [`PRIVACY.md`](PRIVACY.md), [`SUPPORT.md`](SUPPORT.md) | The app's privacy policy and support page |
 
 ## Three things that will bite you
 
 **Don't use the photogrammetry mesh.** The Lands Department also publishes a tile-based
 oblique-photogrammetry model. It has ground gaps, level discontinuities, and cars fused into the
-terrain — a prior public attempt concluded it suited flight simulation, not driving. Use the
-**non-textured** models and **iB1000** instead.
+terrain. Use the **non-textured** models and **iB1000** instead.
 
-**The road centrelines are 2D — grade separation is an attribute, not a Z value.** Hong Kong drives on
-three levels in places, and a naive 2D graph turns every flyover into a junction that doesn't exist.
-Road Network v2 carries no Z, but it does carry an integer `ELEVATION`. **Only ever join edges at
-matching levels — but never key a *node* on the level**, because every place two levels meet at a
-shared endpoint is a ramp touching down, and splitting there severs the elevated network from the
-ground one.
+**The road centrelines are 2D — grade separation is an attribute, not a Z value.** Road Network v2
+carries no Z, only an integer `ELEVATION`. Only ever join edges at matching levels, but never key a
+*node* on the level: every place two levels meet at a shared endpoint is a ramp touching down, and
+splitting there severs the elevated network from the ground one.
 
-**Where the deck actually *is* comes from the map sheets, not the road data.** The `INFRASTRUCTURE`
-class in the LandsD sheets models the flyovers *including their approach ramps*, and that is the only
-height source there is for off-grade roads. A tunnel is a void, so it has none and never will.
-
----
+**Where a deck actually is comes from the map sheets, not the road data.** The `INFRASTRUCTURE`
+class in the LandsD sheets models the flyovers including their approach ramps, and it is the only
+height source for off-grade roads. A tunnel is a void, so it has none.
 
 ## Data attribution
 
@@ -183,8 +153,6 @@ intellectual property rights in that data, obtained via [DATA.GOV.HK](https://da
 [Common Spatial Data Infrastructure Portal](https://portal.csdi.gov.hk). Used under the DATA.GOV.HK
 and CSDI Portal Terms and Conditions of Use. Data is provided "as is". The Government of the HKSAR
 does not endorse this product.
-
----
 
 ## Licence
 
@@ -196,14 +164,14 @@ exception (`Q79`):
 | **Code** — pipeline, engine scripts, tools, config, tuning | **GPL-3.0-or-later** ([`LICENSE`](LICENSE)) |
 | **Hand-authored assets** — hero buildings, vehicles, UI, shaders (`game/assets/authored/`, `game/assets/shaders/`) | **CC BY-SA 4.0** ([`game/assets/authored/LICENSE`](game/assets/authored/LICENSE)) |
 | **Generated city data** — tiles, road surface, road graph, fares | **Not relicensed by us.** Derived from HK government data under the DATA.GOV.HK and CSDI Portal Terms and Conditions of Use |
-| **Bundled typeface** — `game/assets/authored/fonts/` | **CC BY 4.0**, third party — see [`LICENSING.md`](LICENSING.md) |
+| **Bundled typefaces** — `game/assets/authored/fonts/` | **CC BY 4.0** and **SIL OFL 1.1**, third party — see [`LICENSING.md`](LICENSING.md) |
 
 **This repository redistributes no government data** — `etl/sources/`, `etl/out/` and
 `game/assets/generated/` are all gitignored. You regenerate them from the government endpoints
 yourself and accept those terms directly. An exported *game* does ship them, and
 that is what makes the credits screen mandatory rather than nice-to-have.
 
-⚠️ **GPLv3 conflicts with App Store distribution terms**, so store builds need a separate proprietary
+**GPLv3 conflicts with App Store distribution terms**, so store builds need a separate proprietary
 grant — which works only while a single copyright holder owns everything, and therefore needs a CLA
 before the first outside contribution. See [`LICENSING.md`](LICENSING.md), which is where
 the reasoning and the open items live.

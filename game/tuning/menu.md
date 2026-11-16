@@ -1,198 +1,87 @@
 # menu.tres
 
-Rationale for `game/tuning/menu.tres`. Each heading is the line the block sat above; `Overview` is the
-file as a whole. Why it lives here and not in the file: `Q119`.
+Rationale for `game/tuning/menu.tres` (`Q119`).
 
-## Overview
+The start menu (`P6-1`): the camera's shot per page (`Q164`), the column's geometry and the type
+scale. Colours and panel shape are `hud_style.tres`'s (`Q139`); strings are `menu_text.json`'s.
 
-The start menu (`P6-1`, the user's ask of 2026-09-26): start, options, credits, over the taxi
-standing on the start line with the camera placed by the page (`Q164`). Two things live here — the camera's shot per page and
-the column's geometry and type scale — and two deliberately do not: the colours and the panel shape
-are `hud_style.tres`'s, so the menu is the cab's one housing (`Q139`) and a second car's theme
-re-skins both, and the strings are `menu_text.json`'s, because a legal text wants a diffable file.
+Every key is required: `menu_profile.gd` declares no defaults, and `verify_menu.gd` refuses a zero
+it would draw with. A `MenuShot` key absent from a sub-resource is 0 or false.
 
-⚠️ EVERY KEY BELOW IS REQUIRED. `menu_profile.gd` declares no defaults, so a missing key reads
-zero, and `verify_menu.gd` refuses a zero it would draw with.
+## Shots
 
-## `shot_home`
+A shot's `yaw_deg` is round the car from its chase position: 0 behind, 180 in front, negative
+toward the kerbside. The car stands at `DriveLevel.showroom_fare_id` (set on the scene), not the
+start line, which is under a podium; `resume` returns it.
 
-HOME's shot, the turntable (`turn_period_s` 40): a circle in forty seconds reads as a showroom
-turntable, not a spin. `distance_m` 7.5 is a metre longer than the chase's 6.5 so the whole car sits
-in frame with road either side; `height_m` 1.6 puts the pivot at the roof sign and `pitch_deg` −12
-looks down onto the bonnet. `yaw_deg` 35 is where the circle starts on a cut; coming back from
-another page it turns on from wherever the camera stands. `fov_deg` 60 is tighter than the chase's
-70: a portrait of one car.
+- `shot_home`: the turntable. `turn_period_s` 40 reads as a showroom, not a spin. A metre longer
+  than the chase camera and a tighter `fov_deg` 60: a portrait of one car.
+- `shot_play`: the kerbside front three-quarter (`yaw_deg` −140), low and close, with `door_open`,
+  the rear kerbside door. The user's ask: ready to go.
+- `shot_options`: just off the tail (`yaw_deg` 10), close and low.
+- `shot_sheet`: the guide, credits and notices cover the screen with a blurred sheet, so this is
+  a backdrop: high over the street, the car small.
+- `shot_report`: head on (`yaw_deg` 180).
+- `sway_deg`, `sway_period_s`: each standing shot rocks a few degrees. A still menu stalls a
+  `--menu=on` capture, and `verify_menu` refuses a shot that neither turns nor sways.
+- `shot_response` 2.5: how fast the camera closes on a new page's shot, about 90% in a second.
+  The opening page is cut to.
 
-Every shot's `yaw_deg` is round the car from its chase position — 0 behind it, 180 in front, and
-negative toward its left, the kerbside.
+## Column and sheets
 
-## `shot_play`
+- `margin_px`: the column's inset from the safe area's bottom-left corner, clear of the car.
+- `button_px` 420 × 72: a thumb-sized target. `button_gap_px` 14 keeps the column one control.
+- `volume_step` 0.05 (`Q221`): a notch of the volume slider on OPTIONS' SOUND page; twenty from
+  full to nothing. The level heard is the travel squared (`Settings.level_db`).
+  `volume_track_px` 6 is the drawn line. OPTIONS is a list of groups, a page each (`Q223`); a
+  group that outgrows its page splits, never scrolls.
+- `credits_px`, `credits_pad_px`: the credits panel, centred, wide enough for the data credit's
+  English at `body_size`.
+- `guide_px`, `guide_picture_px`: the guide sheet, five steps abreast. The pictures are drawn
+  (`guide_card.gd`); the bundle ships no UI textures.
+- `backdrop_lod` 3.5, `backdrop_width_px` 760, `backdrop_fade_from` 0.55 (`Q163`): the blur behind
+  the text (`backdrop_blur.gdshader`), read from the screen's mips and pulled toward
+  `HudStyle.scrim`. A column takes a side panel fading out from 0.55 of its width; a sheet takes
+  the whole screen. A row of three choices runs past the panel.
 
-PLAY (`Q164`, the user's ask: "the side-front angle of taxi (as in ready to go)"): the kerbside
-front three-quarter, `yaw_deg` −140, low (`height_m` 1.0, `pitch_deg` −6) and close (6 m) so the
-car looks ready to pull away, with `door_open` — the rear kerbside door, the one the driver's lever
-swings for the fare (the user's second ask). −120 shows the leaf less edge-on but loses the front.
+## Type
 
-## `shot_options`
+Pairs, the `_zh` size for Chinese. A Chinese face sets larger than the Latin at every line: the
+brush is thin (`button_size_zh`, `heading_size_zh`), the 黑體 dense (`body_size_zh`,
+`subtitle_size_zh`). Which line takes which face is `street_plate.json`'s `_faces` (`Q218`).
 
-OPTIONS (`Q164`: "goes to back of taxi (as in settings)"): just off the tail, `yaw_deg` 10, close
-and low — the boot and the plate, the car's back to the street.
+- `title_size`, `title_size_zh` 96 (`Q208`): the game's name on one line, which may run past the
+  column but stays inside the backdrop and under the top bracket on a handset.
 
-## `shot_sheet`
+## The 成績表
 
-The guide, credits and notices cover the screen with a blurred sheet, so this is a backdrop of
-colour more than a picture: high over the street (`distance_m` 24, `pitch_deg` −35), the car small
-on its road.
+`LedgerCard` (`P3-76`), beside REPORT's and PAUSE's column and inside RECORD's sheet.
 
-## `shot_report`
+- `ledger_px` 1120 × 840: what the 760 px column leaves on a 1920 canvas, and tall enough for a
+  full sheet. Only a frame shows the total hanging under the panel; a row added to
+  `SessionTally.BONUSES` needs more height.
+- `ledger_row_px` 40, `ledger_rule_px` 2: a row, and the ruled line in `frame_ink`.
+- `ledger_count_px` 64, `ledger_money_px` 104: the number columns, for a four-digit count and
+  `+12345.6`, right-aligned. `ledger_gutter_px`, `ledger_gap_px`: between the tables, and above
+  the books.
+- `ledger_head_size*`, `ledger_title_size*`, `ledger_total_size*`, `ledger_total_row_px`: the
+  sheet's ranks of type (`LedgerCard.Rank`): column head under the body, block title over it, the
+  total about 1.8 rows.
+- `ledger_stacked_scale` 1.4 (`Q206`, the user's pick): on a touch screen the sheet stacks into
+  one scrolling column, the buttons pinned outside the scroll, every rank scaled. 1.4 makes the
+  body about 14 pt on an iPhone. `ledger_stacked_width_px` 1000 is RECORD's sheet on a phone.
+- `sheet_image_scale` 2.0 (`P3-80`, `Q188`): SAVE RESULT's picture is drawn at twice the sheet's
+  size, text at the scale, never stretched.
 
-The shift's REPORT: head on (`yaw_deg` 180), the headlamps lit toward the player at the handover.
+## The boot cover
 
-## `sway_deg` / `sway_period_s`
+`ShaderWarmup` holds an opaque cover over the menu's first seconds so the web build compiles its
+shaders there (`Q184`); cold, they cost frames of 0.3–2 s in the menu and at the drive's start.
+The cover is the loading screen (`LoadingCover`, `Q209`), whose meter counts real steps.
 
-Each standing shot rocks a few degrees either side of its yaw over 12–30 s: enough that the frame
-is never still — a still menu stalls a `--menu=on` capture on "no frame drawn" (`SKILL.md`) — and
-slow enough to read as a held shot. `verify_menu` refuses a shot that neither turns nor sways.
-
-## `shot_response = 2.5`
-
-How fast the camera closes on a new page's shot, per second, on the chase rig's first-order filter:
-about 90% of the way in a second, so a click reads as a camera move, not a cut, and a page changed
-mid-move just bends toward the next. The page the menu opens on is cut to.
-
-The car stands at `DriveLevel.showroom_fare_id` — `f_001`, the Harbour Road cross-harbour
-stand, HKCEC's old wing behind it under open sky — not on the start line, which is under the
-Phase II podium where every orbit angle looks at a soffit (measured 2026-09-26; `f_003` faces a
-wall and `f_028` buries the arm in the pavement). `resume` returns the car to the start line.
-
-## `margin_px = Vector2(96, 72)`
-
-The column's inset from the safe area's bottom-left corner. Bottom-left keeps the car — which
-the orbit frames about the centre — clear of the text, and it is the corner the racing genre puts
-its menu in. `button_px` 420 × 72 is a thumb-sized target with room for 鳴謝及授權 at the Kai's
-32 px; `button_gap_px` 14 is under a button's quarter so the column reads as one control.
-
-## `volume_step = 0.05`
-
-The volume slider on OPTIONS (`Q221`, the user's ask of 2026-11-16), under the sound's ON / OFF. It
-is a choice's size, `button_px`, so a thumb takes the whole 72-unit row and not the line; a notch
-is a twentieth of the travel, twenty presses of left or right from full to nothing on a pad, and
-each one a step the ear can tell. `volume_track_px` 6 is the line drawn: the muted ink, what is
-filled in the dial's amber like a current choice, and the lighter ink under the pointer or the
-focus. The level heard is the travel squared (`Settings.level_db`), so half way is −12 dB.
-
-The slider stands on OPTIONS' SOUND page since `Q223`: OPTIONS is a list of groups, a page each,
-because three blocks in one column ran from a handset's foot to its top bracket (frame,
-2026-11-16). A page holds two blocks with room; a group that grows past that splits, it does not
-scroll. ⚠️ A row of three choices (CONTROLS' steering response) is 1288 units and its third stands
-past the 760 px backdrop, over the picture, on its outline alone.
-
-## `credits_px = Vector2(1100, 760)`
-
-The credits panel, centred: wide enough for the data credit's English to run six lines at 20 px
-rather than a column of fragments, short enough to leave a strip of city above and below it.
-`credits_pad_px` 28 keeps the text off the keyline.
-
-## `guide_px = Vector2(1500, 560)`
-
-The guide sheet: five steps abreast at `guide_picture_px` 240 × 150 each, with a caption of three
-or four lines under, and the same pad and keyline as the credits. The pictures are drawn
-(`guide_card.gd`) — the bundle ships no UI textures, and a screenshot of the city would be the
-generated data committed in another form.
-
-## `title_size = 72`
-
-The game's name, `menu_text.json`'s `title` (`Q208`): 香港的士車神 in the heavy brush (`Q218`),
-Hong Kong Taxi Ace in the theme's face, on ONE line that may run past the column — the name is the
-page's, not the buttons' width. `title_size_zh` 96 is six brush characters across 576 px, inside
-the 760 px backdrop and under the top bracket on a handset (frame, 2026-11-15); it was 60 while
-the title wrapped to the column.
-
-The rest are pairs, Chinese first like `FareFace._say`, and a Chinese face sets larger than the
-Latin at every line. The brush is thinner than the Kai it replaced, so its lines grew:
-`button_size_zh` 40 against 28 and `heading_size_zh` 34 against 24. The 黑體 is denser than the
-Kai, so the running text shrank: `body_size_zh` 22 against 20, `subtitle_size_zh` 28 against 26.
-Which line takes which face is `street_plate.json`'s `_faces`.
-
-## `backdrop_lod = 3.5`
-
-The blur behind the menu's text (`Q163`, the user's ask: "background blur/shadowing in the menu so
-that the texts are more readable"), `backdrop_blur.gdshader`. The frame is read from the screen's
-mips at 3.5 — about an eleventh of the resolution, which turns the city's edges into soft fields
-— and pulled toward `HudStyle.scrim`. HOME's columns (HOME, PLAY, OPTIONS, the report) take a side
-panel `backdrop_width_px` 760 wide from the left edge, fading out from 0.55 of that width so the
-car stays the picture; a sheet takes the whole screen.
-
-## `ledger_px`
-
-The 成績表 (`LedgerCard`, `P3-76`), beside REPORT's and PAUSE's column and inside RECORD's sheet. 1120 wide fills
-what the 760 px column leaves on a 1920 canvas. 840 tall holds a full sheet with both optional lines, floor and
-walked: 640 left the total hanging under the panel, which nothing but a frame shows, and 770 held it until the
-books took a title each and the total its taller row (2026-11-15). A row added to `SessionTally.BONUSES` needs more
-height here.
-
-## `ledger_row_px`
-
-40 px a row carries the Kai at `body_size_zh` 24 with air, and is what a thumb can read on a phone in a paused car.
-`ledger_rule_px` 2 is `frame_ink`'s ruled line: what makes the two tables a sheet rather than two lists.
-
-## `ledger_count_px`
-
-The two number columns. 64 holds a lifetime count of four digits, 104 a lifetime `+12345.6`, right-aligned so the
-digits stand under each other. `ledger_gutter_px` 40 keeps the tables apart; `ledger_gap_px` 28 sets the books under them.
-
-## `ledger_head_size`
-
-The sheet's ranks of type (`LedgerCard.Rank`; the user's ask 2026-11-15, "need better visual hierarchy in this
-report form"). Every line had been the body's size, so the total read as one more row. Four ranks now, pairs like
-the rest, Chinese second: a column head 17 / 18 under the body's 20 / 22, a block's title 24 / 28 over it, and the
-total 34 / 40, about 1.8 times a row, on a `ledger_total_row_px` 64 row closed by a double rule. The sheet is set in
-the 黑體 since `Q218`, whose even strokes hold at 18 where the Kai's thin ones wanted 20; on a phone every rank takes
-`ledger_stacked_scale`.
-
-## `ledger_stacked_scale = 1.4`
-
-On a touch screen (`Q206`, the user's pick of one scrolling column over two scrolling columns and tabs) the 成績表
-stacks — sums, bests, bonuses, penalties since 2026-11-15, the total on the scroll's first screen — in one column the thumb scrolls, with the page's buttons pinned outside
-the scroll. Side by side at the desk's 20 px it read about 10 pt on an iPhone Air (20 units × the touch table's
-1.25 × 420 pt / 1080), RECORD's BACK fell under the screen's foot and REPORT's sheet covered the shift's total.
-1.4 makes the body 28 units, ~14 pt there, and the Kai's 24 34; rows and the number columns scale with it so the
-digits still stand in line. The desk keeps its two tables at 1.0.
-
-`ledger_stacked_width_px` 1000 is RECORD's sheet on a phone: the 1.4× bonus table's four columns with air, centred
-on a 20:9 handset's 1596-unit safe width. REPORT's and PAUSE's sheet is not a width but what is left right of the
-page's column, so it never lands on the total again.
-
-## `sheet_image_scale`
-
-SAVE RESULT's picture of the 成績表 (`SheetImage`, `P3-80`, `Q188`): laid out at the sheet's own size on screen
-(REPORT's 1120 × 770, `ledger_px`; RECORD's taller, its runs and best over the tables) and drawn 2.0 times over, so the type stays sharp when a phone or a chat app scales the picture down.
-The text is drawn at the scale, never stretched from a 1× picture.
-
-## The boot cover — `cover_*`, `warm_*`
-
-The opaque cover `ShaderWarmup` holds over the menu's first seconds, so the web build compiles its
-shaders where a wait is expected instead of in the menu and on the first frames of a drive. The
-Compatibility renderer compiles a shader the first time something draws with it; measured cold on
-the export (Chrome's Metal shader cache emptied), that was 733, 2124 and 595 ms frames in the
-menu's first seconds and 312 and 462 ms as the drive started.
-
-- `cover_wait_frames = 600`: the most it waits for the city's first settle (`CityRegions.built`)
-  before warming anyway, so a city that never settles cannot hold the cover up.
-- `cover_settle_frames = 30`: frames after the settle, for the traffic and the parked cells to
-  stand.
-- `cover_warm_frames = 2`: frames the copies stand. One is enough to draw; the second covers a
-  frame the first one's compile ran over.
-- `cover_fade_s = 0.4`: the cover's fade once the copies are gone. The menu takes input from the
-  fade's first frame.
-- `warm_distance_m = 3.0`, `warm_size_m = 0.08`: the copies' grid, that far in front of the camera,
-  each shrunk to that size — 33 draws on the boot of 2026-11-05, so the grid is about 0.7 m across
-  and inside the frame at the menu's 60° shots. A copy outside the frustum is culled and warms
-  nothing.
-
-The cover is `HudStyle.plate_field`, the housing, opaque. On it stands the loading screen
-(`LoadingCover`, `Q209`): the toy taxi idling over the cab's meter, drawn from
-`assets/authored/loading/taxi.json`, the same drawing the boot splash is a still of. Its meter
-counts real steps — the most tiles the streamers owed at once, then each settle frame, then each
-warm frame — so `cover_settle_frames` and `cover_warm_frames` are also how much of the meter the
-last stretch takes.
+- `cover_wait_frames` 600: the most it waits for the city's first settle (`CityRegions.built`).
+- `cover_settle_frames` 30: frames after the settle, for the traffic and parked cells to stand.
+- `cover_warm_frames` 2: frames the warm-up copies stand.
+- `cover_fade_s` 0.4: the fade. The menu takes input from its first frame.
+- `warm_distance_m` 3.0, `warm_size_m` 0.08: the copies' grid in front of the camera. A copy
+  outside the frustum is culled and warms nothing.

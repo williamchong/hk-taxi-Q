@@ -18,76 +18,56 @@ paths:
 
 # Façade, materials and exposure — before marking work done
 
-Moved verbatim from the root `CLAUDE.md`, which keeps the trigger and points here.
-
-- Height-ramp or façade-survey changes: also `tools/ring_weights.py`, and paste what it derives. The
-  surveyed material weights are authored against both, and no check can see them go stale (`Q34′`).
-- Façade-survey or `facade_hue.strength` changes: also `tools/facade_chroma.py`, and paste its table
-  into `docs/ART_DESIGN.md`. `Q30`'s numbers are the argument that the shipped palette is not the
-  authored one, and they are only an argument while they describe the survey that ships.
-- 🔴 **`materials:` colours, a material's `bounds:`, or the rigs' `exposure_anchor`: the ETL half and
-  the game half move in ONE commit and `schema_version` goes with them** (`Q38`, `P5-28c`). Since the
-  un-bake a shipped colour **is** a material's reflectance and the rig multiplies — so a bundle
-  without the multiply, or a rig without the bundle, renders a city 1/0.520 too bright or too dark
-  with nothing in a frame to say which half is missing. ⚠️ **`_check_reflectance`'s round trip is a
-  tautology on its own**: with the anchor gone `luminance(colour)` *is* `reflectance` by
-  construction, and `bounds:` — the numeric half of the `source:` each entry already wrote in prose —
-  is the only part that can fail. **Correct a colour outside its bounds; never widen the bounds to
-  admit it**, which is the one direction the rule does not work in. ⚠️ **The exposure has exactly one
-  home, the rig scene**, read by `tools/lighting_rig.py` and never restated: `facade_chroma.py`
-  applies it to every figure — chroma does **not** survive a linear-light scale: `C*` is multiplied
-  by `anchor ** (1/3)`, **0.804** at 0.520, so an unexposed table reads **1.24x MORE** saturated than
-  the screen — and `frame_stats.py` applies it to `--albedo-l`, where it moves **`gain` only** — `linear ratio` and `additive share` are quotients of
-  linear luminances and a uniform scale cancels exactly in them. ⚠️ **Do not put the number back into
-  `etl/`**: the ETL publishes reflectance and knows nothing about the hour, and that is the coupling
-  the un-bake removed. Owed: the per-material round trip, `facade_chroma.py --shipped` before and
-  after, and the `Q27`/`Q31` cameras — ⚠️ **shooting the skyline at `t=2.0` and not `t=0.8`**, where
-  the streamer has not settled and two runs disagree. Numbers in `Q38`.
-- **Band changes — `survey_bands`, `STREET_BAND_M`, `BAND_FACE_TEXELS`, `FALLBACK_SPREAD_AB`,
-  `band_hue`, `cut_bands`, `_ship_line` or `facade_hue.bands` (`Q197`), and `band_lift`,
-  `band_noise_l`, `FALLBACK_SPREAD_L` or `facade_hue.band_lightness` (`Q240`): re-run the survey with
-  `--regions wan_chai causeway_bay`, keep the old table in `superseded/`, and check its shipped
-  columns moved on ZERO rows** — the bands ride the same pass, and a change that moves the
-  whole-building colour is a `Q37` change, not a band change. Then the build's `facade bands` log
+- **Height ramp or façade survey**: `tools/ring_weights.py`, paste what it derives. The surveyed
+  material weights are authored against both and no check sees them go stale (`Q34′`).
+- **Façade survey or `facade_hue.strength`**: `tools/facade_chroma.py`, paste its table into
+  `docs/ART_DESIGN.md` (`Q30`'s argument holds only while it describes the shipped survey).
+- **`materials:` colours, a material's `bounds:`, the rigs' `exposure_anchor`** (`Q38`, `P5-28c`):
+  the ETL half and the game half move in ONE commit with `schema_version`. A shipped colour is a
+  reflectance and the rig multiplies; one half without the other renders 1/0.520 off with nothing
+  in a frame to say which. Owed: the per-material round trip, `facade_chroma.py --shipped` before
+  and after, and the `Q27` / `Q31` cameras with the skyline shot at `t=2.0` (at `t=0.8` the
+  streamer has not settled).
+  - Correct a colour outside its `bounds:`; never widen the bounds to admit it. `bounds:` is the
+    only part of `_check_reflectance` that can fail — its round trip is a tautology.
+  - The exposure has one home, the rig scene, read by `tools/lighting_rig.py`. Never put the number
+    into `etl/`.
+  - `C*` scales by `anchor ** (1/3)` (0.804 at 0.520), which `facade_chroma.py` applies;
+    `frame_stats.py --albedo-l` moves `gain` only.
+- **Bands** — `survey_bands`, `STREET_BAND_M`, `BAND_FACE_TEXELS`, `FALLBACK_SPREAD_AB`, `band_hue`,
+  `cut_bands`, `_ship_line`, `facade_hue.bands` (`Q197`); `band_lift`, `band_noise_l`,
+  `FALLBACK_SPREAD_L`, `facade_hue.band_lightness` (`Q240`): re-run the survey with `--regions
+  wan_chai causeway_bay`, keep the old table in `superseded/`, and its shipped columns must move on
+  ZERO rows (a moved whole-building colour is a `Q37` change). Then the build's `facade bands` log
   line (no stale warning), `verify_tiles`, and the four `Q197` cameras against the commit before.
-  ⚠️ **A podium band is cut at the line `podiums.json` ships**: rebuild `podiums` before the
-  survey, or the ETL draws that band as the tower and warns. ⚠️ **Cut only one object's
-  triangles** — `collapse` stitches seams across two, and interpolating their ordinal is what
-  `verify_tiles`' 8 m box check caught. ⚠️ **Lightness is the street band's alone** (`Q240`):
-  a step from its own tower, never the building's `L*` — that refusal stands. `band_lightness`
-  at 0 must rebuild `Q197` byte for byte.
-- **Filler-guard changes — `is_filler`, `filler_colours`, `MODAL_SHARE`, `MODAL_STRIDE`: also
-  `tools/facade_survey.py --all --filler-report`, and paste its table.** It is the only thing that
-  reproduces `Q55`, whose every number came from a scratch script — the same debt `Q37` was opened
-  about. ⚠️ **Validate with the guard off first**: re-run the survey with `MODAL_SHARE` above 1.0
-  and diff against the shipped table. It must differ on **zero** rows, and that is what proves
-  nothing but the guard moved — `Q37`'s own validation move. ⚠️ **The two axes must stay
-  disjoint**: a repeated *grey* belongs to `Q37`'s channel tie and is filtered out of the colour
-  set, or the sweep reports every grey-padded building in the region instead of the 100 that carry
-  a panel. ⚠️ `facade_lab.json` is **not committed** — it is under `etl/sources/`, which is
-  gitignored — so re-publishing it is a local act and `superseded/` is the only way back.
-
-- **The day cycle — `lighting_rig.gd`, `rig_cycle.gd`, `rig_keyframe.gd`, `day_clock.gd`,
-  `day_to_night.tres` or a keyframe's environment (`Q160`): `tools/check.sh` (which runs
+  - Rebuild `podiums` before the survey: a podium band is cut at the line `podiums.json` ships.
+  - Cut one object's triangles only: `collapse` stitches seams across two (`verify_tiles`' 8 m box
+    check).
+  - Lightness is the street band's alone (`Q240`), a step from its own tower; the building's `L*`
+    stays refused. `band_lightness` 0 must rebuild `Q197` byte for byte.
+- **Filler guard** — `is_filler`, `filler_colours`, `MODAL_SHARE`, `MODAL_STRIDE` (`Q55`):
+  `tools/facade_survey.py --all --filler-report`, paste its table. First re-run the survey with
+  `MODAL_SHARE` above 1.0: it must differ from the shipped table on zero rows. A repeated GREY is
+  `Q37`'s channel tie and stays out of the colour set. `facade_lab.json` is under gitignored
+  `etl/sources/`; `superseded/` is the only way back.
+- **The day cycle** — `lighting_rig.gd`, `rig_cycle.gd`, `rig_keyframe.gd`, `day_clock.gd`,
+  `day_to_night.tres`, a keyframe's environment (`Q160`, `Q222`, `Q225`): `tools/check.sh` (runs
   `verify_day_cycle`), the `street` camera by day shot twice a side against the commit before, and
-  frames at `--time-of-day=0.79`, `0.86` and `1` (the keyframes since `Q162`), and since `Q222` the
-  daylight ones too: `0`, `0.36`, `0.57`, `0.71`.** 🔴 **A resting rig writes nothing**: a rig nobody moved
-  (and one `DayClock` put back with `rest()`) holds the authored `Environment` object and the authored sun, and that — not a
-  re-applied copy of the day — is what keeps every scripted daylight frame. ⚠️ `time_of_day` 0 is
-  the MORNING since `Q222`; the authored day is at `day_at`. 🔴 **The daylight keyframes' angles and
-  `at`s are solved together** so the sun moves at one speed (`day_to_night.md`); never move one alone. Since `Q225` a free drive's cycle
-  comes round at `loop_at`: the keyframes past 1.0 are its night and dawn (frames at `1.464`, `1.607`, `1.661`),
-  `night_lights` rises to 1 and only then falls, and a shift never passes 1.0. 🔴 **One rig blending,
-  never two**; **`exposure_anchor` does not move with the hour** (it scales `COLOR_0` alone, so the
-  dark comes from the light); and **night dims the key light, never deletes it** — the last
-  keyframe's energy sits under `vehicle_lamps.tres`'s `night_energy` and the two move together.
-  ⚠️ A keyframe's `.tres` is read only for what `LightingRig.BLENDED` / `BLENDED_SKY` name, and its
-  `Sky` carries `radiance_size = 0` — a loaded sky holds its radiance map undrawn, 18 MB each at the
-  default (`Q225`). For the same reason a MOVED rig shrinks the authored sky's `radiance_size` and
-  gives it back on `rest()` and on leaving the tree: the one write to the authored resource, held
-  by `verify_day_cycle`. ⚠️ A
-  still preview camera at a pinned hour often stalls the capture (`no frame drawn`): shoot at
-  `--seconds=2 --shots=1.0`, or from a moving drive. ⚠️ `drive.sh` appends `--day-cycle=off`; a
-  frame of the cycle itself needs `--day-cycle=on`. ⚠️ A moving sky costs the iPhone Air about
-  0.15 ms a frame at `update_hz` 10 (`Q222`); the floor handset is not measured, and `update_hz` is
-  the lever. Numbers in `Q160`.
+  frames at `--time-of-day=` 0, 0.36, 0.57, 0.71, 0.79, 0.86, 1, and past the loop 1.464, 1.607,
+  1.661.
+  - A resting rig writes nothing (it holds the authored `Environment` and sun), which keeps every
+    scripted daylight frame. `DayClock.rest()` puts it back.
+  - `time_of_day` 0 is the morning; the authored day is at `day_at`; a free drive's cycle comes
+    round at `loop_at`; a shift never passes 1.0.
+  - The daylight keyframes' angles and `at`s are solved together (`day_to_night.md`): never move
+    one alone.
+  - Measured shut (`Q160`): one rig blending, never two cross-fading; `exposure_anchor` does not
+    move with the hour (it scales `COLOR_0` alone, so the dark comes from the light); night dims
+    the key light, never deletes it — the last keyframe's energy sits under `vehicle_lamps.tres`'
+    `night_energy` and the two move together.
+  - A keyframe `.tres` is read only for `LightingRig.BLENDED` / `BLENDED_SKY`; its `Sky` has
+    `radiance_size = 0` (a loaded sky holds 18 MB undrawn). A moved rig shrinks the authored sky's
+    and restores it on `rest()` — the one write to the authored resource (`verify_day_cycle`).
+  - A still preview camera at a pinned hour can stall the capture (`no frame drawn`): shoot at
+    `--seconds=2 --shots=1.0` or from a moving drive. `drive.sh` appends `--day-cycle=off`.
+  - `update_hz` is the sky's cost lever (`Q222`); the floor handset is unmeasured.

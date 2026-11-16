@@ -1,174 +1,52 @@
 # region.tscn
 
-Rationale for `game/scenes/region.tscn`. Each heading is the line the block sat above; `Overview` is the
-file as a whole. Why it lives here and not in the file: `Q119`.
+One region's content, placed once per synced region by `CityRegions` (`P5-9c`), which sets each
+node's `region` before it enters the tree. Everything is authored in the region's frame, so the
+one translation on the region node places it. Both `city_drive.tscn` and `city_preview.tscn`
+instance this, so `verify_city.gd` holds this file against `generated_layer.gd`'s table.
 
-## Overview
+No tiles here: the drive streams them (`CityStreamer`) and the preview loads every one
+(`tile_preview.gd`), so `CityRegions` adds them as the first child.
 
-One region's content, placed once per synced region by `CityRegions` (`P5-9c`). Every node here
-reads its own region's bundle — `CityRegions` sets each one's `region` before it enters the tree —
-and everything it draws is authored in that region's frame, so the one translation on the region
-node places all of it. Both `city_drive.tscn` and `city_preview.tscn` instance this, which is why
-`verify_city.gd` holds this file, not those two, against `generated_layer.gd`'s table.
+A layer whose region publishes nothing for it stays empty. Each `city_layer.gd` node prints its
+collider count: none of the generated meshes carries a collider (`Q74`); what collides is listed
+below.
 
-There are no tiles here. They are the one child the two scenes disagree on — the drive streams them
-(`CityStreamer`), the preview loads every one (`tile_preview.gd`) — so `CityRegions` adds them, as
-the region's first child, according to whether it was given a `StreamingProfile`.
-
-## `[node name="Water" type="Node3D" parent="."]`
-
-The harbour (2026-09-25, the user's call): the basemap's sea as one flat mesh at
-mean sea level, `water.glb`, drawn where the minimap already drew it blue. The
-ground under it is not this node's: `pipeline/buildings.py` sinks every terrain
-vertex inside the sea to `basemap.seabed_m`, because the sheets' terrain over the
-harbour is 1.1-4.2 m of noise and no plane laid over it meets the shoreline. A
-region whose frame holds no shoreline ships none and this node simply stays
-empty.
-No collider, and deliberately: water is not a floor. A car that leaves the quay
-lands on the sunk ground beneath, under the plane, rather than driving on the
-sea; `drive_level.gd` pulls it back onto the nearest road a tick later
-(`drown_depth_m`).
-
-## `[node name="Tramway" type="Node3D" parent="."]`
-
-The tramway (`P3-14`), beside the road surface rather than under it: it is a
-separate mesh at the position iB1000 publishes, and `Q58` measured that this
-is *not* on the carriageway — only 18.8% of cross-sections have both tracks
-on the drawn ribbon, and 1.5% on Hennessy. A region whose sources publish no
-tramway ships none and this node simply stays empty.
-No collider: it has no `-col` suffix, it lies on ground that is already solid
-(`P3-10`), and a 30 mm rail modelled as collision geometry is a kerb the
-player cannot see the point of.
-
-## `[node name="Arrows" type="Node3D" parent="."]`
-
-The turn arrows (`P3-15`), beside the road surface for the same reason the
-tramway is — separate geometry; one draw call per glyph code since `P5-4`
-made it a library stood by `arrows_placements.json` — but for the opposite
-geometric reason. The tramway is separate because `Q58` measured it is *not* on the
-carriageway; the arrows are separate because they are, and drawing them on it
-would put them under `road_markings.tres`'s 6 m junction fade at exactly the
-junctions they are about. A region whose sources publish no marking symbols
-ships none and this node simply stays empty.
-No collider, for a sharper reason than the tramway's: an arrow lies flat
-across a lane the car drives along, so a collider is a step every vehicle in
-the region crosses at speed rather than one at the edge of the road.
-
-## `[node name="BoxJunctions" type="Node3D" parent="."]`
-
-The published yellow box junctions (`P3-18`), one mesh for the whole region,
-drawn over the caps the ribbon markings fade away from. A region whose
-sources publish no box polygons ships none and this node simply stays empty.
-No collider, for the arrows' reason: the hatch lies across the middle of
-every boxed junction, so a collider is a 12 mm step every vehicle crosses at
-speed.
-
-## `[node name="Crossings" type="Node3D" parent="."]`
-
-The published pedestrian-crossing stripes (`P3-35g2`), one mesh per paint —
-light-signal yellow and zebra white — drawn at their surveyed extent. A region
-whose sources publish no crossing lines ships none and this node stays empty.
-No collider, for the arrows' reason: a stripe lies across the whole carriageway.
-
-## `[node name="RoadMarks" type="Node3D" parent="."]`
-
-The published stop and give-way lines (`P3-23`), one mesh for the whole
-region, drawn across the junction mouths the ribbon markings fade away from.
-Lifted 16 mm — a clear millimetre above the arrows — because where the two
-overlap the bar is the boundary and the arrow is an instruction already read.
-A region whose sources publish no transverse markings ships none and this
-node simply stays empty.
-No collider, and this layer is the sharpest case for it: a stop line crosses
-every approach in the city, so a 16 mm step modelled as collision geometry is
-a kerb the player mounts at every junction while braking.
-
-## `[node name="Railings" type="Node3D" parent="."]`
-
-The published pedestrian railings (`P3-19`), standing on the kerb the
-ribbon actually drew rather than where they were surveyed — two-thirds of
-them were surveyed inside it. One panel per class since `P5-5`, tiled
-along every run by `railings_placements.json`: three draw calls, as before.
-A region whose sources publish no railing layer ships none and this node
-simply stays empty.
-`collides = true`: a box body under every panel (`Q159`, the user's call,
-2026-10-07), reversing the old stance — `GAME_DESIGN.md` listed railings under
-"omit or make breakable" because a solid one turns a narrow street into a
-corridor. The box is the panel's own extent, so a bumper stops flat rather than
-snagging in the gaps, and `railings.glb` itself stays collider-free. No panel
-crosses a road centreline (0 of 5,535 in Wan Chai). `false` is the off switch.
-
-## `[node name="Lamps" type="Node3D" parent="."]`
-
-The published lamp posts (`P3-26`), one mesh for the whole region, standing on
-the kerb the ribbon actually drew rather than where they were surveyed — 64.1%
-of them were surveyed inside it — with a bracket arm reaching over the
-carriageway. **Unlit**, and deliberately: `Q38` bakes the exposure into
-`COLOR_0` at build time, `Q26` has not chosen a look, and `ART_DESIGN.md` says
-to resist adding lights. A region whose sources publish no utility point layer
-ships none and this node simply stays empty.
-`posts = true`: a lamp column is a crash (`Q191`, the user's call, 2026-11-09),
-reversing the old stance — "897 bodies before `P2-6` has measured a frame" —
-which was a budget call and never measured shut. An upright cylinder up each
-column, read off the library mesh's own foot (`PropBatch.post_of`: 90 mm,
-9.05 m), and nothing for the bracket arm or the lantern over the carriageway.
-**One static body per kind and plan cell**, the trees' reason: 18 bodies for
-Wan Chai's 1,077 columns, 10 for Causeway Bay's 364. `lamps.glb` stays
-collider-free. Breakaway is still `B3`'s; `false` is the off switch.
-
-## `[node name="Trees" type="Node3D" parent="."]`
-
-The published trees (`P3-77`, `Q171`): HyD's and LCSD's inventories, stood as
-four library kinds scaled to each tree's height, only where one is surveyed. A
-city whose config declares no `trees:` block ships none and this node simply
-stays empty.
-`trunks = true`: a tree is a crash (the user's call, 2026-10-27). A cylinder of
-the kind's trunk radius up to the crown's base, scaled with the tree, and
-nothing for the crown — a car passes under a canopy. **One static body per
-plan cell**, each holding a shape per tree, never a body per tree: Jolt's
-`max_bodies` is 10,240 and the railings hold 7,693 of it, and the two regions'
-3,436 trees would pass the cap. `collides` stays off: its box is the whole
-tree's extent, crown and all. `false` is the off switch.
-
-## `[node name="Signs" type="Node3D" parent="."]`
-
-The published traffic signs (`P3-16`), one mesh for the whole region, standing
-on the poles TD surveyed rather than at the abbreviation points that name them
-— those are drawing labels and sit a median 2.6 m away. Only the signs whose
-meaning is their *shape* are here; the text-faced 2,364 are refused (`Q42`).
-`posts = true`: a sign post is a crash (`Q191`, the user's call, 2026-11-09),
-reversing the old budget stance. A cylinder up every `pole` placement, read off
-the mesh's foot (32 mm, scaled to the stack), and none under a face — a plate
-hangs on its pole at its own centre, so `post_of` reads it as standing on
-nothing, and the pole is what a bumper meets. The signs are not in
-`prop_cells.tres`, so the posts are one body a region holding a shape each (634
-in Wan Chai, 216 in Causeway Bay). `signs.glb` stays collider-free; `false` is
-the off switch.
-
-## `[node name="Landmarks" type="Node3D" parent="."]`
-
-The authored heroes, placed from `landmarks.json` (`P3-6`). Beside `Tiles`
-rather than under it: the streamer owns what it streams, and a hero is
-always resident.
-
-## `[node name="Fence" type="Node3D" parent="."]`
-
-The barriers dressing P3-29's fence, placed from `fence.json`. 🔴 Not
-optional chrome: `RoadGraph.fits_car` refuses 14 drivable edges, and Q19
-forbids a refusal the player cannot see — round 0 of P3-9a ended with three
-drivers stopping at geometry they could not read. The prop is the only thing
-in the barrier family that collides, and that is the point of it.
-
-## `[node name="Parked" type="Node3D" parent="."]`
-
-The parked roster (`P3-71`–`P3-73`, `Q161`): the stationary vehicles the region's
-`parked_placements.json` stands from the AUTHORED library
-`assets/authored/vehicles/parked.glb`, by the hour of the lighting rig's clock
-(`Q160`). Not a `city_layer` row, because that table's library lives in the
-bundle and this one is committed, and because that placer stands everything
-once where this one re-stands a hidden cell when the hour moves or a bus's
-chance is rolled again. A region with no `parked:` block ships none and the
-node says so.
-It COLLIDES, a box body per vehicle through `PropBatch.bodies` (`Q159`'s
-shape), because a parked bus the car drives through is the invisible refusal
-the fence exists to remove — and because the near miss (`P3-2a`) is a body
-passed, not a mesh. The asset itself stays collider-free.
+- `Water`: the basemap's sea as one flat mesh at mean sea level (`water.glb`). No collider: a car
+  that leaves the quay lands on the sunk ground under the plane (`pipeline/buildings.py` sinks
+  terrain inside the sea to `basemap.seabed_m`) and `drive_level.gd` pulls it back to the nearest
+  road (`drown_depth_m`).
+- `Tramway` (`P3-14`): a separate mesh at the position iB1000 publishes, which `Q58` measured is
+  not on the drawn carriageway. No collider: a 30 mm rail is a kerb with no point.
+- `Arrows` (`P3-15`): one draw call per glyph, stood by `arrows_placements.json` (`P5-4`).
+  Separate geometry because drawn on the surface they would sit under `road_markings.tres`'s
+  junction fade. No collider: a step every vehicle crosses at speed. The same holds for the three
+  paint layers below.
+- `BoxJunctions` (`P3-18`): the published yellow boxes, drawn over the junction caps.
+- `Crossings` (`P3-35g2`): pedestrian-crossing stripes, one mesh per paint (signal yellow, zebra
+  white).
+- `RoadMarks` (`P3-23`): the published line marks. Lifted 16 mm, a millimetre over the arrows.
+- `Railings` (`P3-19`): one panel per class tiled by `railings_placements.json` (`P5-5`), standing
+  on the kerb the ribbon drew. `collides = true` (`Q159`, the user's call): a box body per panel,
+  the panel's own extent, so a bumper stops flat. `false` is the off switch.
+- `Lamps` (`P3-26`): the published lamp posts on the drawn kerb. `posts = true` (`Q191`, the
+  user's call): an upright cylinder up each column (`PropBatch.post_of`), nothing for the arm or
+  lantern, one static body per plan cell. Breakaway is `B3`'s. `false` is the off switch.
+- `Trees` (`P3-77`, `Q171`): HyD's and LCSD's inventories as four library kinds scaled to each
+  tree's height. `trunks = true` (the user's call): a cylinder of the trunk's radius up to the
+  crown's base, one static body per plan cell holding a shape per tree. Never a body per tree:
+  Jolt's `max_bodies` is 10,240 and the railings hold most of it. `collides` stays off: its box is
+  the whole tree, crown included.
+- `Signs` (`P3-16`): the published signs on the poles TD surveyed. `posts = true` (`Q191`): a
+  cylinder up every `pole` placement, none under a face. Not in `prop_cells.tres`, so one body a
+  region.
+- `Landmarks` (`landmarks.gd`, `P3-6`): the authored heroes from `landmarks.json`. Beside the
+  tiles, not streamed: a hero is always resident.
+- `Fence` (`fence.gd`, `P3-29`): the barriers from `fence.json`. Not optional: `RoadGraph.fits_car`
+  refuses some drivable edges, and `Q19` forbids a refusal the player cannot see. The barrier
+  collides.
+- `Parked` (`parked_layer.gd`, `P3-73`, `Q161`): the vehicles `parked_placements.json` stands from
+  the authored `assets/authored/vehicles/parked.glb`, by the rig's clock hour (`parked.md`). Not a
+  `city_layer` row: its library is committed, and it re-stands hidden cells as the hour moves. A
+  box body per vehicle (`PropBatch.bodies`): a parked bus the car drives through is an invisible
+  refusal, and the near miss (`P3-2a`) reads bodies.

@@ -1,95 +1,37 @@
 # hud_layout.tres
 
-Rationale for `game/tuning/hud_layout.tres`. Each heading is the line the block sat above; `Overview` is the
-file as a whole. Why it lives here and not in the file: `Q119`.
+Rationale for `game/tuning/hud_layout.tres` (`Q119`).
 
-## Overview
+The desk's HUD arrangement (`Q138`): map bottom-left, speed bottom-right, the middle kept for what
+the player is reading now. A touch screen reads `hud_layout_touch.tres`; a layout change owes both.
 
-The racing-game arrangement (`Q138`, the user's call): map bottom-left, speed
-bottom-right, and the middle kept for what the player is reading now. It was
-Midtown Madness 2's mirror of this until `P3-44`. See hud_layout.gd, and Q80 for
-why the check grades `thumb_rest_*` and not `touch_zone_*`.
+Every key is required: `hud_layout.gd` declares no defaults, and `verify_hud.gd` refuses a
+zero-size rect.
 
-⚠️ SINCE `Q163` THE READOUTS STAND 32 PX IN, not flush: with no housings the
-corner brackets are the screen's edge, and the minimap's slot is square
-(280 × 280) for the round scope. What follows is `Q142`'s, and its thumb-rest
-reasoning still holds — both bottom readouts end at y 960.
+The rule: left is the world, right is the car, top is the fare, the middle is the road. One
+exception (`Q142`): the tip clock's bare numerals sit centred under the goal box, and the tick and
+the NO ENTRY sign follow down the same column.
 
-⚠️ EVERY HOUSED PANEL SITS ON THE SCREEN'S EDGE (`Q142`, the user's call,
-2026-09-24): the map and the speed on the side edges, the meter and the
-callout on the top edge, no margin — the safe-area inset is the only gap. The
-two bottom readouts share a baseline at y 960, one clear band above
-`thumb_rest_*`, which is as low as the touch contract allows: the bottom edge
-is the thumbs', so those two go to the SIDE edges only. ⚠️ THE RESTS ARE THE
-BOTTOM 100 px, not 200, since the user asked for the map and the speed closer
-to the bottom (2026-09-24): `P2-4` has no handset yet, so the rest's height is
-a guess either way, and this one is the user's. `P2-4` re-measures it.
-
-⚠️ THE GOAL BOX IS 520 WIDE, not 700: it carries one language since `Q142`,
-and the street plate's strip is 56 tall for the same reason — one line.
-
-⚠️ THE NO ENTRY SIGN SITS UNDER THE COUNTDOWN AND THE TICK (the user's call),
-not at the top: the top-centre is the callout's, flush with the edge. 4 px under
-the tick in both tables — y 352 on the desk since `Q212` moved the tick, y 432
-on touch.
-
-🔴 ONE RULE, AND IT IS ABOUT WHAT A READOUT MEANS: left is the world, right is
-the car, top is the fare, and the middle is the road — with ONE exception the
-user called (`Q142`, 2026-09-24): the tip clock's bare numerals sit centred
-just under the goal box (y 116), with no housing behind them, and the meter's
-tick and the NO ENTRY sign follow down the same column. A countdown is what an
-arcade racer puts there, and it is only up while a fare runs. The meter's tick — "+HK$2.1" — flashes in `tick` just under it and
-fades; nothing else joins them but the style combo's live line, which shares
-the tick's row (`Q212`, the user's call): 車手 ×N and the gap's bar on top, and
-the skill that joined, small, in a row of its own below (2026-11-16). The stack
-hangs from the rect's top and the skill's row runs ~30 px under it, so the
-touch table's `tick` is y 338, not 368: on a handset the row below is the
-taxi's roof sign. A tick or a delivery takes the row back for its flash.
-
-⚠️ THE TICK IS 800 WIDE, not 300 (`P3-76`, `Q169`): a skill flashes its item
-off the driving test's fault sheet, and "−HK$5.0 touching an object
-(serious)" is the longest line it says. Centred on the same column, it spans
-x 560–1360 at y 288–348 — above the touch zones (from y 480) and clear of the
-pause button (x 1440); 288, not 248, since `Q212`: the world's guide arrow
-lands around y 180–260 on the desk and sat on the combo's total — and `hud.gd` shrinks a line to the box rather than
-letting it run past.
-
-🔴 PLAN THE AREA, DO NOT HOLD THE SPACE. What ships is placed as though the
-reserved slots do not exist, because they do not; a slot's contents arriving
-is an edit to this file.
-
-🔴 `minimap` AND `street_plate` ARE ONE PANEL (`P3-44`, `Q136`, the user's
-call): the map sits on the plate at the plate's width, under one keyline, and
-`HudLayout.abutting()` fails a layout that moves either alone. 280 wide is
-14.6% of the frame, inside the 18% the size rule in hud_style.md allows; 340
-was built first and read as too large (the user's call). The
-pair is anchored as the PLATE is — bottom, with the speed.
-
-⚠️ `combo` IS RESERVED, for `P3-2b`'s fare combo: one rect for every
-component a planned task is known to add (`Q138`), graded now and drawn only
-under `--debug-view=full`. `award` was, until the style combo filled it
-(`Q205`, 2026-11-13); since `Q212` it holds only the combo's summary — each
-skill and its count, one small line under the meter — while 車手 ×N lives in
-the tick's row. `timer`, `meter` and `callout` were, until `P3-5a` filled
-them — the 咪錶 top-right, the callout top-centre as they stood, and the tip
-clock moved to the middle of the frame (`Q142`) — and they stay graded against
-the thumbs as filled slots.
-
-🔴 `clock` IS 特更's HOUR, NEVER A COUNTDOWN (`Q162`, the user's call,
-2026-10-11): the time of day over the hour of 交更 ("14:32" over "交更 21:00"),
-so the player reads when the day ends the way a driver reads a dashboard
-clock. Top-left, 300 × 120 over `combo`'s 132: the corner the arcade-taxi
-reference gives its game clock, and the corner the dev overlay wins when it is
-on. Shown only in a shift; in the housing's ink, never the meter's red (`Q139`).
-
-🔴 `pause` IS THE ONE SLOT THAT TAKES A TAP (`P6-1`, `Q165`, the user's ask,
-2026-10-13): a phone has no Esc, so the pause is a drawn button, 88 × 88 at
-1440, 40 — in the top band left of the meter, its centre on the meter's
-first line. Above y 480, so outside both `touch_zone_*`: a tap on it is never
-a thumb landing, and `InputRouter` ignores a finger no zone claims. 88 design
-px is about 9 mm on a 6-inch handset, over Apple's and Material's 44 pt /
-48 dp minimum; `P2-4` re-measures it with the rests.
-
-⚠️ EVERY KEY BELOW IS REQUIRED. `hud_layout.gd` declares no defaults, so a key
-missing here is a zero-size rect rather than something sensible, and
-`verify_hud.gd` refuses one.
+- Readouts stand 32 px in from the edges (`Q163`): with no housings, the corner brackets are the
+  screen's edge.
+- `minimap` and `street_plate` are one panel (`P3-44`, `Q136`): the map sits on the plate at the
+  plate's width, and `HudLayout.abutting()` fails a layout that moves either alone. The map is
+  square for the round scope. 280 wide is 14.6% of the frame, inside `hud_style.md`'s 18%.
+- `speed` and `street_plate` end at y 960, one clear band above `thumb_rest_*`.
+- `thumb_rest_*`: the bottom 100 px, the user's call; `P2-4` re-measures it. The check grades
+  the rests, not `touch_zone_*`: the HUD may overlap a tap zone and may not overlap a thumb
+  (`Q80`).
+- `callout` 520 wide and the plate's strip 56 tall: one language, one line (`Q142`).
+- `timer` y 116: the countdown, centred under the goal box, only up while a fare runs.
+- `tick` 800 wide at y 288 (`P3-76`, `Q169`, `Q212`): the meter's "+HK$2.1" flash, the longest
+  fault-sheet line a skill flashes, and the style combo's live line (車手 ×N on top, the skill
+  that joined in a row below). Above the touch zones (y 480), clear of the pause button, and
+  below the world's guide arrow (about y 180–260). `hud.gd` shrinks a line to the box.
+- `wrong_way`: 4 px under the tick in both tables.
+- `meter`: the 咪錶, top-right. `award` under it holds the combo's summary (`Q205`, `Q212`).
+- `clock` (`Q162`): 特更's hour, never a countdown ("14:32" over "交更 21:00"). Top-left, shown
+  only in a shift.
+- `combo` is reserved (`Q138`): graded now, drawn only under `--debug-view=full`. Plan the area,
+  do not hold the space: what ships is placed as though reserved slots do not exist.
+- `pause` (`P6-1`, `Q165`): the one slot that takes a tap. 88 × 88 in the top band left of the
+  meter, above y 480 so outside both `touch_zone_*`.

@@ -1,135 +1,34 @@
 # stability_control.tres
 
-Rationale for `game/tuning/systems/stability_control.tres`. Each heading is the line the block sat above; `Overview` is
-the file as a whole. Why it lives here and not in the file: `Q119`.
+Stability control (`Q155`): takes engine torque away when the car runs wide or its tail swings
+out, and brakes one wheel to turn the car back. Every slip here is the rear axle's
+(`VehicleController.rear_axle_velocity`, `Q153`). `Q153` and `Q156` hold the sweeps.
 
-## Overview
-
-⚠️ Every slip in this file is the rear axle's since 2026-10-06 (`Q153`,
-`VehicleController.rear_axle_velocity`); figures written before that day were read at the centre
-of mass and do not compare.
-
-Stability control: a real car's ESC takes engine torque away when the car runs wide or its tail swings out, and brakes one wheel to turn the car back. The power cuts are the first three sections; the yaw brake (`Q156`, 2026-10-06) is the last.
-
-⚠️ The sections below moved here from `tyre.md` when the dials became the car's systems (`Q155`,
-2026-10-05); their prose keeps the names the dials had when it was written: `turn_drive_cut` → `understeer_power_cut`, `slide_drive_fade_from_deg` / `_to_deg` → `slip_power_cut_from_deg` / `_to_deg`, `assist_drive_fade_from_deg` → `assisted_slip_cut_from_deg`, which went with the drift assist on 2026-10-06 (`P3-56`; `Q153` keeps its sweeps) — "the assisted mode" below is that removed option.
-
-## `understeer_power_cut = 0.5`
-
-**Kept on 2026-10-06 after two closed-loop forms were measured and withdrawn** (`Q153`): the
-doubled drive below is gone, and the value stands on the technique table instead — with the cut
-the full-throttle corner holds 0.87–0.90 g with the rears at 0.6× their grip from 20 to 86 kph;
-without it the rears run at 1.2–1.8×, the fronts at 2.2–3.5× and lateral falls to 0.70–0.86 g. A
-yaw-rate deficit cannot key it (the car achieves 85–90% of the grip-limited yaw rate holding and
-70–86% ploughing), and traction control on the combined slip holds the rears at their peak, where
-the steering cap lifted and the fronts ploughed (the lift is on the countersteer side alone since,
-`arcade_aids.md`; with the cut at 0 the rears still run at 1.2–1.7×, and the governor re-tried on
-the fixed cap still loses from 63 kph up — 0.82 / 0.73 g against 0.91 / 0.85 — so the value
-stands). What it is in a real car: Bosch's enhanced
-understeer control, power off while the steering asks for more than the road gives, in open loop.
-
-The share of the forward drive taken off at full lock while traction control is armed (`P3-55`,
-`Q153`), for the power-on corner: at 0 a full-lock corner under the doubled drive runs to about
-128 kph from any entry and its arc widens, where the shipped car settles at 62–65. The handbrake
-disarms traction control, so a slide never sees it — `ride` and `hold` hold their peak and
-`longest` at every value, and only the exit after the re-arm moves. Swept 0–0.9 on `corner` at 42 /
-63 / 86 / 105 / 125 kph (`Q153` holds the table): 0.5 settles near 90 kph and pulls away from
-10 kph at full lock as the shipped car does (45.1 against 43.3 kph two seconds in); 0.6 settles
-near 70 and 0.7 near 57, the shipped car's terminal speed between them, pulling away 13% and 30%
-behind it. Set at 0.5 on the user's call after driving the pad (2026-10-02, "seems ok for now"):
-the arc stops widening and the pull-away is the shipped car's; 0 turns it off. 🔴 Graded on `corner` and
-`liftoff`'s windows across entries and on the 10 kph pull-away, never on `hold` or `ride`, which
-cannot see it.
-
-## `slip_power_cut_from_deg = 10.0`, `slip_power_cut_to_deg = 40.0`
-
-**From 10° since 2026-10-05** (the user's "tune the aids so the plain tap stops spinning"): on the
-real taxi's power (`Q153`, 6,000 N off the line, 83 kW above) a plain tap with the assist off
-spun at 42 and 86 kph. Swept one lever at a time at three speeds: the cut's start was the only
-lever that reached 42 kph (10 / 15 / 20° → tap 67.7 / 110.4 / 163.4° there) — `drift_side_cut`
-0.3 / 0.45, `rev_limiter.overspeed_share` 0 / 0.25 and the handbrake left it at 163° — so the
-spin there is power feeding the slide, not the rear's grip. The end stays at 40°: 20 / 25 / 30°
-collapse `hold` at 42 kph (0.68 / 0.78 / 0.92 s) and leave 86 kph at 75–81°. The handbrake
-(`handbrake.md`) finished 86 kph. The assisted mode started at its own 35° and was
-not moved; it went with the assist (`P3-56`, 2026-10-06).
-
-| 42 / 63 / 86 kph, assist off | before | cut from 10° | + handbrake 1,150 |
-|---|---|---|---|
-| `tap` peak | 163.3 / 64.5 / 162.9° | 67.7 / 29.8 / 87.6° | 69.2 / 23.6 / 37.3° |
-| `hold` longest | 3.30 / 3.12 / 2.93 s | 2.07 / 3.12 / 2.88 s | 2.08 / 2.82 / 2.98 s |
-| `ride` longest | 3.30 / 2.35 / 3.47 s | 1.47 / 1.95 / 2.77 s | 1.50 / 2.82 / 2.30 s |
-| `turn@counter` came out | 178.2 / 154.8 / 138.6° | 109.8 / 67.6 / 133.7° | 117.8 / 61.1 / 120.6° |
-
-The section below is the band as first set, at 25°.
-
-The forward drive fades out over this band of body slip while traction control is disarmed, so a
-held throttle cannot spin the car (`Q153`, the user's street report). A plain held tap peaked 30.7 /
-47.8 / 65.1 / 49.7 / 50.0° at 42 / 50 / 63 / 75 / 86 kph; with the band and the cut ending at 65 kph,
-29.0 / 35.7 / 41.6 / 35.3 / 34.5°. `hold` never reaches the band (peak 23–27°) and is unchanged, as
-is the `turn` row at 42 kph. 30 → 40–50 left 63 kph at 50–53°; no existing dial did it
-(`rim_overspeed` 0 calms 75–86 kph and loses `hold` at 86; `traction_rearm_s` moves nothing).
-
-## `armed_slip_cut_from_deg = 8.0`, `armed_slip_cut_to_deg = 14.0`
-
-**8–14° since 2026-10-06, with the slip read at the rear axle** (`Q153`): the tyre's peak slip
-angle to the angle the game calls a slide, so the cut starts where the rear lets go and not before.
-The 3–6° below was set on the centre of mass's slip, which carries a tight turn's geometry: full
-lock and full throttle from 10 / 20 / 30 kph came out at 6.9 / 15.7 / 21.8 kph after 4 s (30.9 /
-35.4 / 42.4 now). Read at the rear axle a gripping corner runs 4–5° of slip, inside 3–6°: `corner`
-at 63 / 86 kph came out at 59.8 / 73.7 kph, and at 86 the rears ran at 0.90× their grip against
-0.73 with no cut at all. Swept `to` 0 / 6 / 10 / 14 at 20 / 42 / 63 / 86 on the technique table: 14
-reads as no cut on `corner` (rears 0.55–0.72×), so the band costs a gripping corner nothing. At
-8–14: `corner` out at 51.6 / 64.7 / 81.0 kph from 42 / 63 / 86, rears 0.60 / 0.57 / 0.60×.
-
-The section below is the band as first set, at 3–6° on the centre of mass's slip.
-
-**Since 2026-10-06**: the road's ESC, drift mode off — power cut as the tail steps out, as a real
-car's catches power oversteer. Built for the drive boost; swept to 6 / 8 / 12° with the boost
-unfaded, 6° held the most (the 42 kph corner's rears 1.54 → 1.35× their grip) but not enough alone,
-which the boost's steering fade finished (`arcade_aids.md`). It also brings the let-go `turn` in
-(194 / 199 / 214 / 176° → 183 / 184 / 173 / 161° at 42 / 50 / 63 / 86 kph). Both slip cuts stand
-aside past 90° of slip (`REVERSED_SLIP_DEG`): a car rolling backwards after a spin had no drive at
-all and rolled at 10–30 kph with the throttle held (the user's report, 2026-10-06; the 50 kph
-assisted tap's exit −9.0 → +2.6 kph).
-
-## `yaw_brake_lock_ratio = 1.5`, `yaw_brake_from_deg = 25.0`, `yaw_brake_to_deg = 40.0`
-
-**The yaw brake, since 2026-10-06** (`Q156`, the user's "it still overspin"): past 25° of
-rear-axle slip the front wheel outside the slide is braked, up to 1.5× the torque that locks a
-wheel at rest by 40°. A real ESC's oversteer intervention, and what a real drift mode keeps as its
-slip ceiling (Ferrari's Side Slip Control, McLaren's Variable Drift Control), so drift mode does
-not stand it down. The force is the braked tyre's own, through the spin solve: it cannot exceed
-the grip that wheel has, where a yaw torque on the body could. In the car's unit (a wheel's lock,
-`TyreVehicleController._wheel_lock_nm`), so it follows the mass, the gravity and the tyre.
-
-Why it and not a deeper power cut: the cuts take away what FEEDS a slide, and the spin that was
-left is the car's own momentum — the plain turn let go came out at 180 / 164 / 146° with the
-power already gone at 40°. Nothing but a force on the car turns it back.
-
-Swept on the full pad, 42 / 63 / 86 kph (2026-10-06; `ride` and `hold` are `longest`):
-
-| | off | 1.5, 30–50 | 1.5, 20–35 | **1.5, 25–40** | 2.0, 25–35 |
-|---|---|---|---|---|---|
-| `turn@off` came out | 180 / 164 / 146° | (1.0:) 132 / 150 / 134° | 83 / 100 / 94° | **95 / 118 / 110°** | 78 / 106 / 101° |
-| `turn@lift` came out | 157 / 135 / 121° | (1.0:) 121 / 126 / 108° | 76 / 84 / 65° | **86 / 100 / 81°** | 74 / 89 / 68° |
-| `tap` peak | 43.3 / 26.8 / 27.2° | — | 30.5 / 24.4 / 24.5° | **34.1 / 26.5 / 26.8°** | 32.1 / 26.4 / 26.6° |
-| `ride` | 1.77 / 1.83 / 1.90 s | — | 1.02 / 1.27 / 1.30 s | **1.20 / 1.70 / 1.73 s** | 1.08 / 1.62 / 1.63 s |
-| `hold` | 3.52 / 3.35 / 3.00 s | 3.52 / 3.35 / 2.88 s | 3.52 / 2.02 / 1.72 s | **3.52 / 3.35 / 2.13 s** | 3.52 / 3.35 / 1.65 s |
-
-25–40 is the earliest band that leaves a countersteered slide alone at 42 and 63 kph (`hold`'s
-slip peaks at 22–27° there) and keeps it over the fare's 2 s at 86, where the driver runs to 34–39°
-and the brake now holds it at 34°. From 20° it cuts `hold` to 1.7 s at 86; a harder brake (2.0)
-or a shorter ramp (25–35, 25–37) does the same. 1.5 and 2.0 read alike over 25–45: the wheel is
-at its grip before the ratio is.
-
-What it leaves: `turn@off` at 63 kph comes out at 118°, 8° over `P3-53`'s 80–110° bar (164°
-before); the handbrake pressed in a turn with the throttle LIFTED still goes round at 63 and
-86 kph (peak slip 179 → 144° at 63, 179° at 86; 116 → 94° at 42), where both rears are locked and
-one front tyre is not enough. The held-throttle handbrake stops swinging on (`handbrake@held` peak
-60 / 34 / 46° → 39 / 31 / 34°). `corner`, `liftoff`, `brake`, `coast`, the flicks and the
-trail-brake never reach 25° and are byte-identical, bar the held flick at 86 kph (peak 28.3 →
-27.4°). The catch is gentler, not snappier: `yaw@hold` −13.2 → −6.2° at 42 kph.
-
-🔴 Graded on `turn`'s `came out` with `hold`'s `longest` as the guard, at all three speeds — 86 kph
-is where the band's start costs dwell. Mutation-checked: braking the INSIDE front instead brings
-`turn@off` / `@lift` out at 170 / 152° at 42 kph and 182 / 152° at 63.
+- `understeer_power_cut = 0.5` (`P3-55`): the share of drive taken off at full lock while traction
+  control is armed (Bosch's enhanced understeer control, open loop). With it a full-throttle
+  corner holds 0.87–0.90 g with the rears at 0.6× their grip from 20 to 86 kph; without, the rears
+  run at 1.2–1.8×, the fronts at 2.2–3.5× and lateral falls to 0.70–0.86 g. Two closed-loop forms
+  (a yaw-rate deficit, traction control on combined slip) were measured and withdrawn. Drift mode
+  disarms it, so grade on `corner`, `liftoff` and the 10 kph pull-away, never `hold` or `ride`.
+- `slip_power_cut_from_deg = 10.0`, `slip_power_cut_to_deg = 40.0`: with drift mode engaged, the
+  drive fades out over this band of slip so a held throttle cannot spin the car. The start was the
+  only lever that stopped the plain tap spinning at 42 kph (10 / 15 / 20° → 67.7 / 110.4 /
+  163.4°). The end stays at 40: 20–30 collapses `hold` at 42 kph to under a second.
+- `armed_slip_cut_from_deg = 8.0`, `armed_slip_cut_to_deg = 14.0`: drift mode off, power is cut as
+  the tail steps out, from the tyre's peak slip angle to the angle the game calls a slide. A
+  gripping corner runs 4–5° at the rear axle, so this band costs it nothing; a 3–6° band slowed
+  every corner.
+- Both slip cuts stand aside past 90° of slip (`REVERSED_SLIP_DEG`), so a car rolling backwards
+  after a spin still has drive.
+- `yaw_brake_lock_ratio = 1.5`, `yaw_brake_from_deg = 25.0`, `yaw_brake_to_deg = 40.0` (`Q156`):
+  past 25° of slip the front wheel outside the slide is braked, up to 1.5× a wheel's lock torque
+  (`TyreVehicleController._wheel_lock_nm`) by 40°. A real ESC's oversteer intervention, and the
+  slip ceiling a real drift mode keeps, so drift mode does not stand it down. The force is the
+  braked tyre's own and cannot exceed its grip. The power cuts cannot do this: the remaining spin
+  is the car's momentum (a let-go turn came out at 180 / 164 / 146° with power already gone).
+  - 25–40 is the earliest band that leaves a countersteered slide alone at 42 and 63 kph (`hold`
+    peaks at 22–27°). From 20° `hold` at 86 kph drops to 1.7 s; a harder brake (2.0) or a shorter
+    ramp does the same. 1.5 and 2.0 read alike: the wheel is at its grip first.
+  - Left over: a handbrake turn with the throttle lifted still goes round at 63 and 86 kph (both
+    rears locked; one front tyre is not enough).
+  - Grade on `turn`'s `came out` with `hold`'s `longest` as the guard, at 42 / 63 / 86 kph.

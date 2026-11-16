@@ -21,274 +21,101 @@ paths:
 
 # Handling and the drift — before marking work done
 
-Moved verbatim from the root `CLAUDE.md`, which keeps the trigger and points here.
+**Any change to the drive model, a car table, a system table, `pace.tres`, `tyre.tres` or a drift
+dial: `tools/skidpad.sh` before AND after, both tables pasted.** It grades, so `check.sh` does not
+run it.
 
-- Handling changes — `VehicleController`'s drive model, `HandlingProfile` or `handling.tres`: also
-  `tools/skidpad.sh`, before **and** after, and paste both tables. It grades rather than checks, so
-  `check.sh` cannot and should not run it. ⚠️ Run the **wrapper**, never `skidpad_ablation.gd`
-  directly — Godot exits `0` on a parse error, so only the wrapper's exit code means anything.
-  ⚠️ Measure on `skidpad.tscn`, never `city_drive.tscn` — a 0.14° micro-gradient there is worth the
-  whole quantity under test, and a published figure has already had to be withdrawn over it
-  (`P0-5b/c/d`).
-  🔴 **A drift dial is graded on dwell (`longest`, `secs>thr`), never on landing peak slip on the
-  threshold** — the game pays per second above it (`Q84`) — with the peak and the exit speed as the
-  guard against a spin.
-  ⚠️ **And the skidpad cannot settle a drift value on its own — drive it too.** An open pad has no
-  far kerb, so 65.7° of peak slip reads as a healthy angle there and was `086° → 219°` and a railing
-  across the carriageway on Expo Drive (`Q86`). It is not a licence to *measure* in
-  `city_drive.tscn`; the numbers still come from the pad and the drive is a veto.
-  ⚠️ **Sweep with `tools/skidpad.sh --sweep=<field>=<v,…>`, not by editing a `.tres` in a shell
-  loop.** One such loop blanked the field it was sweeping and published a table of all-zero rows that
-  read like a finding; the flag exists so that cannot happen again.
-  🔴 **Grade anything speed-dependent at 42, 63 and 86 kph (`--entry-kph=`), because one entry speed
-  is the tool's blind spot** — a yaw assist tuned at 63 and applied at 84 spun the car for a whole
-  release with a green `check.sh` and five clean rows (`Q87`); rows compare only *within* one entry.
-  🔴 **A static sweep of a speed-dependent dial gives an upper bound on a fix, never an estimate**:
-  the car slows inside a drift and crosses the band under it (`Q88`). Sweep the band's own dials.
-  The engine-tyre car's grip-cut and yaw-torque drift (`Q84`–`Q89`) went with the control car on
-  2026-10-05; those Qs keep its lessons.
-- ⚠️ **The wrapper runs `--fixed-fps 60` since 2026-10-06**: a frame is exactly one physics tick
-  and nothing waits on the wall clock, so the full pad at one entry is about 5 s (was 3:26) and a
-  table is byte-identical run to run, serial or five at once, the wall rows included — only the
-  `us/tick` cost columns move. Run 42, 63 and 86 kph at once with `&` and `wait`. Rows shift about
-  0.1 kph against a table graded in real time (entry 63.08 → 63.22, spawn height 0.959 → 1.0), so
-  re-run the before side; the run-to-run bands quoted below (`hold` ±0.3 s, `wall@30`'s exit, the
-  brush's 0.5 kph) were read in real time and are not this mode's.
-- 🔴 **`hold`'s driver commands a SHARE of the lock, so a steering-lock change re-tunes the driver,
-  not the car** (`Q152`, the `slide_lock_deg` sweep in `systems/arcade_aids.md`): a wider lock while sliding read as
-  a SHORTER `hold` at every speed, because three quarters of 35° is a straightening where three
-  quarters of 14° was a catch. Its 20° target was itself set by the old lock. Grade a lock change on
-  the user's own drive, and never read `hold` as evidence that a lock is too narrow or too wide.
-- ⚠️ **`--only=catch` grades the CATCH, and reads two things a countersteer can do** (`Q152`, the
-  street report of 2026-09-30): `snap` is the slip the other way after full opposite lock, and
-  `yaw@hold` the heading swept while it was held. Neither car snaps — under 0.4° at every timing,
-  early, at the peak or late, throttle held or lifted. Both TURN the other way once caught: full
-  lock on gripping tyres sweeps 50–70° the other way inside the next 0.7 s of a 1.5 s hold, about
-  85°/s, on the shipped car and the spike alike. A keyboard holds full lock for as long as the key
-  is down, so this is what "the countersteer turns the car the other way" is; read `yaw@hold`, not
-  `snap`, before reaching for a tyre dial — the shipped car does it too, so the tyre table is not
-  the lever.
-  ⚠️ Its timing columns (`to lock`, `settled`, `turns`, `wheel@turn`) say which half of the
-  steering turns the car: held throttle turns at full lock, lifted before it (`Q152`'s timing
-  round). A lever keyed on the slip falling back is late — the heading reverses first.
-  🔴 **`catch_lock_deg` is graded on `catch`'s `yaw@hold` and `settled`, never on `hold`**
-  (`Q152`'s catch cap round): `hold`'s driver never turns the car the other way, so the row is
-  byte-identical with the cap set and says nothing about it. `wheel` and `to lock` read
-  `steer_ratio`, the player's input, which the cap leaves alone — `fronts@off` reads the front
-  wheels, `capped` when the cap engaged. The row runs to the end of its hold now, so its exit and
-  `+0.5 s` do not compare with a table from before 2026-09-30. ⚠️ A countersteer latch keyed on
-  the slip alone takes a turn-in plough for a slide: latch on tail out (yaw and countersteer sign
-  disagree), and grade a latch change on the tap at 42 kph.
-- 🔴 **A drive assist is tuned against a LINEAR input, never a key** (`Q210`): a key is shaped in
-  `InputRouter.steer_for` by `keyboard_steer.tres` before the car sees it, and the pad steers as a
-  key unless `--steer=analog`. Grade a steering dial on both; a dial that moves on keys alone is
-  the keyboard's, and goes in `keyboard_steer.tres`, not the car.
-- 🔴 **`keyboard_steer.attack_at_top_s` (the car's `steer_attack_at_top_s` until `Q210`) is graded
-  on `--only=flick`'s `flick@held` at 95, 110 and 120 kph** (`Q174`): the full-lock swap with the throttle held, a lane change, and the street's high-speed
-  slide with no button pressed. The 42 / 63 / 86 kph pad is its guard and only `corner` and `tap`
-  move there; drift mode and a countersteer keep `steer_attack_s`.
-- ⚠️ **`--only=liftoff` grades a technique's DIRECTION against `corner`, its control** (`Q153`):
-  read the windows around the lift, never a 4 s total — a coasting car slows and turns tighter
-  for that alone, which read as a +132° pivot on the totals and is about the shipped car's tuck on
-  the windows. 🔴 **`mu`, gravity, `engine_force` and the handbrake's torque move together** (`Q153`,
-  2026-10-05): the two torques are sized to what the tyre can answer, and a grip or a weight change
-  under the old torques spun every tap (168°) where no stability dial helped. The handbrake's
-  follows by itself since `Q156` (`handbrake.lock_ratio`); the drive's does not. 🔴 **A real taxi is
-  the baseline** (the user's call): physical numbers are a Crown Comfort's, and gameplay is layered
-  on top as an aid, never by bending one. `engine_force` is the car's whole drive, split across
-  the driven wheels (`drive_scale`, which multiplied a per-wheel copy, is gone). The power-on corner's lever is
-  `stability_control.understeer_power_cut` (`P3-55`), graded on `corner` across five entries — full lock runs to a TERMINAL speed, so one
-  entry reads a transient — and on the pull-away from `--entry-kph=10`; `hold` and `ride` cannot
-  see it while drift mode is engaged, and only their exits move.
-- ⚠️ **`--only=technique` grades `P3-54`'s three techniques on DIRECTION, each against a control
-  that differs by its input alone** (`Q153`): `flick@held` / `@lift` and `handbrake@held` / `@lift`
-  against `corner`, `trailbrake` against `turnin` — the same steering and the same throttle after
-  0.6 s, no brake. 🔴 Never grade the brake against `corner`: a car that sheds speed turns tighter
-  for that alone, so read slip and turn rate in `+0.00..+0.50`, never radius. The windows run from
-  each row's own input (the feint's end, the press, the brake), and the control is re-read at that
-  same second, so `corner` prints different numbers under the flick and the handbrake. The flick at
-  42 kph is recorded, not graded (a real car rarely flicks on tarmac that slowly). Graded
-  2026-10-05: no flick on either car, the trail-brake ploughs at 42, the held handbrake swings
-  after 0.5 s, and handbrake-and-lift at 86 spins with the assist off — a tyre dial aimed at one
-  of these is read on its row and guarded by `corner`, `tap` and `turn`. ⚠️ Its last three
-  columns are the tyre car's own (`wheel_slips`, `wheel_loads_n`): each axle's most-used tyre in
-  multiples of its peak, and the rear load's swing. The fronts sit at their peak in a plain corner
-  from 63 kph while the rears use about half of theirs, so a dial that "frees the rear" can read
-  as nothing on the flick — read `rear use` before blaming the dial. ⚠️ It is COMBINED slip: a
-  rear over 1.0 at 2° of slip is wheelspin, not the side letting go (`Q153`'s step 2).
-- 🔴 **`--sweep` refuses a field the car reads once, in `_ready`** (`READY_ONLY_FIELDS`:
-  `mass_kg`, `centre_of_mass_offset_y`, the suspension, `wheel_radius_m`)
-  — set live they moved nothing and printed identical rows under distinct labels. Sweep the body
-  instead: `--sweep=body.center_of_mass_y|center_of_mass_z|gravity_scale=…` writes the rigid body
-  live (`P3-54`). A probe only; a value worth keeping goes into `handling.tres`.
-- ⚠️ **A flick stands traction control down like the button** (`FlickWatch`, `flick_*` in
-  `systems/arcade_aids.tres`, `P3-54`): a lifted or braked feint, then the steering across within
-  `flick_window_s`. Never the side cut, which stays the button's. 🔴 **It fires, but on the real
-  car the tail barely comes round**: `flick@lift` peaks at 3.7 / 19.2 / 9.3° at 42 / 63 / 86 kph
-  at pace 2.0, over the threshold at 63 alone (12.3° at 1.5), since the Crown Comfort's chassis
-  (`1876da9`). The 31–40° in P3-54's commit and `arcade_aids.md`'s first table is the `mu` 2.0
-  car's (bisect in `arcade_aids.md`). Grade a change to it with
-  `--sweep=arcade_aids.flick_window_s=0,<v>` on the full pad —
-  0 is the car without it, so every row but the flick's must read the same at both values. 🔴
-  Anything that adds a steering reversal with the throttle lifted to a pad row (a new driver, a
-  lifted catch) now reaches it, unless traction control is already off there — it never fires
-  then. `--catch-lift` was not run in the round that built it.
-- ⚠️ **`--only=turn` grades the street's 90° drift** (`Q153`, the user's street report): the tap,
-  ended at 45° of heading three ways, reading `slide at` / `turned` (when the slip first reaches
-  the threshold, and how far the car had turned by then) and `came out`, the heading it settles on. The bar is
-  80–110° settled at 42 and 63 kph. 🔴 A start bar that reads the PEAK passes a slide that begins
-  after the corner is over (181° of heading at 42 kph before the cut) — read `slide at`.
-  `drift_side_cut` and its band are graded here with `ride`'s peak as the guard (a cut right for
-  42 kph spins the car at 63); `stability_control.slip_power_cut_*` on `ride`'s peak across 42–86 kph with `hold`
-  as the guard; `drift_mode.rearm_on_steer_release` on the settled heading and on `hold`, which a re-arm on a
-  steering REVERSAL kills. Refused, each measured: a locked handbrake (`handbrake_declutch`),
-  every tyre dial at 42 kph. ⚠️ A lower `mu` was refused at 2.0's drive and shipped with the
-  drive and handbrake rescaled (`mu` 1.0, `Q153`, 2026-10-05) — the `turn` let go then fails (136 /
-  220° at 42 / 63 kph), owed.
-- ⚠️ **`--only=wall` grades a penalty bar, not a handling dial** (`P3-50`, `Q148`): the tool
-  stands a slab across the path at `--wall-deg` (10, 30, 90 by default) and reports `approach`,
-  its own reading of the speed into the face on the tick before contact, beside `impact`, the
-  controller's `take_impact_mps` latch, which is the number the game docks on — the two must
-  agree, and they do to the hundredth on every row. Run it at 4, 6 and 8 s like anything speed
-  dependent; `skills.md` quotes the matrix the bars were read from. ⚠️ **The latch reads
-  `_velocity_into_step`**, the velocity at the end of `_physics_process`, because by
-  `_integrate_forces` the solver has already removed the normal velocity — off the state a 69.5
-  kph head-on read 1.6 kph and a 30° hit read nothing, the state already separating. 🔴 **The slide
-  reads the same velocity** (`Q151`): off the state a 30° clip read as already separating and the
-  arcade `collision_speed_retained` / `collision_deflection` response never ran — the car stopped
-  DEAD at 30° and 90° while only the 10° brush kept its speed. Fixed 2026-09-29: exit on the clip
-  0.09 → 28.8 / 51.3 / 76.2 kph at the three run-ups, the brush 34.5 → 57.1, the head-on a stop by
-  construction. Anything new in `_integrate_forces` reads `_velocity_into_step`, never the state.
-  ⚠️ The wall rows are noisy where the drift rows are not (the brush's exit moved 0.5 kph and a
-  head-on's tick count 3 → 2 between two runs of one HEAD): grade a wall change against that band.
-  🚫 Left: the scrub after a clip — on the street a 40 kph clip still rests within a second with
-  the nose on the face. The lever is a yaw-away or a tyre-grip term while a wall contact is live,
-  graded on the clip rows and the drive; `collision_deflection` scales only the first tick.
-- 🔴 **`--only=traffic` grades the latch and the slide against a MOVING body** (`Q175`): `tail5`,
-  `tail20`, `head50`, `rear40`, `back20`, at 42, 63 and 86 kph, `impact` against the tool's own
-  `approach`. Both read the collider's frame in `_integrate_forces`; a static wall's velocity is
-  zero, so `--only=wall` must stay byte-identical. `back20` reading above 0 means the "moving into
-  the contact" test has gone; `rear40` is under the 1 m/s floor and cannot see it.
-  ⚠️ **Six push rows follow (`Q180`)**: `tail20_car`, `head50_car`, `rear40_car`, `tail20_van`,
-  `tail20_tram`, `head50_tram`, with the body's speed before and after. They must match the
-  analytic exchange `J = (1 + e) · closing / (1/m + gives)`; the five rows above are unmarked and
-  stay byte-identical. 🔴 The push goes in at the MIDDLE of the contact patch
-  (`_contact_middle`): at the first corner a square hit read a spurious turn. A
-  `collision_restitution` change re-reads these rows and nothing else.
-- 🔴 **The slip is the REAR AXLE's since 2026-10-06** (`Q153`): `VehicleController.rear_axle_velocity`
-  against the nose, in the fare, drift mode, stability control's cuts and the pad's own copy
-  (`_slide_velocity`). At the centre of mass a gripping full-lock turn carried 15° by geometry
-  alone, which paid as a drift and cut a U-turn's power. Every slip, `secs>thr` and `longest`
-  from before that day was read at the centre of mass and does not compare — re-run the before
-  side. A band in degrees under the tyre's peak (8°) cuts a gripping corner: `armed_slip_cut_*`
-  moved 3–6 → 8–14° for it.
-- 🔴 **The drive is sized on each driven wheel's own rim speed since 2026-10-06** (`Q153`,
-  `_drive_force_at`): the engine's power falls as a wheel spins up. Before, a spinning wheel had
-  more power than the engine, and several dials were set against the spin that fed — the side
-  cut's band (65 → 105 kph), `rev_limiter.overspeed_share` and `slip_power_cut_*` (neither
-  re-swept). A drift row from before that day does not compare.
-- 🚫 **`understeer_power_cut` is not re-keyed on a yaw-rate deficit, and traction control is not
-  put on the combined slip** (`Q153`, 2026-10-06, both measured on `--only=technique` and
-  withdrawn): the deficit band between holding and ploughing is 85–90% against 70–86%, and the
-  friction-circle governor parked the rear at its peak, where `steer_to_grip` lifted and the fronts
-  ploughed. ⚠️ That lift is fixed since (`Q153`, 2026-10-06): the cap stands aside only on the
-  countersteer side of a slide and in drift mode. The governor was re-tried on it the same day and
-  withdrawn again: level with the cut to 42 kph, 0.82 / 0.73 / 0.63 g against 0.91 / 0.85 / 0.72
-  at 63 / 86 / 105, the pull-away 26.9 kph against 30.8 — it holds the rear AT its peak, so the
-  body sits 8° into the turn and the capped fronts run past theirs (2.2× against 1.6×). Grade the
-  lift with the cut swept `0,0.5` on `--only=technique` — at 0.5 `corner`'s rear never reaches
-  the peak and cannot see it.
-- ⚠️ **`drift_slip_threshold_deg` has a consumer since `P3-49`**: the fare's drift skill pays
-  `SkillProfile.drift_hkd`, rising `drift_step_hkd` per `drift_s`, while the slip holds at or over it past `drift_min_s` (`Q145`, `Q172`), so the number the
-  skidpad's `secs>thr` column grades is now the number the game pays on. It stays a design target
-  (`Q84`): a slide that should pay is answered on the grip dials against dwell, never by lowering
-  the threshold — and the game's slip (`FareSystem.slip_deg_of`) is a deliberate second copy of
-  the ablation's, so a change to the flattening or the 1 m/s floor is made in both.
-- 🔴 **The car's own numbers are a `CarSpec`, one table per car under `game/tuning/cars/`**
-  (`Q156`, 2026-10-06): mass, drive, brakes, lock, suspension — a maker's sheet, never a feel dial.
-  `handling.tres` keeps the game layer. 🔴 **A force the car's size decides is derived, never
-  authored**: the brake (`brake_g`), the handbrake (`handbrake.lock_ratio` × a rear wheel's lock)
-  and a spring's ceiling (`suspension_max_load_ratio` × a wheel's load at rest) — a new one goes
-  through `VehicleController._wheel_load_at_rest_n`. `--sweep` finds a bare field in the handling
-  table, the car's or the tyre's, and refuses a name in two.
-- 🔴 **The game's pace is one scale, `pace.pace_scale` (`Q156`): the world's gravity, with every
-  force the car makes following it** — launch force and rolling resistance by the scale, speeds
-  and rates by its root, power by both; mass, `mu`, drag, every angle and every INPUT's seconds
-  by nothing. Never answer "the car feels slow" or "wants more grip" with `mu`, `engine_force` or
-  a boost: that is this dial. `handling.tres` has no `gravity_scale` any more. 🔴 **A new speed-
-  keyed dial on the car reads `_car_kph()`, a new speed floor takes `_pace_root()`, and a system's
-  clock is stepped with `delta × _pace_root()`** — or it is right at pace 1 alone. Sweep with
-  `--sweep=pace.pace_scale=1,1.5,2`: it re-fits the car and scales `--entry-kph` by the root, so
-  rows compare in the car's own terms; grade a value at REAL speeds by editing `pace.tres`.
-  🔴 **60 Hz holds to pace 2.0 and not 2.5** (`pace.md`'s brake table): past it the tick is the
-  limit, not a dial. The player's hands do not scale, so drift dwell falls with the pace.
-  Shipped at 2.0 on the user's drive since 2026-10-07 (1.5 the day before, `pace.md`): every
-  figure in a sidecar or a `Q` from before 2026-10-06 was read at pace 1, and from that day to
-  2026-10-07 at 1.5. Neither compares. At 2.0 `hold` at 42 / 63 kph is under the fare's 2 s,
-  a known trade.
-  🔥 `arcade_aids.drive_boost` is gone for it. 🚫 `drift_side_cut` was tried at 0 and kept (the
-  turn under-rotates, 59° at 42 kph; no handbrake ratio buys it back) — the part that would
-  replace it is a limited-slip differential, deferred as a joint spin solve, not measured shut.
-- 🔴 **Stability control brakes the front wheel outside a slide past 25° of rear-axle slip**
-  (`stability_control.yaw_brake_*`, `Q156`, 2026-10-06), drift mode or not — the answer to a spin
-  that is the car's own momentum, which no power cut reaches. Graded on `turn`'s `came out` with
-  `hold`'s `longest` as the guard at 42 / 63 / 86 kph: a band starting under `hold`'s own slip
-  (22–27° at 42 / 63, to 39° at 86) costs the countersteered slide its dwell at 86 first. Every
-  drift row from before it does not compare. Left open: `turn@off` at 63 kph (118°), and the
-  lifted handbrake in a turn at 63 / 86, which one front tyre cannot hold.
-- 🔴 **The car's dials are its systems, one table each under `game/tuning/systems/`** (`Q155`):
-  traction control, stability control, drift mode, the handbrake, the rev
-  limiter — real cars' — and `arcade_aids`, the game's own (the side cut, the flick, the catch
-  limiter, the slide lock), never filed under a real system. `tyre.tres` is the tyre alone. A new
-  dial goes in the system it belongs to, and an aid no real car has goes in `arcade_aids`; the old
-  names are in `Q155`'s rename map. Each table is assigned on `taxi_tyre.tscn` by path, and
-  `verify_vehicle.gd` refuses any other.
-- 🔴 **The tyre car (`P3-52`, `Q152`) is the game's car since 2026-10-03 and the only car since
-  2026-10-05**, graded on `skidpad.tscn` — `tools/skidpad.sh --entry-kph=63` (and 42, 86) — and
-  driven with a plain `drive.sh`: `city_drive.tscn` instances `taxi_tyre.tscn`, and
-  `verify_vehicle.gd` refuses it any other car (`--tyres=` fits a trial table). "The shipped car"
-  in a note written before 2026-10-03 is `taxi.tscn` on the engine's tyres, the pad's control until
-  it was dropped; its grip and yaw drift went with it, so `handling.tres` holds no drift dial but
-  the button's ramp (`drift_attack_s`, `drift_release_s`) and the threshold. Compare two
-  configurations at one `--entry-kph`, never one `--run-up`: two drives reach two speeds in the
-  same seconds. `--sweep` reaches `TyreProfile` fields, and a system's as `<system>.<field>`
-  (`Q155`); a drift_* field sweeps only the drift rows.
-  🔴 **`hold`'s driver is the harness's, never the car's** (`Q72`): it plays the human, and both
-  cars get the same one. `longest` is the unbroken dwell the fare's drift pays on (`drift_min_s`);
-  `secs>thr` sums every run. 🔴 **`longest` cannot read past the 4 s window** (`Q179`): a
-  sustained slide reads the window less its onset, 3.57 s at 86 kph. A drift or tyre change re-reads `--only=ride --entry-kph=20`
-  and `--only=hold` at 76–95 kph with `--manoeuvre-s=30`, because on the pad both hold a slide for
-  30 s, and only the street stops it paying HK$435. ⚠️ `hold` on the spike carries ±0.3 s run to run at one
-  configuration (`Q152`; three serial runs were byte-identical on 2026-10-02, `Q153` — run the
-  repeats anyway). 🔴 **Anything new in the spin step is solved, never stepped**: explicit, a braked
-  wheel past the curve's peak limit-cycled; clamped at zero slip, the drive could not carry the rim
-  past the road. 🔴 **Where the sideways force goes in is a drift dial** (`TyreProfile.side_force_depth`):
-  at the contact the car rolled at a kerb, at the shipped 0.2 nothing slides.
-  🔴 **The drift assist is gone (`P3-56`, dropped 2026-10-06 on the user's call)** — it was an
-  automatic countersteer and its own later slip cut, an option default ON in the game and OFF on
-  the pads, so every drift change was graded in two modes. There is one car now, the old off mode:
-  grade a drift change on `ride` AND `hold` (`ride` the player's plain input, `hold` a player who
-  countersteers). "Assist on" figures in an earlier `Q` or sidecar are that removed mode's.
-  ⚠️ At 86 kph `hold` sits on its own cliff (about 3.1 s to 83 kph, about 1.4 from 90) — read
-  76–95 kph before trusting one cell there. ⚠️ `--sweep` refuses a field in both tables — the tyre dial was
-  renamed `side_force_depth` after a shared `roll_influence` swept the wrong table silently.
-- ⚠️ **`touch.steer_return_at_top_s`, `wheel_radius_px`, `wheel_hub_px` and `spin_lock_deg` have NO pad row** (`Q238`): the pad
-  steers through the action map, which never leaves a wheel turned and never goes round one, so
-  `--steer=touch` is unmoved by them by construction. `verify_input.gd` holds their logic; the
-  handset grades their values.
-- 🔴 **Three game-layer dials since `Q230` (2026-11-16), each with its own row**:
-  `drive_fade_from_kph` / `drive_fade_curve` (the drive easing off from 59 kph on the road) are
-  graded on speed after N seconds — `--only=brake --run-up=2…20`, read `entry` — with `hold` at
-  76–95 kph as the guard: the fade stands down in drift mode because, applied there, `hold` at
-  86 kph fell 3.57 → 1.02 s. `collision_align_s` is graded on `--only=bump`'s `brush30` (`yaw` is
-  the face's 30° when it is right; under 0.3 s the car swings past the wall) with `wall`'s exits
-  re-read. `touch.steer_attack_at_top_s` is graded on `--only=flick --steer=touch` at 95 / 110 /
-  120 kph, as the keyboard's is on keys. ⚠️ Every row entered above 59 kph from before that day
-  had the car's whole drive and does not compare; the wall rows moved with the alignment.
-  ⚠️ `bump`'s kerb and rut rows are a guard that reads nothing (under 2.5° at every speed): a
-  spin "over a bump" is looked for in the brush and clip rows first. `bump@post` is a dead stop
-  at most speeds, not built.
-- ⚠️ **`wall@30`'s exit wanders 28.4–31.7 kph across runs of one HEAD** at 63 kph (`Q152`),
-  approach and impact identical to the hundredth — wider than `Q151`'s 0.5 kph. Grade a wall change
-  against that band.
+## Running the pad
 
+- Run the wrapper, never `skidpad_ablation.gd` (Godot exits 0 on a parse error). Measure on
+  `skidpad.tscn`, never `city_drive.tscn` (a 0.14° gradient there is worth the quantity under test).
+- It runs `--fixed-fps 60`: about 5 s a pad, byte-identical run to run except the `us/tick`
+  columns. Run 42, 63 and 86 kph (`--entry-kph=`) at once with `&` and `wait`.
+- **Always re-run the before side.** Tables in a `Q` or sidecar were read under older slip, drive,
+  pace or timing conventions and do not compare.
+- **A drift dial is graded on dwell** (`longest`, `secs>thr`), never on landing peak slip on the
+  threshold (`Q84`); peak and exit speed guard against a spin. `longest` cannot read past the 4 s
+  window (`Q179`): a drift or tyre change also re-reads `--only=ride --entry-kph=20` and
+  `--only=hold` at 76–95 kph with `--manoeuvre-s=30`.
+- **The pad cannot settle a drift value alone — drive it** (`Q86`: 65.7° of peak slip read healthy
+  on the pad and spun into a railing on Expo Drive). The drive is a veto; numbers come from the pad.
+- **Grade anything speed-dependent at all three entries** (`Q87`), and compare rows only within one
+  `--entry-kph` (never one `--run-up`). A static sweep of a speed-dependent dial is an upper bound
+  (`Q88`): sweep the band's own dials.
+- **`--sweep=<field>=<v,…>`**, never a shell loop over a `.tres`. It reaches handling, car and tyre
+  fields bare, a system's as `<system>.<field>`, `pace.pace_scale`, and
+  `body.center_of_mass_y|center_of_mass_z|gravity_scale`. It refuses a name in two tables and a
+  field read once in `_ready` (`READY_ONLY_FIELDS`). A `drift_*` field sweeps the drift rows only.
+- **`hold`'s driver is the harness's** (`Q72`) and commands a SHARE of the lock, so a lock change
+  re-tunes the driver: grade a lock on the user's drive, never on `hold` (`Q152`). `hold` at 86 kph
+  sits on a cliff — read 76–95 kph. Grade a drift change on `ride` (plain input) AND `hold`
+  (countersteering).
+- **A drive assist is tuned against a linear input** (`Q210`): keys are shaped by
+  `keyboard_steer.tres` in `InputRouter.steer_for`; the pad steers as a key unless `--steer=analog`.
+  A dial that moves on keys alone belongs in `keyboard_steer.tres`.
+
+## Rows (`--only=`)
+
+| Row | Grades | Read / trap |
+|---|---|---|
+| `catch` | a countersteer; `arcade_aids.catch_lock_deg` | `yaw@hold` and `settled`, never `snap` or `hold`. The car turns the other way under held full lock (about 85°/s); the tyre table is not the lever. A latch keyed on slip alone takes a plough for a slide: latch on tail out, grade on `tap` at 42 kph |
+| `flick` | `keyboard_steer.attack_at_top_s` (`Q174`); `touch.steer_attack_at_top_s` with `--steer=touch` | `flick@held` at 95, 110, 120 kph; the three-entry pad is the guard |
+| `liftoff` | a technique's direction against `corner` (`Q153`) | the windows round the lift, never a 4 s total |
+| `technique` | flick and handbrake against `corner`, `trailbrake` against `turnin` | slip and turn rate in `+0.00..+0.50`, never radius; never the brake against `corner`. `rear use` over 1.0 at 2° slip is wheelspin (combined slip) |
+| `turn` | the street's 90° drift: `arcade_aids.drift_side_cut`, `stability_control.yaw_brake_*`, `drift_mode.rearm_on_steer_release` | `slide at` / `turned` / `came out`, bar 80–110° settled at 42 and 63 kph. A bar on the PEAK passes a slide that starts after the corner. Guards: `ride`'s peak, `hold`'s `longest` |
+| `ride`, `hold` | `stability_control.slip_power_cut_*` (ride's peak, hold the guard) | drift mode engaged hides `understeer_power_cut` |
+| `corner` | `stability_control.understeer_power_cut` | five entries (full lock runs to a terminal speed) and the pull-away from `--entry-kph=10` |
+| `wall` | a penalty bar (`skills.md`), `collision_*` | `impact` (the `take_impact_mps` latch) must equal `approach`. `--wall-deg` 10, 30, 90. `wall@30`'s exit wanders 28.4–31.7 kph at 63 |
+| `traffic` | latch and slide against a moving body (`Q175`); six push rows (`Q180`) | `back20` above 0 means the moving-into-contact test is gone. Push rows match `J = (1 + e) · closing / (1/m + gives)`; a `collision_restitution` change re-reads them alone. `wall` must stay byte-identical |
+| `brake` | `drive_fade_from_kph` / `drive_fade_curve` (`Q230`) | `entry` across `--run-up=2…20`; `hold` at 76–95 kph is the guard (the fade stands down in drift mode: applied there `hold` at 86 fell 3.57 → 1.02 s) |
+| `bump` | `collision_align_s` on `brush30` | `yaw` is the face's 30° when right; under 0.3 s the car swings past the wall. The kerb and rut rows read nothing |
+
+No pad row exists for `touch.steer_return_at_top_s`, `wheel_radius_px`, `wheel_hub_px`,
+`spin_lock_deg` (`Q238`): `verify_input.gd` holds the logic, the handset grades the values.
+
+## Where a number lives
+
+- **`CarSpec`** (`tuning/cars/`, `Q156`): the maker's sheet, a Crown Comfort's — never a feel dial.
+  A force the car's size decides is derived (`brake_g`, `handbrake.lock_ratio`,
+  `suspension_max_load_ratio`, through `_wheel_load_at_rest_n`). `engine_force` is the whole drive,
+  split across the driven wheels.
+- **Systems** (`tuning/systems/`, `Q155`): a real car's system each in its own table; an aid no
+  real car has goes in `arcade_aids`. `tyre.tres` is the tyre alone, `handling.tres` the game
+  layer. `taxi_tyre.tscn` is the only car (`verify_vehicle.gd`); `drive.sh --tyres=` fits a trial
+  tyre table.
+- **Pace** (`pace.pace_scale`, `Q156`): the world's gravity with every force following. "Feels
+  slow" or "wants grip" is this dial, never `mu`, `engine_force` or a boost. A speed-keyed dial
+  reads `_car_kph()`, a speed floor takes `_pace_root()`, a system's clock steps `delta ×
+  _pace_root()`. 60 Hz holds to pace 2.0, not 2.5 (`pace.md`).
+- `mu`, gravity and `engine_force` move together (`Q153`): a grip change under the old torque spun
+  every tap.
+
+## Traps in the controller
+
+- **The slip is the rear axle's** (`rear_axle_velocity`): at the centre of mass a gripping
+  full-lock turn carried 15° and paid as a drift. A slip band under the tyre's 8° peak cuts a
+  gripping corner.
+- **Anything in `_integrate_forces` reads `_velocity_into_step`, never the state**: the solver has
+  already removed the normal velocity (a 69.5 kph head-on read 1.6; a 30° clip stopped dead).
+- The push goes in at the middle of the contact patch (`_contact_middle`).
+- The drive is sized on each driven wheel's own rim speed (`_drive_force_at`).
+- Anything new in the spin step is solved, never stepped. `TyreProfile.side_force_depth` is a drift
+  dial.
+- `drift_slip_threshold_deg` is what the fare pays on and a design target (`Q84`): never lower it
+  to make a slide pay. `SlipAngle` duplicates the ablation's `_slip_deg` on purpose; change both.
+- A flick stands traction control down (`FlickWatch`). Grade with
+  `--sweep=arcade_aids.flick_window_s=0,<v>`: every row but the flick's reads the same. A new pad
+  row with a lifted steering reversal triggers it.
+
+## Measured shut, and open
+
+- `understeer_power_cut` is not re-keyed on a yaw-rate deficit (bands overlap: 85–90% holding
+  against 70–86% ploughing), and traction control is not put on combined slip (0.82 / 0.73 / 0.63 g
+  against 0.91 / 0.85 / 0.72 at 63 / 86 / 105 kph; pull-away 26.9 against 30.8 kph) — `Q153`.
+- `drift_side_cut` 0 was tried and kept (59° at 42 kph). A locked handbrake
+  and every tyre dial at 42 kph were refused on `turn`.
+- Gone: the engine-tyre control car, the drift assist (`P3-56`), the drive boost.
+- Open: `turn`'s let-go at `mu` 1.0 (136 / 220° at 42 / 63 kph); `turn@off` at 63 (118°); the
+  lifted handbrake in a turn at 63 / 86; the scrub after a wall clip; `flick@lift` barely brings
+  the tail round (3.7 / 19.2 / 9.3° at 42 / 63 / 86); `--catch-lift` ungraded; `bump@post` is a
+  dead stop; a limited-slip differential is deferred, not refused.

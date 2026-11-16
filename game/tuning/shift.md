@@ -1,23 +1,10 @@
 # shift.tres
 
-Rationale for `game/tuning/shift.tres`. Each heading is the line the block sat above; `Overview` is the
-file as a whole. Why it lives here and not in the file: `Q119`.
+The shift's clock hours (`Q162`), read by `day_clock.gd` in `Mode.SHIFT` for the HUD clock. The
+shift's length is not here: it is `day_to_night.tres`'s `length_s` (840 s), so the clock and the
+sky end on the same game second. `--shift-s=<seconds>` compresses a whole shift. Both keys are
+required (`shift_profile.gd` declares no defaults).
 
-## Overview
-
-特更 / THE SHIFT (`Q162`, the user's ask, 2026-10-11): a run from morning to night, then the total
-fare weighed against the best. Read by `scripts/world/day_clock.gd` in `Mode.SHIFT` for the hours on
-the HUD's clock; the shift's LENGTH is not here. It is `day_to_night.tres`'s `length_s`, the rig's,
-so the clock on the dash and the sky end on the same game second and there is one number to move.
-`--shift-s=<seconds>` compresses the whole shift for a frame of the handover.
-
-## `opens_h = 7.0`
-
-The shift opens at 07:00, the morning the user asked for. The rig opens on the authored daylight —
-there is no dawn keyframe — so 07:00 is drawn as the day every frame so far was graded under.
-
-## `closes_h = 21.0`
-
-交更 at 21:00: an hour after `day_to_night.tres` reaches full night at 20:00, so the last stretch of
-every shift is driven in the dark it was lit for. 14 game hours over 840 s of driving is a
-minute on the clock for every second driven (`Q233`).
+- `opens_h = 7.0`: the rig opens on the authored daylight; there is no dawn keyframe before it.
+- `closes_h = 21.0`: an hour after the rig reaches full night at 20:00, so every shift ends in the
+  dark. 14 game hours over 840 s is a clock minute per second driven (`Q233`).

@@ -1,242 +1,72 @@
 # hud_style.tres
 
-Rationale for `game/tuning/hud_style.tres`. Each heading is the line the block sat above; `Overview` is the
-file as a whole. Why it lives here and not in the file: `Q119`.
+Rationale for `game/tuning/hud_style.tres` (`Q119`).
 
-## Overview
+The HUD's theme. Keep every look here and out of `hud.gd`; a second car's cluster would be a
+second `.tres` of this class. Every key is required: `hud_style.gd` declares no defaults, and
+`verify_hud.gd` refuses a zero it would draw with.
 
-⚠️ SINCE `Q163` ONE HEAD-UP DISPLAY (the user's call, 2026-10-13): the readouts
-float bare on a bracketed, vignetted frame and only the 咪錶 keeps its box —
-see the `float_shadow` section below. What follows is `Q139`'s, and still holds
-for the meter's box and the map's field.
+One head-up display (`Q163`): readouts float bare on a bracketed, vignetted frame, and only the
+咪錶 keeps its box. Colour has fixed meanings (`Q139`): red is the fare's, amber the speed's, green
+a gain.
 
-ONE VOICE: the cab's instruments in one black housing (`Q139`, the user's
-calls). Every panel is `plate_field` under one `plate_edge` bezel; the speed is
-the DASHBOARD's — a dial, an amber needle, printed numerals — and the 咪錶's red
-seven-segment LED is kept for the fare (`P3-5a`), because speed was never on a
-meter. It was "white is the city speaking, dark is the car speaking" (`Q80`)
-until the map made the white half the larger one and the two read as two
-designs.
+Size rule: the speed reads at about 7% of frame width and the plate under about 18%. Larger reads
+as furniture.
 
-🔴 THIS TABLE IS THE THEME. A Comfort Hybrid's modern cluster is a second
-`.tres` of this class that the car names; nothing selects one while there is
-one car. Keep every look here and out of `hud.gd`.
-
-⚠️ `plate_field`, `chip_field` and `map_field` ARE ONE VALUE in three keys —
-three panels read them, one housing — and `verify_hud.gd` holds them equal,
-dark and OPAQUE. The housing is NOT the road's asphalt constant, for the
-reason the plate white was not its paint (`Q53`, `Q79`).
-
-⚠️ THE SIZE RULE, measured off the references this layout is taken from: the
-speed reads at about 7% of frame width and the plate under about 18%, which is
-where Midtown Madness 2 puts the same two things. Anything larger reads as
-furniture, and the city is the deliverable.
-
-⚠️ EVERY KEY BELOW IS REQUIRED. `hud_style.gd` declares no defaults, so a key
-missing here is zero rather than something sensible; `verify_hud.gd` refuses a
-zero it would otherwise draw with.
-
-## `warn_disc = Color(0.761, 0.102, 0.149, 1)`
-
-NO ENTRY (TS115), the same sign standing on 179 posts in the region. The red
-and the two proportions are quoted from the world sign and graded against it
-by verify_hud; the bar draws in plate_field. See hud_style.gd and Q81.
-
-## `map_field = Color(0.07, 0.07, 0.075, 1)`
-
-The minimap (`P3-44`, `Q136`): light roads on the housing — a figure-ground
-plan, which is what survives under a pixel to the metre.
-🔴 `map_field`, `map_road` AND `map_road_main` ARE OPAQUE, and verify_hud refuses otherwise:
-strokes overlap at every joint, a deck's casing is the field drawn over the
-street beneath it, and minimap.gd clips by the field's drawn alpha. The chevron
-is taxi red: it is the taxi, and the one saturated thing on the map.
-
-## `map_road = Color(0.5, 0.5, 0.48, 1)` and `map_road_main = Color(0.94, 0.92, 0.86, 1)`
-
-Main roads apart from minor ones (2026-09-24, the user's call, after "what does
-an ordinary GPS show that we are missing"): a GPS draws the arterials bolder, and
-on a dark plan the bolder one is the lighter one. Main is iB1000's published
-`MAR`/`HIG`/`TUN`/`ROB`/`SLR` (`roadgraph.json`'s `street_class`), so Hennessy,
-Gloucester, King's Road and Yee Wo Street run as one near-white line through a
-mid-grey grid. The grey came down from 0.72 to make the room; `verify_hud` holds
-both on the field and the main road 0.15 of luminance over the minor. Not amber:
-amber is a waiting customer's, and a road the colour of a pin hides the pin.
-
-## `map_water = Color(0.1, 0.19, 0.31, 1)` and `map_park = Color(0.11, 0.21, 0.13, 1)`
-
-The ground under the map's roads (2026-09-24, the user's call): the harbour and
-the parks, `basemap.json`. In Wan Chai the waterfront is the strongest landmark
-there is, and a GPS always shows the water. Dark and quiet — a blue and a green
-barely off the field — because they are the background and the roads are the
-figure: `verify_hud` holds a minor road 0.30 of luminance over both, which is
-what took them down from a first 0.36 blue and 0.25 green. Opaque, like the rest
-of the mesh.
-
-## `dial_needle = Color(1, 0.6, 0.12, 1)`
-
-The speedometer's needle: amber, a Crown Comfort's. 🔴 NOT RED, and verify_hud
-holds it off: red is the fare's, and the acceleration bar's red two pixels
-below it already means "losing speed". `dial_full_scale_kph` is 160 against a
-car that tops out at 140 — a dial that ends where the car does never looks
-fast, and one the car can run off pins the needle when it matters.
-
-## `warn_bar = Color(0.941, 0.941, 0.918, 1)`
-
-The NO ENTRY bar's white, the world sign's `#f0f0ea`. It borrowed the plate's
-white while the plate had one (`Q139`).
-
-## `meter_lit = Color(1, 0.22, 0.12, 1)`
-
-The 咪錶's LED (`P3-5a`, `Q139`): the fare in red seven-segment digits over
-their ghosts (`meter_unlit`), dollars to one place, right-aligned in five cells
-— a Hong Kong meter's face, and the one place red is spent. `verify_hud.gd`
-holds the lit digit off the ghost and the ghost off the housing, so the unlit
-segments stay a face and never a second reading.
-
-## `tip_digit_px = 26.0`
-
-The tip's own LED under the meter's (`P3-49`, the user's call: the tip on the
-same seven-segment display in the same red as the fare, not a green label).
-The meter's housing is 120 px high and its digits 46, so the tip's are a bit
-over half that with `tip_segment_px` 5 — the same lit and unlit colours, the
-same five cells and lean, and still a meter's face at that size. It shows the
-skills paid so far while carrying and nothing else: the seconds left are
-priced at the door, since a tip that fell with the clock read as a penalty.
-
-## `total_digit_px = 26.0`
-
-The session's takings on a third LED under the tip's (the user's ask,
-2026-11-11: seven-segment for the total too, where it was a label reading
-"合計 HK$0.0"). The tip's size and weight (`total_segment_px` 5), so the two
-small rows read as one face under the fare; the chip beside it is "合計" /
-"TOTAL" alone, "HK$" standing once on the fare's row. `total_cells` is 6, one
-more than the fare's five: a sum that overflows its cells drops its LEADING
-digit, and a session passes HK$9,999.9 long before a fare does. The three
-rows share one stack as wide as the fare's row, the small LEDs ending where
-the fare's does, the way a meter's columns line up.
-
-## `total_lit = Color(0.65, 0.143, 0.078, 1)`
-
-The total's lit segments: `meter_lit` at 65% (the user's ask, 2026-11-11: a
-dimmer red, so the row differs from the tip's by more than its chip). Picked
-from frames at 100 / 80 / 65 / 50%: 80 is hard to tell from the tip beside
-it, 50 starts to sink into the ghost. The ghost stays `meter_unlit`.
-⚠️ `meter_lit` clears its ghost by 0.306 of luminance against
-`verify_hud`'s 0.30, so no dimmer red can hold the meter's bar; this one
-clears 0.17 and the check holds it to half the bar and under the meter's red.
-
-## `timer_outline_px = 6`
-
-The tip clock has no housing (`Q142`, the user's call: the countdown in the
-middle of the frame, no backdrop), so its numerals carry the housing's dark as
-an outline instead, and `verify_hud.gd` refuses a zero: a bare white 84 px
-number over a light road is the one place this HUD could vanish.
-
-## `timer_unit_gap = 4`
-
-The unit sits to the right of the seconds on one baseline, `99 秒` (the user's
-call), this many pixels after the number. It was the line under it; a row keeps
-the clock one line tall in the middle of the frame. The baseline is not a dial:
-the unit is lifted by the difference of the two fonts' descents, so it follows
-`timer_size`, `timer_unit_size` and the language's face.
-
-## `timer_warn_s = 10.0`
-
-The tip clock is seconds left on the allowance (`Q141`: the seconds left are
-the tip), in the chip's ink until ten seconds, then the fare's red — the
-passenger is about to bail, and it is the tip draining, so it takes the meter's
-colour. A first guess ahead of the user's drive.
-
-## `callout_sub_size = 20`
-
-The callout is the place over the road (`Q142`, the user's call: a passenger
-says a building, not a kerb): the building's name on the first line in both
-languages at the plate's sizes, and the street under it at this size in the
-chip's muted ink, with the distance while idle. Both lines shrink to the box,
-the English giving way first because the Chinese is the shorter.
-
-## `tick_fade_s = 1.2`
-
-Each meter tick flashes "+HK$2.1" under the clock at `tick_size` and fades over
-this (the user's call: feedback near the centre for every tick). Long enough to
-be read at a glance, short enough that ticks a few seconds apart never stack.
-`callout_caption_size` is the small line over the goal — DESTINATION, PICKING
-UP, DELIVERED — that says what the box is, which the box alone did not.
-⚠️ THE CHINESE SIZES ARE LARGER (`callout_size_zh` 34, `callout_caption_size_zh`
-22, `callout_sub_size_zh` 26) AND THE LINES FURTHER APART (`callout_line_gap_zh`
-8 against −4 for the Latin): the Kai face's strokes thin out at the Latin
-sizes and the user read the box as unreadable at 30 / 15 / 20; 40 for the
-place was then too much, and the lines wanted air.
-
-## `callout_hold_s = 5.0`
-
-How long the delivery's receipt, or the bail's, stays in the callout before the
-box goes down: twenty-five samples at the loop's 5 Hz, and the model counts
-samples, not seconds, so `verify_hud.gd` can step it. Was 3.0 for a two-word
-notice; since `P3-49` the sub line is a sum — "meter 29.0 + time 18.0 + drift
-×2 10.0" — and five seconds is what reading it takes.
-
-## `map_pin_px = 26.0`
-
-The destination's marker on the map is a PIN, not a dot (`Q142`, the user's
-calls): its tip on the point, upright whatever the map's heading, in
-`map_destination`, up only while a fare has one. Every PENDING customer in
-range is a pin too — all of them, like a map, not the closest alone — at
-`map_pending_px` in `map_pickup`, shown only while no one is aboard.
-
-## `map_beacon_px = 22.0`
-
-The target's arrow on the map's border (2026-09-24, the user's call): while the
-target is off the map — the destination 1.2 km away on a 320 m map — a plain
-triangle stands on the border on the line from the car toward it, in the
-target's own colour (`map_destination` or `map_pickup`), rimmed like the car.
-Not the car's notched chevron: nothing else on the map may read as the car. In
-from the keyline by its own length so it clears the chamfer, and above the
-strip. `verify_hud` holds where it stands; the frame holds the rest.
-
-## `map_pickup = Color(0.9, 0.75, 0.3, 1)`
-
-Every pending customer as an amber pin on the map (`Q142`, the user's call:
-the pool, not one invented passenger). The destination is ONE pin in
-`map_destination`, the chevron's red, because the destination is the fare and
-red is the fare's.
-
-## `float_shadow = Color(0, 0, 0, 0.6)`
-
-The head-up look (`Q163`, the user's pick of three mockups): every readout but
-the meter floats with no panel, and casts this shadow — 8 px round the glyphs,
-2 px down — which is what keeps a white numeral readable on a white sky.
-`frame_*` are the four corner brackets in the plate's ink at 0.55, 48 px arms,
-16 px in from the safe area; `vignette` darkens the top and bottom 16% of the
-frame to 0.4 at the edge, under every readout. `map_fade_px` 28 is the round
-map's rim fading to nothing — also its clip. `dial_sweep_px` 6 is the amber arc
-from zero to the needle. `scrim` is the tint the menu's blurred backdrop is
-pulled toward (`menu.md`). `verify_hud` refuses a zero or a light shadow.
-
-`brush_stroke` is the menu's brush (`InkStroke`, `Q218`): the stroke behind the
-choice the focus is on and the rule under the game's name, in the taxi's own
-red — the body colour, a shade under the NO ENTRY disc's so the two are not one
-red. It replaced the accent-green rule: the green stays the HUD's gain.
-
-
-## `touch_hint = Color(0.93, 0.93, 0.9, 0.3)`
-
-The thumbs' sticks on a touch screen (`Q204`, the user's ask, reversing `Q97`'s
-"no visible touch chrome"): the bracket's ink, faint at 0.3 for the hint where
-each thumb goes and 0.8 under a thumb, in an 8 px stroke. Not red and not
-amber: red is the fare's and amber the speed's (`Q139`), and a stick is
-neither.
-
-
-## `touch_go = Color(0.3, 0.82, 0.38, 0.9)`
-
-The pedals' levels under the driving thumb (`Q228`, the user's ask from a new
-player on a phone): the accelerator fills green from the thumb upward as far as
-it is pushed and the brake red from the thumb downward (`touch_stop`,
-`Color(0.92, 0.29, 0.26, 0.9)`), where the whole pedal used to brighten — a
-change of opacity nobody could read a half throttle from. The ▲ and ▼ beside
-the pedals are the sticks' ink, and each takes its pedal's colour only while the
-thumb is pushing that way. `accent`'s green and
-`accent_negative`'s red at 0.9: go and stop. ⚠️ This is the one place a stick
-is red, on the user's instruction — the wheel and the pedals' outlines keep the
-bracket's ink.
+- `plate_field`, `chip_field`, `map_field`: one housing value in three keys. `verify_hud.gd`
+  holds them equal, dark and opaque. Not the road's asphalt constant (`Q53`, `Q79`).
+- `float_shadow`, `float_shadow_px`, `float_shadow_drop_px`: the shadow every floating readout
+  casts, which keeps a white numeral readable on a white sky. `verify_hud` refuses a zero or a
+  light one.
+- `frame_*`: the four corner brackets, in the plate's ink at 0.55. `vignette`, `vignette_share`:
+  the top and bottom 16% darkened to 0.4 at the edge.
+- `dial_needle`: amber, a Crown Comfort's. Never red; `verify_hud` holds it off.
+  `dial_full_scale_kph` 160 is past the car's top speed, so the needle never pins.
+  `dial_sweep_px`: the amber arc from zero to the needle.
+- `warn_disc`, `warn_bar`, `warn_bar_length`, `warn_bar_thickness` (`Q81`): NO ENTRY (TS115).
+  The red, the white and the two proportions are the world sign's, graded against it by
+  `verify_hud`. `warn_blink_hz` is capped at 3 Hz (WCAG 2.3.1).
+- `map_road`, `map_road_main` (`P3-44`, `Q136`): light roads on the dark field. Main roads
+  (`roadgraph.json`'s `street_class`) are near-white, minor ones mid-grey; `verify_hud` holds the
+  main 0.15 of luminance over the minor. Not amber: that is a waiting customer's. Both and
+  `map_field` are opaque, because strokes overlap and `minimap.gd` clips by the field's alpha.
+- `map_water`, `map_park`: the harbour and parks from `basemap.json`, barely off the field;
+  `verify_hud` holds a minor road 0.30 of luminance over both.
+- `map_marker`: the car's chevron, taxi red, the one saturated thing on the map.
+- `map_pickup`, `map_pending_px` (`Q142`): every pending customer in range as an amber pin, only
+  while no one is aboard. `map_destination`, `map_pin_px`: the one destination pin, red, upright
+  whatever the map's heading.
+- `map_beacon_px`: while the target is off the map, a plain triangle on the border on the line
+  from the car, in the target's colour. Not the car's chevron.
+- `map_fade_px`: the round map's rim fading out, and its clip. `map_route`: the fare's route line.
+- `meter_lit`, `meter_unlit` (`P3-5a`): the 咪錶's red seven-segment LED over its ghosts, five
+  cells, dollars to one place. `verify_hud.gd` holds the lit digit off the ghost and the ghost off
+  the housing.
+- `tip_digit_px`, `tip_segment_px` (`P3-49`): the tip's LED under the meter's, same red, a bit
+  over half its size. It shows the skills paid so far while carrying.
+- `total_digit_px`, `total_segment_px`, `total_cells` 6: the session's takings on a third LED at
+  the tip's size. One more cell than the fare's, because an overflow drops the leading digit.
+- `total_lit`: `meter_lit` at 65%, so the row is told from the tip's. `verify_hud` holds it to
+  half the meter's contrast bar off the ghost; `meter_lit` itself clears the full bar by 0.006,
+  so no dimmer red could.
+- `timer_outline_px` 6 (`Q142`): the tip clock has no housing, so its numerals carry the
+  housing's dark as an outline. `verify_hud.gd` refuses a zero.
+- `timer_unit_gap`: pixels between the seconds and the unit on one baseline (`99 秒`).
+- `timer_warn_s` 10: the clock turns the fare's red for the last ten seconds. A first guess.
+- `callout_*` (`Q142`): the building's name on the first line, the street under it at
+  `callout_sub_size` in muted ink, `callout_caption_size` for the line saying what the box is.
+  The `_zh` sizes are larger and `callout_line_gap_zh` wider: the Kai face's strokes thin out at
+  the Latin sizes.
+- `callout_hold_s` 5: how long a delivery's or bail's receipt stays up. Counted in samples at the
+  loop's 5 Hz. Five seconds is what reading the sum takes.
+- `tick_size`, `tick_fade_s` 1.2: each meter tick flashes under the clock and fades. Short
+  enough that ticks never stack.
+- `scrim`: the tint the menu's blurred backdrop is pulled toward (`menu.md`).
+- `brush_stroke` (`Q218`): the menu's brush (`InkStroke`), the taxi's body red, a shade under the
+  NO ENTRY disc's.
+- `touch_hint`, `touch_live`, `touch_px` (`Q204`): the thumbs' controls on a touch screen, in the
+  bracket's ink, faint at rest and 0.8 under a thumb.
+- `touch_go`, `touch_stop` (`Q228`): a pedal shows its push as a level, never as opacity. Green
+  up the accelerator, red down the brake: `accent` and `accent_negative` at 0.9. The one place a
+  touch control is red.
+- `slot_fill`, `slot_edge`, `slot_edge_px`: the reserved slots under `--debug-view=full`.

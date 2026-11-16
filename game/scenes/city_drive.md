@@ -1,154 +1,57 @@
 # city_drive.tscn
 
-Rationale for `game/scenes/city_drive.tscn`. Each heading is the line the block sat above; `Overview` is the
-file as a whole. Why it lives here and not in the file: `Q119`.
+The drive level: the car on the streamed city. `main.tscn` boots it under `World`.
+(`city_preview.tscn` is for looking at ETL output with a free camera.) See
+`docs/ARCHITECTURE.md` "To drive it".
 
-## Overview
-
-The first scene that puts the car on the real city (`P1-4` + `P0-5`).
-
-`city_preview.tscn` is for looking at the ETL output; this is for driving it.
-The two are separate because they answer different questions and want
-different cameras — and because a free-look camera in a scene with a physics
-body is a scene where nobody is sure what they just judged.
-
-It exists to put a real answer under `Q8` — whether real Wan Chai geometry is
-fun to drive — which a grey box could not.
-
-Since `P2-1` the tiles stream from `city.json` rather than being instantiated
-wholesale by a dev preview, so this is no longer only a dev scene: it is what
-`run/main_scene` boots and the closest thing to a build the project has. The
-buildings still carry no collision — that is an ETL product, see PROGRESS.md.
-
-## `[node name="Regions" type="Node3D" parent="."]`
-
-Every synced region at its offset from the frame (`P5-9c`): `region.tscn` once per region, with a
-`CityStreamer` added to each as its `Tiles`. Its layers, heroes and fence are argued in
-`region.md`. The harness asks this node, not a streamer, to hold the road under the start line,
-and it asks every region's streamer, because the regions' boxes overlap by the far halves each one
-owns.
-
-`camera` points at the Camera3D inside the rig, not at the rig and not
-at the Taxi — the far plane is on the camera, and it is the camera a look-back
-swings away from the car. See city_streamer.gd for the rest.
-
-There is no `RoadSurface` node since `P5-6`: the drivable surface (`P1-4`)
-ships as one chunk per tile and `Tiles` streams it beside the buildings, each
-chunk with the `-col` trimesh the wheels stand on — `verify_road_surface.gd`
-asserts it is there on every chunk, and `drive_level.gd` asks the streamer
-to hold the chunks under the start line before the first tick. Every layer
-node in `region.tscn` prints its collider count for the opposite reason — there must be
-none but the railings' boxes (`Q159`) — and each says why (`Q74`).
-
-## `[node name="Taxi" parent="." instance=ExtResource("4_taxi")]`
-
-⚠️ This transform is a FALLBACK, not the start line. Since P2-3 the spawn is
-resolved at runtime: drive_level.gd asks RoadSpawn for a fare node and calls
-place_at, so what is written here only survives on a clone with no generated
-assets — where there is no road to drive on either. The harness prints the gap
-between the two when it exceeds AUTHORED_DRIFT_M.
-
-It is left in place because it puts the camera somewhere sensible while the
-"run the ETL" warning gets read, and because it records what the query should
-produce: eastbound in the nearside lane of Expo Drive underneath HKCEC Phase
-II, 2.56 m off the centreline, road surface + 1.0 m.
-
-Do NOT hand-edit it to move the spawn — set `spawn_fare_id` on the root, which
-defaults to RoadSpawn.DEFAULT_FARE_ID. And do not rewrite these twelve floats
-from a direction: they are row-major while "forward" is the -Z column, so
-writing them as columns transposes the basis, which is undetectable on a
-north-south street. road_spawn.gd carries that argument in full;
-tools/verify_spawn.gd is what asserts the resolved basis against the edge.
-
-See docs/ARCHITECTURE.md "To drive it".
-
-`sun` points the car at this scene's own key light (`P5-24`): the glint and
-the lamps read `VehicleController.sun` instead of searching the window for a
-`DirectionalLight3D`, so the scene that owns the rig is the one that names it.
-Unset, the car reads no rig — no daylight to be in or out of — and drives with
-its front lamps out, which is `vehicle_lamps.gd`'s stated rule for a car with
-no world around it.
-
-## `[node name="Heads" type="Node3D" parent="Signals"]`
-
-The lit signal heads (`P3-3e`, `Q173`). `posts = true` (`Q191`, the user's call, 2026-11-09): the
-post each head stands on collides, an upright cylinder read off `heads.glb`'s foot (60 mm, 3.65 m), in
-one body per plan cell; the head itself does not. `false` is the off switch.
-
-## `[node name="GraphOverlay" type="Node3D" parent="."]`
-
-`P2-2`'s debug overlay: what `RoadGraph` believes is under the car, drawn on
-the road and written out as text. Dev-only, and after the Taxi so the node it
-follows already exists when it looks for it.
-
-## `[node name="Fares" type="Node" parent="."]`
-
-`P3-1a`'s `FareSystem`: the hail → board → carry → deliver / bail loop over the
-resident regions' fare nodes, metered at the real tariff (`Q141`). A plain
-`Node` under the level, not under `GUI`: it owns no pixels — its state reaches
-the HUD through signals. After the Taxi, which it reads every physics tick, and
-before the camera, which it does not. `--fares=off` frees it, which is free
-roam and what `P3-9` runs.
-
-## `[node name="Readout" type="Node" parent="Fares"]`
-
-`fare_readout.gd`: the loop's state, destination, clock and meter on the
-`DebugHud` overlay, its only face until `P3-5a`. A child of `Fares` rather than
-lines inside it, on `GraphOverlay`'s pattern: this one names the `DebugHud`
-autoload, and `FareSystem` must not, because `verify_fares.gd` loads that
-script before any autoload exists. Freed with its parent under `--fares=off`.
-
-## `[node name="Hire" type="Node" parent="Fares"]`
-
-`taxi_hire.gd` (`P3-48`): the fare loop as the car shows it — the roof sign
-dark from boarding to the drop, the passenger door open from the hail to the
-boarding and briefly at the drop. Signals only, so it adds nothing per frame. A
-child of `Fares` on `Readout`'s pattern, so `--fares=off` frees it with the
-loop and the car keeps its authored state: sign lit, door shut. Since `P3-79` it
-also sounds the fare: the meter's flag and the payout.
-
-## `[node name="Sounds" type="Node" parent="."]`
-
-`taxi_audio.gd` (`P3-79`): the taxi's sounds off the car — engine, squeal, wind,
-scrape, impacts, landing, indicator relay. A sibling of `Horn` and not
-a child of the car, for the horn's reason: it is the player's car's, and an AI
-taxi on the same body (`B3`) must not carry it. Not under `Fares`, so free roam
-still hears its engine. Its voices hang on the car; its numbers are
-`tuning/taxi_audio.tres`.
-
-## `[node name="Attract" type="Node" parent="."]`
-
-`MenuOrbit` (`P6-1`): the chase rig's slow circle round the car while the start
-menu is up. It moves the SAME rig — `Regions.camera` is the rig's camera and
-the streamer measures from it — with the rig's own `_physics_process` off,
-which `DriveLevel.park` and `resume` switch. Its numbers are
-`tuning/menu.tres`. The harness's `showroom_fare_id = "f_001"` is where the
-car stands for it: the Harbour Road stand, HKCEC's old wing behind it, not the
-start line under the Phase II podium (`menu.md`); `resume` puts the car back
-on the line. `showroom_time_of_day = 0.41` is the hour the boot menu is lit at
-(the user's ask, 2026-11-16: the menu "on early morning where everything is
-grey and washed out, not attractive for main menu first sight"): 12:44 on the
-shift's clock. Picked from menu frames at eleven hours (`build/driver/menu_hour/`,
-gitignored): the stand is north of HKCEC and in its shadow at 0, 0.174 (the
-authored day), 0.27, 0.31, 0.57, 0.71 and 0.79, and in the sun only at 0.36,
-0.41 and 0.46; 0.41 is past noon's flat overhead light, with the trees' and the
-car's shadows thrown short across the forecourt. Boot only — a menu over a
-finished run keeps the hour the run reached — and `play` puts the run's own
-hour back through `DayClock.restart`. `guide` is the `FareGuide` below, hidden under the menu and shown
-again by its own next sample.
-
-## `[node name="Camera3D" type="Camera3D" parent="CameraRig"]`
-
-400 m, not the fly camera's 2 km. The region is only 1.66 km across, so a 2 km
-far plane culls nothing at all, and a chase camera 8 m behind a car in a Wan
-Chai street canyon cannot see past a couple of blocks anyway. Measured: 94 draw
-calls and 2.06 M primitives at 2 km, against 48 and 1.16 M at 400 m, with
-nothing visible lost at street level.
-
-## `[node name="DayClock" type="Node" parent="."]`
-
-Game time for the rig (`Q160`): `scripts/world/day_clock.gd` counts the seconds DRIVEN and hands
-them to `Lighting` as its `time_of_day`. Here and not in the rig because what game time means is
-the level's to say: it holds while `Taxi.parked` is true, so the start menu's orbit is always
-noon. `--day-cycle=off` (which `drive.sh` appends) and the options menu's ALWAYS DAY both leave it
-idle.
+- `CityDrive` (`drive_level.gd`): the harness. `showroom_fare_id = "f_001"` is where the car
+  stands under the start menu (the Harbour Road stand, `menu.md`); `resume` puts it back on the
+  start line. `showroom_time_of_day = 0.41` lights the boot menu at 12:44, one of the few hours
+  the stand is in sun and not in HKCEC's shadow (the user's ask). Boot only: a menu over a
+  finished run keeps the run's hour, and `play` restores the run's hour through
+  `DayClock.restart`.
+- `Regions` (`city_regions.gd`, `P5-9c`): `region.tscn` once per synced region at its offset, with
+  a `CityStreamer` added to each as `Tiles` (see `region.md`). `camera` points at the `Camera3D`
+  inside the rig, not the rig or the taxi: the far plane is on the camera, and a look-back swings
+  it away from the car. There is no `RoadSurface` node (`P5-6`): the road ships one chunk per tile
+  with its `-col` trimesh, and the harness asks every region's streamer to hold the chunks under
+  the start line before the first tick.
+- `Lighting`: `clean_daylight.tscn`, the rig (`clean_daylight.md`).
+- `DayClock` (`day_clock.gd`, `Q160`): counts the seconds driven and hands them to `Lighting` as
+  `time_of_day`. It holds while `Taxi.parked` is true. `--day-cycle=off` (which `drive.sh`
+  appends) and the options menu's ALWAYS DAY leave it idle.
+- `Taxi`: `taxi_tyre.tscn`. The transform is a fallback, not the start line: `drive_level.gd`
+  asks `RoadSpawn` for a fare node and calls `place_at`, and prints the gap past
+  `AUTHORED_DRIFT_M`. Move the spawn with `spawn_fare_id` on the root, never by editing the
+  transform. Do not rewrite the twelve floats from a direction: they are row-major while forward
+  is the -Z column (`road_spawn.gd`; `tools/verify_spawn.gd` asserts the resolved basis). `sun`
+  names this scene's key light (`P5-24`); unset, the car reads no rig and drives with its front
+  lamps out.
+- `GraphOverlay` (`road_graph_overlay.gd`, `P2-2`): dev overlay of what `RoadGraph` believes is
+  under the car. After the Taxi it follows.
+- `Signals` (`signal_controller.gd`) and `Signals/Heads` (`signal_heads.gd`, `P3-3e`, `Q173`):
+  the signal plan and the lit heads. `posts = true` (`Q191`, the user's call): each head's post
+  collides, an upright cylinder read off `heads.glb`'s foot, one body per plan cell. `false` is
+  the off switch.
+- `Traffic` (`traffic_system.gd`) and `Trams` (`tram_system.gd`): the moving fleet, each given the
+  taxi and `Signals` (`traffic.md`, `trams.md`).
+- `Fares` (`fare_system.gd`, `P3-1a`): the hail, board, carry, deliver or bail loop, metered at
+  the real tariff (`Q141`). A plain `Node` under the level: it owns no pixels and reaches the HUD
+  through signals. `--fares=off` frees it (free roam, what `P3-9` runs).
+  - `Fares/Readout` (`fare_readout.gd`): the loop's state on the `DebugHud` overlay. A child,
+    because it names the `DebugHud` autoload and `FareSystem` must not (`verify_fares.gd` loads
+    that script before any autoload exists).
+  - `Fares/Hire` (`taxi_hire.gd`, `P3-48`): the loop as the car shows it: roof sign, passenger
+    door, and since `P3-79` the meter's flag and the payout sounds. Signals only. Freed with the
+    loop, leaving the sign lit and the door shut.
+- `Horn` (`taxi_horn.gd`) and `Sounds` (`taxi_audio.gd`, `P3-79`): the player's car's horn and
+  sounds. Siblings of the car, not children, so an AI taxi on the same body does not carry them,
+  and not under `Fares`, so free roam still hears the engine. Numbers in `tuning/taxi_audio.tres`.
+- `FareGuide` (`fare_guide.gd`): the fare's guide in the world, hidden under the start menu.
+- `CameraRig` (`chase_camera.gd`, `tuning/camera.tres`) and its `Camera3D`: `far = 400.0`. A chase
+  camera in a street canyon cannot see past a couple of blocks, and 400 m roughly halved draw
+  calls and primitives against 2 km with nothing visible lost. Other layers key off this value
+  (`prop_cells.md`, `parked.md`, `traffic.md`).
+- `Attract` (`menu_orbit.gd`, `P6-1`): the chase rig's slow circle round the car while the start
+  menu is up. It moves the same rig with the rig's own `_physics_process` off, which
+  `DriveLevel.park` and `resume` switch. Numbers in `tuning/menu.tres`.

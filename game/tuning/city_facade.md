@@ -1,123 +1,44 @@
 # city_facade.tres
 
-Rationale for `game/tuning/city_facade.tres`. Each heading is the line the block sat above; `Overview` is the
-file as a whole. Why it lives here and not in the file: `Q119`.
+Rationale for `game/tuning/city_facade.tres` (`Q119`).
 
-## Overview
+The facade look the city loads, one resource for every tile. `game/tools/generated_scene_import.gd`
+maps the ETL's `city_facade` material name to this path only, so this file is the switch between
+`Q26`'s looks. Swapping is a copy and a reimport, never a rebuild; all read the same `TEXCOORD_0`
+payload:
 
-The facade look the city actually loads, shared by every tile.
+| Candidate | File | Look |
+|---|---|---|
+| `C` | this file | flat per-building colour, elements off |
+| `A‴` | `city_facade_elements.tres` | the clean look with its elements on |
+| `B` | `city_facade_warm.tres` | the measured Hong Kong window bands |
 
-`tools/generated_scene_import.gd` maps the ETL's `city_facade` material name to
-this path and only this path, so this file *is* the switch. All three of
-`Q26`'s looks now have a file, and swapping is a copy and a reimport — never a
-rebuild, because all three read the same `TEXCOORD_0` payload:
+`city_facade_cel.gdshader` (`P3-64`, `Q158`) reads the same payload under a banded sun; not
+shipped.
 
-  candidate `C`  this file             flat per-building colour, elements off
-  candidate `A‴` city_facade_elements  the clean look with its elements on
-  candidate `B`  city_facade_warm      the measured Hong Kong window bands
+This file ships `C`: accurate massing, flat per-building colour, no facade fabric. `Q26` closed on
+it on the user's call. `A‴` was not faulted, and the `P3-9a` driver round can reopen the question.
 
-A fourth shader reads the same payload: `city_facade_cel.gdshader` (`P3-64`, `Q158`), this look
-under a banded sun. Trialled by pointing this file's `ext_resource` at it and adding its `cel_*`
-values; not shipped until the user picks.
+Six values separate this from `A‴`, and a `diff` should show only these:
 
-Here rather than as shader defaults because CLAUDE.md hard rule 4 makes tuning
-data, not constants — and beside `golden_hour.tres` because the sun these are
-judged under is tuned in the same directory. Loaded as **one** resource for all
-66 tiles: retuning the city is this file.
+    solid_share 1.0 · glass_ratio 0.0 · shopfront_share 0.0 · accent_share 0.0
+    floor_line_darkness 0.0 · mullion_darkness 0.0
 
-✅ **This file ships candidate `C`: accurate massing, flat per-building colour
-and no facade fabric.** The user's call, 2026-08-16, to
-continue development on flat colour, and **`Q26`'s closing verdict on
-2026-08-17** — `C` is the look that ships, not merely the one being developed
-against. It is the same configuration that shipped from 2026-08-06 to
-2026-08-09 and that every `P3-7a` step since has been proved byte-identical
-against — the reducibility baseline is now also the default *and* the answer.
-
-⚠️ **`A‴` was not faulted, and closing `Q26` is not a verdict against it.** The
-user accepted `A‴` on 2026-08-09 from the `q26_A3_422ee16` frames and it
-shipped until 2026-08-16; that grading stands. `city_facade_elements.tres`
-carries `A‴` unchanged and its header holds the argument for the elements.
-Restoring it is one `cp`, and the `≥3`-HK-driver round at `P3-9a` — which
-closed before running — is now what can **reopen** `Q26` rather than what
-decides it.
-
-**Six values separate this from `A‴`**, and `diff` against
-`city_facade_elements.tres` should show exactly those six lines:
-
-  solid_share 1.0 · glass_ratio 0.0 · shopfront_share 0.0 · accent_share 0.0
-  floor_line_darkness 0.0 · mullion_darkness 0.0
-
-⚠️ **It was seven until `Q195`.** `cornice_darkness` came back to `A‴`'s 0.28
-on the user's pick from four trial strengths (0.28 at 0.5 m, against 0.5 and
-0.75 at 1.0 m), and it no longer means what it did in `A‴`: the shader draws a
-cornice **only** on a building whose tile carries an iB1000 podium line in
-`COLOR_0.a` — 133 in Wan Chai, 61 in Causeway Bay — and never at
-`podium_height_m`. Every other building is untouched by it.
-
-⚠️ **It takes all seven, and `solid_share` is a gate rather than a zero.**
-`glazed = step(solid_share, …)` in the shader, so at 1.0 no building is ever
-glazed and the curtain-wall, fin and punched types stop drawing — but
-shopfronts, cornices, floor lines and mullions draw *outside* that gate, and
-with only the gate closed 86% of the frame still differed.
-
-⚠️ **It was eight until `Q102`.** The eighth was `survey_apply 0.0`, the gate
-on the vision reader's per-building verdicts, and the pair's headers argued at
-length that it must never move alone. The reader was withdrawn on cost and the
-`TEXCOORD_1` payload with it, so both files lost that line and the five
-`quiet_*` values behind it. `A‴` did move, and its header records what it lost.
-
-⚠️ **`C` moved by compiler precision only, and that was measured rather than
-argued.** The gate was already closed here, so the removal could not reach a
-pixel by any path — and it did anyway: A/B at both `Q27` cameras puts **1.59%**
-(`street`) and **1.61%** (`skyline`) of pixels **2 of 255** apart, whole-frame
-`L*` +0.0003. Tile geometry is byte-identical and the sky and road do not move
-at all, so it is interpolator allocation, not a look. 🔴 **Do not certify this
-with the 0.1% figure from 2026-08-16** — that measured what the *payload* cost
-the frame at schema 6, a different change, and borrowing it here would be
-asserting a number nobody took of this one. `DECISIONS.md` `Q102`.
-
-⚠️ **This was "the city without the reader" before there was no reader.** The
-per-building hue is `COLOR_0`, which the ETL picks from the `materials:` table
-in `etl/config/hong_kong.yaml`, and `Q37`'s glazing dip/tint survey is local
-compute upstream of it. Neither was switched off here, and neither went with
-the reader.
-
-The dozens of uniforms the seven make inert — `bay_width_m`, `glass_colour`,
-`pane_bow` and the fresnel terms — are left at their `A‴` values on purpose.
-They are what makes the two files diffable, and they are the state a future
-art idea starts from, not dead weight to be cleaned up.
-
-⚠️ **`base_wash` is 0.0 because the palette lives in the city config**, which
-is where the shader's header says it belongs. The `materials:` table in
-`etl/config/cities/hong_kong.yaml` carries the city's level — every colour in
-it was re-authored 19 L* darker once the anchor probe measured that as what the
-white city needed — so the wash has nothing left to trial. That leaves
-`base_colour` inert, kept at its tuned value on the same rule as above.
-
-⚠️ Those colours used to sit inline on the height bands, and `Q34` moved them:
-the field's position asserted that material is a function of height, which 0.9%
-of measured facade lightness does not support. Nothing about the level changed.
-
-`value_jitter` 0.35 is the small half of that change and is bounded on both
-sides. Below it a block reads as one mass; above roughly 0.4 the darkest draws
-stop reading as buildings differing and start reading as a few of them being
-broken. It is not the lever that fixed the white city — at the 0.6 ceiling it
-moved the frame 0.4 L*, against 10.3 for the bands.
-
-`floor_height_m` is still the measured 2.8 m and stays that way whichever look
-is loaded — the massing is real and the floor rhythm should be.
-
-## `shader_parameter/night_spot_*` — the floodlights (`Q160`)
-
-At night `night_spot_share` 0.6 of the buildings are floodlit from street level, in three of the
-user's calls: "skip the window, just make the building glow"; then "not so bright, maybe just
-something that feels like a spotlight onto it"; then "spotlight the whole building instead of just
-the bottom". So `lit_window_share` and `emission_strength` stay 0.0 and reserved, the all-over
-glow that was tried is gone, and what ships is a lamp every `night_spot_spacing_m` 14 m along the
-wall throwing a warm cone (`night_spot_colour`) up it at `night_spot_strength` 0.55. The cones
-widen with `night_spot_spread` 2.5 until they merge into one wash, which dims to `night_spot_top`
-0.3 of its strength by `night_spot_reach_m` 120 m and holds to the roofline.
-
-What is lit is the wall's own finished colour, so each look keeps its palette. All of it is
-multiplied by the rig's `night_lights`: these are the values at FULL night and draw nothing at
-noon. Walls only — the branch tests `wall_normal_max`, so no roof is lit from the kerb.
+- `solid_share` is a gate, not a zero: `glazed = step(solid_share, …)`, so at 1.0 no building is
+  glazed. Shopfronts, floor lines and mullions draw outside the gate, so all six are needed.
+- `cornice_darkness` 0.28, `cornice_thickness_m` 0.5 (`Q195`, the user's pick): drawn only on a
+  building whose tile carries an iB1000 podium line in `COLOR_0.a`, never at `podium_height_m`.
+- The uniforms the six make inert (`bay_width_m`, `glass_colour`, `pane_bow`, the fresnel terms)
+  stay at their `A‴` values on purpose: they keep the two files diffable.
+- `base_wash` 0.0: the palette lives in `etl/config/hong_kong.yaml`'s `materials:` table (`Q34`),
+  which leaves `base_colour` inert. The per-building hue is `COLOR_0`.
+- `value_jitter` 0.35: below it a block reads as one mass; above about 0.4 the darkest buildings
+  read as broken.
+- `floor_height_m` 2.8: measured, and the same in every look.
+- `night_spot_*` (`Q160`): at night `night_spot_share` 0.6 of the buildings are floodlit from
+  street level. A lamp every `night_spot_spacing_m` 14 m throws a `night_spot_colour` cone up the
+  wall at `night_spot_strength` 0.55; the cones widen with `night_spot_spread` 2.5 into one wash,
+  which dims to `night_spot_top` 0.3 by `night_spot_reach_m` 120 m and holds to the roofline. Walls
+  only, the wall's own colour, multiplied by the rig's `night_lights`.
+- `lit_window_share`, `emission_strength` 0.0: reserved. The user refused lit windows and an
+  all-over glow.
