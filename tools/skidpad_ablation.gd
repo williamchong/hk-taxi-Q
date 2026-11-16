@@ -35,6 +35,7 @@ const MANOEUVRES: PackedStringArray = [
 	"coast",
 	"wall",
 	"traffic",
+	"bump",
 	"lift",
 	"hold",
 	"catch",
@@ -174,6 +175,34 @@ const WALL_SIZE := Vector3(240.0, 4.0, 1.0)
 ## Seconds sampled after the first contact, so `exit kph` is what the arcade
 ## response left and not the tick of the hit.
 const WALL_AFTER_S: float = 1.0
+## `bump`: what the street puts under or beside a car going straight, the
+## throttle held and the steering never touched, each row its own obstacle.
+## `deg` is the angle between the travel and the obstacle's face, as the wall's;
+## `height_m` its top over the ground. A `kerb` is a step up onto a plateau the
+## car stays on (the city's kerbs are 0.15 m and mountable by design); `rut` is
+## a bar `depth_m` along the travel under the RIGHT wheels alone, `offset_m` from the car's
+## centre line to its near end and `length_m` across the path (a `post` is one
+## clipped by the car's corner); a `steer` row holds that share of the lock to
+## the right from the obstacle being stood, a gentle bend, and its yaw is the
+## bend's plus the obstacle's — read its `peak slip`; `brush` is the wall's own slab, read here for
+## what the car does after it rather than for the penalty. The row reads how
+## far the tail stepped out and where the car ended up pointing: on a straight
+## with no hand on the wheel, both should be nothing.
+const BUMP_ROWS: Dictionary[String, Dictionary] = {
+	"kerb10": {"deg": 10.0, "height_m": 0.15},
+	"kerb30": {"deg": 30.0, "height_m": 0.15},
+	"kerb90": {"deg": 90.0, "height_m": 0.15},
+	"rut": {"deg": 90.0, "height_m": 0.08, "depth_m": 0.5, "offset_m": 0.0},
+	"brush10": {"deg": 10.0, "height_m": 3.0, "depth_m": 1.0},
+	"brush30": {"deg": 30.0, "height_m": 3.0, "depth_m": 1.0},
+	"post": {"deg": 90.0, "height_m": 3.0, "depth_m": 0.4, "offset_m": 0.65, "length_m": 0.4},
+	"kerb10_turn": {"deg": 10.0, "height_m": 0.15, "steer": 0.3},
+	"rut_turn": {"deg": 90.0, "height_m": 0.08, "depth_m": 0.5, "offset_m": 0.0, "steer": 0.3},
+}
+## Seconds sampled from the obstacle being stood, the throttle held.
+const BUMP_S: float = 3.0
+## How far a plateau runs, each way: further than the car goes in `BUMP_S`.
+const BUMP_PLATEAU_M: float = 400.0
 ## `traffic` (`Q175`): a body the size of a car, moved each tick as
 ## `TrafficSystem` moves one, met five ways, each row's closing speed in kph.
 ## `start_m` is where it starts, centre from the taxi's centre, and `sign` the way
@@ -263,6 +292,9 @@ const PACE_FIELD: StringName = &"pace.pace_scale"
 ## The keyboard's input assist (`Q210`), swept as `keyboard_steer.<field>`: the
 ## router's table, which the pad's driver steers through unless `--steer=analog`.
 const KEYBOARD_TABLE: String = "keyboard_steer"
+## The touch table, the router's too: `touch.steer_attack_at_top_s` under
+## `--steer=touch`.
+const TOUCH_TABLE: String = "touch"
 ## The car's systems a `<system>.<field>` sweep may name (`Q155`), and the
 ## game's pace (`Q156`): only these, so `profile.` or `tyre.` cannot slip past
 ## the refusals the bare names get.
@@ -276,12 +308,15 @@ const SYSTEM_TABLES: PackedStringArray = [
 	"arcade_aids",
 	"anti_lock_brakes",
 	KEYBOARD_TABLE,
+	TOUCH_TABLE,
 ]
 const BODY_FIELDS: PackedStringArray = ["center_of_mass_y", "center_of_mass_z", "gravity_scale"]
 
 ## Default seconds of full throttle before every manoeuvre, to reach a working
 ## speed. Long enough to be well past the initial squat, short enough that the car
-## is nowhere near the 140 kph limiter where the drive taper distorts things.
+## is nowhere near the limiter. ⚠️ The drive fades from about 59 kph on the road
+## since `Q230` (`HandlingProfile.drive_fade_from_kph`; the header prints it), so
+## the default run-up ends inside the fade and reaches about 93 kph, not 102.
 ##
 ## ⚠️ **Overridable since `--run-up`, and a fixed entry speed is exactly what hid
 ## a defect.** Every other column is only comparable because entry is identical
@@ -291,17 +326,6 @@ const BODY_FIELDS: PackedStringArray = ["center_of_mass_y", "center_of_mass_z", 
 ## same tap spins the car. Vary it between runs, never expect two run-ups to be
 ## comparable on anything but the trend.
 const DEFAULT_RUN_UP_S: float = 4.0
-
-## Fraction of `max_speed_kph` above which the controller's drive taper is easing
-## engine force off, so an entry speed inside it grades the taper alongside
-## whatever is under test.
-##
-## ⚠️ **A deliberate copy of `VehicleController.TOP_SPEED_TAPER`**, which this
-## file cannot name: `--script` tools do not get `class_name` resolution, the same
-## constraint that keeps every controller call here behind `call()`. Warned about
-## rather than refused — this tool grades and does not check — but a run-up that
-## reaches the band needs saying, because nothing in the table shows it.
-const TOP_SPEED_TAPER: float = 0.15
 
 ## Seconds the manoeuvre itself is held and measured.
 const MANOEUVRE_S: float = 4.0
@@ -342,6 +366,9 @@ var _only: String = ""
 ## `Input.action_press`, which sends no event, so the router steers as a key does
 ## and shapes the driver's input with the keyboard's input assist.
 var _steer_analog: bool = false
+## `--steer=touch`: the analogue path as a steering thumb's, which the router
+## slews at speed (`TouchProfile.steer_attack_at_top_s`).
+var _steer_touch: bool = false
 ## The `InputRouter` autoload, resolved once in `_boot`; untyped for the reason
 ## `_vehicle` is.
 var _router: Node = null
@@ -498,6 +525,10 @@ class Result:
 	## pays on. The two must agree, and that agreement is the column's point.
 	var approach_kph: float = 0.0
 	var impact_kph: float = 0.0
+	## The bump rows only: the fastest the heading turned, in degrees a second,
+	## and the seconds every wheel was off the ground.
+	var peak_yaw_dps: float = 0.0
+	var aloft_s: float = 0.0
 	## Ticks on which the latch read a hit: one wall should be one.
 	var impact_ticks: int = 0
 	## A `push` row's body (`Q180`): its kind and mass, its pace along the taxi's
@@ -610,10 +641,11 @@ func _parse_args() -> bool:
 			"--only":
 				_only = bits[1]
 			"--steer":
-				if not bits[1] in ["keys", "analog"]:
-					_fail("--steer is keys or analog, got '%s'" % bits[1])
+				if not bits[1] in ["keys", "analog", "touch"]:
+					_fail("--steer is keys, analog or touch, got '%s'" % bits[1])
 					return false
-				_steer_analog = bits[1] == "analog"
+				_steer_analog = bits[1] != "keys"
+				_steer_touch = bits[1] == "touch"
 			"--scene":
 				_scene_path = bits[1]
 			"--run-up":
@@ -751,10 +783,22 @@ func _boot() -> bool:
 		_fail("no InputRouter: the car has no pedals")
 		return false
 	_router.set(&"steer_from_keys", not _steer_analog)
-	print("steer:   %s" % ("analog, as it reads" if _steer_analog else "keys, shaped"))
+	_router.set(&"steer_from_thumb", _steer_touch)
+	var steered: String = "keys, shaped"
+	if _steer_touch:
+		steered = "touch, slewed at speed"
+	elif _steer_analog:
+		steered = "analog, as it reads"
+	print("steer:   %s" % steered)
 	print("vehicle: %s at %s" % [_vehicle.name, _spawn.origin])
 	var profile: Resource = _vehicle.get("profile") as Resource
 	print("profile: %s" % ("none" if profile == null else profile.resource_path))
+	# The drive eases off above this (`HandlingProfile.drive_fade_from_kph`, at
+	# the pace): a row entered past it is graded with less than the car's drive.
+	var pace: Resource = _vehicle.get("pace") as Resource
+	if profile != null and pace != null and &"drive_fade_from_kph" in profile:
+		var fade_from: float = profile.get(&"drive_fade_from_kph")
+		print("drive:   fades above %.1f kph" % (fade_from * sqrt(float(pace.get(&"pace_scale")))))
 	if profile != null and SLIP_THRESHOLD_FIELD in profile:
 		_slip_threshold_deg = profile.get(SLIP_THRESHOLD_FIELD)
 		print("slip threshold: %.1f deg" % _slip_threshold_deg)
@@ -812,14 +856,11 @@ func _measure_all() -> void:
 			_fail("sweep: '%s' is not a system; one of %s" % [parts[0], ", ".join(SYSTEM_TABLES)])
 			return
 		# The keyboard's input assist is the router's, not the car's (`Q210`).
-		var system_table := (
-			(
-				_router.call(&"keyboard_profile")
-				if parts[0] == KEYBOARD_TABLE
-				else _vehicle.get(parts[0])
-			)
-			as Resource
-		)
+		var system_table: Resource = _vehicle.get(parts[0]) as Resource
+		if parts[0] == KEYBOARD_TABLE:
+			system_table = _router.call(&"keyboard_profile") as Resource
+		elif parts[0] == TOUCH_TABLE:
+			system_table = _router.call(&"touch_profile") as Resource
 		if system_table == null:
 			_fail("sweep: the car has no system table '%s'" % parts[0])
 			return
@@ -921,6 +962,16 @@ func _measure_all() -> void:
 						return
 					results.append(met)
 				continue
+			if manoeuvre == "bump":
+				for row: String in BUMP_ROWS:
+					var label: String = "bump@%s" % row
+					if not is_nan(value):
+						label = "%s@%s" % [label, String.num(value, 4)]
+					var bumped: Result = await _measure(manoeuvre, label, 90.0, 0.0, "", row)
+					if bumped == null:
+						return
+					results.append(bumped)
+				continue
 			# ⚠️ Only the two drift manoeuvres are swept **when the swept field is
 			# `drift_`-prefixed** — see DRIFT_FIELD_PREFIX, which is what decides it.
 			# For such a field the other three never
@@ -985,6 +1036,7 @@ func _measure_all() -> void:
 		return
 	var handling: Array[Result] = []
 	var walls: Array[Result] = []
+	var bumps: Array[Result] = []
 	var sustained: Array[Result] = []
 	var catches: Array[Result] = []
 	var lift_rows: Array[Result] = []
@@ -1004,6 +1056,8 @@ func _measure_all() -> void:
 			continue
 		if manoeuvre == "wall" or manoeuvre == "traffic":
 			walls.append(result)
+		elif manoeuvre == "bump":
+			bumps.append(result)
 		elif manoeuvre == "catch":
 			catches.append(result)
 		elif manoeuvre == "turn":
@@ -1021,6 +1075,8 @@ func _measure_all() -> void:
 	if not walls.is_empty():
 		_print_wall_table(walls)
 		_print_push_table(walls)
+	if not bumps.is_empty():
+		_print_bump_table(bumps)
 	if not catches.is_empty():
 		_print_catch_table(catches)
 	if not sustained.is_empty():
@@ -1082,23 +1138,6 @@ func _measure(
 	# Drained so the row's cost is the manoeuvre's, not the run-up's.
 	if _vehicle.has_method("take_tyre_cost_us"):
 		_vehicle.call("take_tyre_cost_us")
-	# See TOP_SPEED_TAPER: entry inside the band means the drive taper is easing
-	# engine force off during the manoeuvre, which no column reports.
-	var max_speed: float = 0.0
-	var car: Resource = _vehicle.get("car") as Resource
-	if car != null and &"max_speed_kph" in car:
-		max_speed = car.get(&"max_speed_kph")
-	if max_speed > 0.0 and result.entry_kph > max_speed * (1.0 - TOP_SPEED_TAPER):
-		print(
-			(
-				(
-					"  note  %s entered at %.2f kph, inside the drive taper above %.2f — "
-					+ "engine force is easing off during this row"
-				)
-				% [label, result.entry_kph, max_speed * (1.0 - TOP_SPEED_TAPER)]
-			)
-		)
-
 	match manoeuvre:
 		"corner":
 			await _sample([&"accelerate", &"steer_right"], MANOEUVRE_S, false, result)
@@ -1118,6 +1157,8 @@ func _measure(
 			await _hit_wall(wall_deg, result)
 		"traffic":
 			await _meet_traffic(variant, result)
+		"bump":
+			await _cross_bump(variant, result)
 		"lift":
 			await _sample(DRIFT_ACTIONS, _manoeuvre_s, false, result, TAP_S, LIFT_AT_S)
 		"hold":
@@ -1179,19 +1220,11 @@ func _measure(
 ## The approach column is this tool's own reading; the impact column is the
 ## controller's latch, read through `call()` for the reason `_vehicle` gives.
 func _hit_wall(wall_deg: float, into: Result) -> void:
-	var travel: Vector3 = _vehicle.linear_velocity
-	travel.y = 0.0
-	if travel.length() < SLIP_FLOOR_MPS:
-		_fail("%s: no speed at the end of the run-up" % into.name)
+	var frame: PackedVector3Array = _face_frame(wall_deg, into)
+	if frame.is_empty():
 		return
-	var along: Vector3 = travel.normalized()
-	# The face turned `wall_deg` off the travel: at 90 its normal is -along,
-	# at 10 the car brushes it. The slab is centred on the path so the car
-	# meets it whatever the angle.
-	var face: Vector3 = along.rotated(Vector3.UP, deg_to_rad(wall_deg))
-	var normal: Vector3 = face.cross(Vector3.UP).normalized()
-	if normal.dot(along) > 0.0:
-		normal = -normal
+	var along: Vector3 = frame[0]
+	var normal: Vector3 = frame[1]
 	var centre: Vector3 = _vehicle.global_position + along * WALL_AHEAD_M
 	# The slab's base a metre under the spawn, so it stands in the ground
 	# rather than on it and no sill is left for a wheel to climb.
@@ -1233,6 +1266,88 @@ func _hit_wall(wall_deg: float, into: Result) -> void:
 	into.seconds = t
 	if is_inf(hit_at):
 		_fail("%s: the wall was never hit in %.0f s" % [into.name, MANOEUVRE_S])
+
+
+## Stands `BUMP_ROWS`' `row` in the car's path and drives over or along it with
+## the throttle held and no steering, for `BUMP_S`.
+func _cross_bump(row: String, into: Result) -> void:
+	var plan: Dictionary = BUMP_ROWS[row]
+	var frame: PackedVector3Array = _face_frame(float(plan["deg"]), into)
+	if frame.is_empty():
+		return
+	var along: Vector3 = frame[0]
+	var normal: Vector3 = frame[1]
+	var right: Vector3 = along.cross(Vector3.UP)
+	# The ground is where a wheel stands, not a constant of the pad's.
+	var ground_y: float = _vehicle.global_position.y
+	for node: Node in _vehicle.find_children("*", "VehicleWheel3D", false, false):
+		var wheel := node as VehicleWheel3D
+		if wheel.is_in_contact():
+			ground_y = wheel.get_contact_point().y
+			break
+	var height: float = float(plan["height_m"])
+	var depth: float = float(plan.get("depth_m", BUMP_PLATEAU_M))
+	var length: float = BUMP_PLATEAU_M
+	# Where the car's centre line meets the face.
+	var meets: Vector3 = _vehicle.global_position + along * WALL_AHEAD_M
+	var centre: Vector3 = meets - normal * depth * 0.5
+	if plan.has("offset_m"):
+		# Under one side alone: a bar from `offset_m` right of the centre line.
+		length = float(plan.get("length_m", 3.0))
+		centre += right * (float(plan["offset_m"]) + length * 0.5)
+	# A metre into the ground, so no sill is left under it.
+	centre.y = ground_y + height * 0.5 - 0.5
+	_stand_slab(
+		StaticBody3D.new(),
+		"Bump",
+		Vector3(length, height + 1.0, depth),
+		Transform3D(Basis.looking_at(-normal, Vector3.UP), centre)
+	)
+	_vehicle.call("take_impact_mps")
+
+	Input.action_press(&"accelerate")
+	if plan.has("steer"):
+		Input.action_press(&"steer_right", float(plan["steer"]))
+	var first_tick: int = Engine.get_physics_frames()
+	var t: float = 0.0
+	var last_position: Vector3 = _vehicle.global_position
+	var last_heading: float = _vehicle.global_rotation.y
+	while t < BUMP_S:
+		await physics_frame
+		t = float(Engine.get_physics_frames() - first_tick) * _step
+		if not _vehicle.global_position.is_finite():
+			_fail("%s: vehicle position went non-finite — the physics blew up" % into.name)
+			break
+		var position: Vector3 = _vehicle.global_position
+		into.distance_m += last_position.distance_to(position)
+		last_position = position
+		var heading: float = _vehicle.global_rotation.y
+		var yaw_step_deg: float = rad_to_deg(angle_difference(last_heading, heading))
+		last_heading = heading
+		into.yaw_deg += yaw_step_deg
+		into.peak_yaw_dps = maxf(into.peak_yaw_dps, absf(yaw_step_deg) / _step)
+		into.peak_slip_deg = maxf(into.peak_slip_deg, _slip_deg())
+		into.impact_kph = maxf(into.impact_kph, float(_vehicle.call("take_impact_mps")) * 3.6)
+		if _vehicle.has_method("is_airborne") and bool(_vehicle.call("is_airborne")):
+			into.aloft_s += _step
+	into.seconds = t
+
+
+## The car's flattened travel and the normal of a face stood `deg` off it,
+## turned to meet the car: at 90 the normal is against the travel, at 10 the
+## car brushes the face. Empty, and the row failed, with no speed to read a
+## travel from.
+func _face_frame(deg: float, into: Result) -> PackedVector3Array:
+	var travel: Vector3 = _vehicle.linear_velocity
+	travel.y = 0.0
+	if travel.length() < SLIP_FLOOR_MPS:
+		_fail("%s: no speed at the end of the run-up" % into.name)
+		return PackedVector3Array()
+	var along: Vector3 = travel.normalized()
+	var normal: Vector3 = along.rotated(Vector3.UP, deg_to_rad(deg)).cross(Vector3.UP).normalized()
+	if normal.dot(along) > 0.0:
+		normal = -normal
+	return PackedVector3Array([along, normal])
 
 
 ## `body` into the scene as the slab this row meets, a box of `size` at `placed`.
@@ -1768,6 +1883,35 @@ func _print_wall_table(results: Array[Result]) -> void:
 					result.exit_kph,
 					result.impact_ticks,
 					result.distance_m,
+				]
+			)
+		)
+
+
+## The bump rows: a car going straight with no hand on the wheel, so `peak
+## slip` and `yaw` are the obstacle's doing alone. `impact` is the penalty
+## latch: a kerb or a rut reading over 0 was taken for a wall.
+func _print_bump_table(results: Array[Result]) -> void:
+	var width: int = _column_width(results)
+	var row_format: String = "%%-%ds %%9s %%9s %%9s %%9s %%9s %%9s %%7s" % width
+	var data_format: String = "%%-%ds %%9.2f %%9.1f %%9.1f %%9.1f %%9.2f %%9.2f %%7.2f" % width
+	print("")
+	print(row_format % ["run", "entry", "peak slip", "yaw", "peak yaw", "impact", "exit", "aloft"])
+	print(row_format % ["", "kph", "deg", "deg", "deg/s", "kph", "kph", "s"])
+	for result: Result in results:
+		_printed_rows += 1
+		print(
+			(
+				data_format
+				% [
+					result.name,
+					result.entry_kph,
+					result.peak_slip_deg,
+					result.yaw_deg,
+					result.peak_yaw_dps,
+					result.impact_kph,
+					result.exit_kph,
+					result.aloft_s,
 				]
 			)
 		)

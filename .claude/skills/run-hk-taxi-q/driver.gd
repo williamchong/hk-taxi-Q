@@ -406,6 +406,10 @@ func _trace_tick() -> void:
 	_trace_line(
 		"tick %d pos %.6f %.6f %.6f vel %.6f %.6f %.6f" % [tick, p.x, p.y, p.z, v.x, v.y, v.z]
 	)
+	# Where the car points, on its own line so a `tick` line reads as it always
+	# has: with the velocity it is the slip, which says a spin from a deflection.
+	var nose: Vector3 = -_vehicle.global_basis.z
+	_trace_line("nose %d %.6f %.6f %.6f" % [tick, nose.x, nose.y, nose.z])
 	# A wall contact this tick, as the fare loop read it (`P3-50`): the speed
 	# into the wall in m/s, the line absent on a tick with none.
 	if "last_impact_mps" in _vehicle:

@@ -5,9 +5,9 @@
 #
 # Everything after the script name is passed to skidpad_ablation.gd:
 #
-#   --only=drift                     one manoeuvre instead of all sixteen
+#   --only=drift                     one manoeuvre instead of all seventeen
 #                                    (corner, liftoff, drift, tap, brake, coast,
-#                                    wall, traffic, lift, hold, catch, turn, turnin,
+#                                    wall, traffic, bump, lift, hold, catch, turn, turnin,
 #                                    flick, trailbrake, handbrake).
 #                                    --only=technique runs the three P3-54
 #                                    techniques with their controls, printed
@@ -76,8 +76,20 @@
 #                                    ahead closing at 5 / 20 kph, a car coming
 #                                    at 50, hit from behind at rest at 40 and
 #                                    under way closing at 20
+#                                    bump (Q230) is a car going straight with
+#                                    no hand on the wheel over or along what
+#                                    the street puts there: a 0.15 m kerb met
+#                                    at 10, 30 and 90 degrees, a rut under one
+#                                    side, a wall brushed at 10 and clipped at
+#                                    30, a post caught by a corner, and the
+#                                    kerb and the rut again in a gentle bend.
+#                                    `peak slip` and `yaw` are the obstacle's
+#                                    doing alone; `impact` over 0 on a kerb is
+#                                    one taken for a wall
+#   --steer=touch                    the analogue path as a steering thumb's,
+#                                    slewed at speed (touch.tres, Q230)
 #   --steer=analog                   steer through the router's analogue path,
-#                                    a stick's or a thumb's input as it reads;
+#                                    a stick's input as it reads;
 #                                    default keys, shaped by the keyboard's
 #                                    input assist (keyboard_steer.tres, Q210)
 #   --sweep=FIELD=0.4,0.6,0.8        sweep any HandlingProfile, CarSpec or TyreProfile
