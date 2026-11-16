@@ -16,6 +16,7 @@ paths:
   - "game/scenes/vehicle/taxi_tyre.{tscn,md}"
   - "game/scripts/vehicle/systems/*.gd"
   - "game/tuning/systems/*.{tres,md}"
+  - "game/tuning/touch.{tres,md}"
 ---
 
 # Handling and the drift — before marking work done
@@ -271,6 +272,18 @@ Moved verbatim from the root `CLAUDE.md`, which keeps the trigger and points her
   ⚠️ At 86 kph `hold` sits on its own cliff (about 3.1 s to 83 kph, about 1.4 from 90) — read
   76–95 kph before trusting one cell there. ⚠️ `--sweep` refuses a field in both tables — the tyre dial was
   renamed `side_force_depth` after a shared `roll_influence` swept the wrong table silently.
+- 🔴 **Three game-layer dials since `Q230` (2026-11-16), each with its own row**:
+  `drive_fade_from_kph` / `drive_fade_curve` (the drive easing off from 59 kph on the road) are
+  graded on speed after N seconds — `--only=brake --run-up=2…20`, read `entry` — with `hold` at
+  76–95 kph as the guard: the fade stands down in drift mode because, applied there, `hold` at
+  86 kph fell 3.57 → 1.02 s. `collision_align_s` is graded on `--only=bump`'s `brush30` (`yaw` is
+  the face's 30° when it is right; under 0.3 s the car swings past the wall) with `wall`'s exits
+  re-read. `touch.steer_attack_at_top_s` is graded on `--only=flick --steer=touch` at 95 / 110 /
+  120 kph, as the keyboard's is on keys. ⚠️ Every row entered above 59 kph from before that day
+  had the car's whole drive and does not compare; the wall rows moved with the alignment.
+  ⚠️ `bump`'s kerb and rut rows are a guard that reads nothing (under 2.5° at every speed): a
+  spin "over a bump" is looked for in the brush and clip rows first. `bump@post` is a dead stop
+  at most speeds, not built.
 - ⚠️ **`wall@30`'s exit wanders 28.4–31.7 kph across runs of one HEAD** at 63 kph (`Q152`),
   approach and impact identical to the hundredth — wider than `Q151`'s 0.5 kph. Grade a wall change
   against that band.

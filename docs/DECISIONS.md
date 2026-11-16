@@ -14067,7 +14067,6 @@ location".
 **See.** `Q142` · `Q162` · `Q165` · `Q203` · `Q52` · `game/scripts/level/drive_level.gd` ·
 `game/scripts/city/road_spawn.gd`
 
-
 ## `Q228` — The pedals show how far they are pushed: a green level up the accelerator, a red one down the brake
 
 **Asked** by the user, 2026-11-16, from a new player on a phone: they did not know the throttle and
@@ -14126,6 +14125,64 @@ The user's own stuck car owed — no wedged spot was reproduced.
 
 **See.** `Q165` · `Q223` · `game/scripts/level/drive_level.gd` · `game/scripts/ui/start_menu.gd` ·
 `.claude/rules/hud.md`
+
+## `Q230` — The drive fades from 60 kph, a thumb is slewed at speed, and a wall turns the nose along it
+
+**Asked** by the user, 2026-11-16: "now the car accelerate fast but is hard to steer on straight
+road, even minor bumps or normal steer would throw the car to spin" — it should reach 50–70 fast
+and the top speed slowly, a bump should not throw it into a crash, and the steering should be
+stable on a fast straight, on touch above all.
+
+**Status.** ✅ Built 2026-11-16, graded on the pad. The user's drive owed on all three, the handset
+on the thumb.
+
+- **The drive fades toward the limiter** (`handling.tres` `drive_fade_from_kph` 42 of the car's
+  own speed, 59 on the road at pace 2; `drive_fade_curve` 2.0). The limiter's last-15% taper was
+  all there was, so the Crown Comfort's power at pace 2 carried it 60 → 120 kph in three seconds.
+  Speed after N seconds of throttle from rest, kph:
+
+  | s | 2 | 3 | 4 | 6 | 8 | 10 | 15 | 20 |
+  |---|---|---|---|---|---|---|---|---|
+  | was | 59 | 83 | 102 | 130 | 152 | 169 | 186 | 188 |
+  | from 42, curve 1.5 | 59 | 81 | 94 | 112 | 123 | 131 | 142 | 148 |
+  | **from 42, curve 2.0** | 59 | 80 | 93 | 108 | 118 | 124 | 134 | 139 |
+  | from 50, curve 2.0 | 59 | 82 | 96 | 112 | 122 | 129 | 138 | 143 |
+  | from 42, curve 3.0 | 59 | 79 | 90 | 103 | 110 | 115 | 123 | 127 |
+
+  The game's dial, not the car's: `CarSpec` and the pace are untouched, and the limiter is still
+  198 kph, which the fade now never lets the car reach on the flat. 🔴 **It stands down in drift
+  mode** (`TyreVehicleController._drive_fade`, the limiter's own taper kept): applied there it took
+  a third of the drive at 86 kph and `hold`'s `longest` fell 3.57 → 1.02 s; stood down, 3.55.
+- **A steering thumb is slewed at speed** (`touch.tres` `steer_attack_at_top_s` 2.0,
+  `InputRouter.steer_for`): the keyboard's `Q174` rule for a thumb, which `Q210` had left to the
+  handset. `flick@held` under `--steer=touch`, peak slip at 110 / 120 / 150 kph: 20.8 / 29.8 /
+  31.4° → 7.2 / 7.2 / 7.2° (`touch.md` has the sweep). A stick still passes through.
+- **A wall turns the nose along it** (`handling.tres` `collision_align_s` 0.3,
+  `VehicleController._align_yaw_rate`). The arcade slide turned the TRAVEL along a clipped face
+  and left the nose in it — the scrub `handling.md` listed as left. `bump@brush30`, exit speed 3 s
+  on at 42 / 63 / 86 / 120 kph: 0.85 / 18 / 37 / 19 → 76 / 77 / 88 / 111 kph, the heading 30°
+  where the face is (40° at 120). Swept 0.1–0.4 s: 0.1 swings the car past the wall (99° at
+  42 kph), 0.2 overshoots to 35–43°, 0.3 is the first that lands on 30° at 42 / 63 / 86. A wall
+  only; a car or tram that gives is left to the push. The penalty latch is not touched.
+- **"Minor bumps" were not the road** — `--only=bump`, new on the pad: a 0.15 m kerb at 10 / 30 /
+  90°, a rut under one side, and both in a gentle bend, read under 2.5° of slip at 42–150 kph
+  before and after, and no kerb is taken for a wall. The clip was. ⚠️ Not built: a box caught by
+  the car's corner (`bump@post`) is still a dead stop at most speeds — the contact's normal is
+  head-on, so the slide has nothing to keep. An off-centre deflection is new machinery and the
+  user's call.
+- **The street's own road edge reads the same** (the user's follow-up: "what about bumping onto
+  roadside kerb"): twelve drives off Expo Drive's carriageway onto the tile beside it and back, a
+  0.2–0.25 m step, at 64–98 kph, on the old settings and the new — the edge is never a wall hit,
+  and the slip stays under 3° in every crossing but one, whose 14° is a scrape on the wall
+  behind the kerb. What stops the car there is that wall met near head-on (72–106 kph, a dead
+  stop either way). One street, keys, under 100 kph; `driver.gd`'s `--trace` writes a `nose`
+  line a tick since, so the slip can be read off a street trace.
+- Unmoved: every drift row at 42 / 63 / 86 kph (`hold` 0.68 / 0.83 / 3.55 s, `turn@off` 80.5 /
+  84.3 / 93.9°); the brake and the coast. `corner` runs to a lower terminal speed above 59 kph
+  (78.5 → 72.9 kph at 63, 91.6 → 80.6 at 86): less drive in the fade.
+
+**See.** `Q174` · `Q210` · `Q151` · `Q156` · `.claude/rules/handling.md` · `game/tuning/touch.md` ·
+`game/scripts/vehicle/handling_profile.gd` · `tools/skidpad.sh`
 
 ## `Q231` — The boot menu is lit at its own hour: 12:44, the stand in the sun
 
