@@ -57,6 +57,9 @@ signal side_changed
 signal page_shown(shot: MenuShot)
 ## The pause's RESUME: `Main` unpauses the drive where it stood and frees this.
 signal resumed
+## The pause's RESET CAR (`Q229`): `Main` unpauses and has the level put the
+## car back onto the nearest road, the run and its fare going on.
+signal reset
 ## The pause's way out: `Main` parks the level and opens a fresh menu, on a
 ## free drive's REPORT or on HOME.
 signal ended
@@ -835,6 +838,7 @@ func _pause() -> Control:
 	var column: VBoxContainer = _column("Pause")
 	_heading(column, "Heading", _text.say("paused", _language))
 	_first[Page.PAUSE] = _button(column, "Resume", "resume", _on_resume)
+	_button(column, "Reset", "reset_car", _on_reset)
 	_button(column, "Guide", "guide", _show.bind(Page.GUIDE))
 	_button(column, "Options", "options", _show.bind(_options_page()))
 	if pause_tally != null:
@@ -1011,6 +1015,11 @@ func _on_start(mode: DayClock.Mode) -> void:
 func _on_resume() -> void:
 	_leave()
 	resumed.emit()
+
+
+func _on_reset() -> void:
+	_leave()
+	reset.emit()
 
 
 func _on_end() -> void:

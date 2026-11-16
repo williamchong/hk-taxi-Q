@@ -194,6 +194,10 @@
       "en": "RESUME",
       "zh": "繼續"
     },
+    "reset_car": {
+      "en": "RESET CAR",
+      "zh": "重置的士"
+    },
     "end_shift": {
       "en": "END SHIFT",
       "zh": "收工"

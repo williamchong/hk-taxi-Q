@@ -64,6 +64,7 @@ const KEYS: PackedStringArray = [
 	"loading",
 	"paused",
 	"resume",
+	"reset_car",
 	"end_shift",
 	"end_drive",
 	"driven",
@@ -269,12 +270,46 @@ func _check_pause() -> void:
 		"the key that paused resumes, and the menu leaves"
 	)
 	paused = false
+	await _check_pause_reset()
 	await _check_options()
 	await _check_sheet()
 	await _check_stacked()
 	await _check_loading()
 	await _check_warmup()
 	_finish("verify_menu")
+
+
+## The pause's RESET CAR (`Q229`): on a shift's pause and a free drive's, it
+## says so once and the menu leaves, as RESUME does — `Main` unpauses on it.
+func _check_pause_reset() -> void:
+	for pausing_shift: bool in [true, false]:
+		var menu := StartMenuScript.new()
+		menu.pausing = true
+		menu.pausing_shift = pausing_shift
+		var resets: Array[int] = [0]
+		var others: Array[int] = [0]
+		menu.reset.connect(func() -> void: resets[0] += 1)
+		menu.resumed.connect(func() -> void: others[0] += 1)
+		menu.ended.connect(func() -> void: others[0] += 1)
+		paused = true
+		root.add_child(menu)
+		await process_frame
+		var page: Control = menu._pages.get(StartMenuScript.Page.PAUSE)
+		var button: Button = page.get_node_or_null("Reset/Button") if page != null else null
+		if button != null:
+			button.pressed.emit()
+		_expect(
+			resets[0] == 1 and others[0] == 0 and menu.is_queued_for_deletion(),
+			"pause",
+			(
+				"RESET CAR on a %s's pause says so once, alone, and the menu leaves"
+				% ("shift" if pausing_shift else "free drive")
+			)
+		)
+		if not menu.is_queued_for_deletion():
+			menu.queue_free()
+		paused = false
+		await process_frame
 
 
 ## The sound on OPTIONS' SOUND page: the slider is heard and saved as it moves with its

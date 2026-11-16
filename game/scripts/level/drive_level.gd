@@ -461,10 +461,31 @@ func _in_the_harbour(at: Vector3) -> bool:
 	return false
 
 
+## The player's own way out of a place the car cannot drive out of (`Q229`,
+## the pause's RESET CAR): back onto the nearest road as from the harbour. The
+## fare aboard, its clock and the meter are untouched — the time lost is the
+## cost.
+func recover() -> void:
+	if vehicle == null:
+		return
+	var edge_id: int = _back_onto_road()
+	print("reset by the player; back onto %s" % _named(edge_id))
+
+
+func _pull_out() -> void:
+	var edge_id: int = _back_onto_road()
+	print("in the harbour (%d); back onto %s" % [_drownings, _named(edge_id)])
+
+
+func _named(edge_id: int) -> String:
+	return "the start line" if edge_id < 0 else "edge %d" % edge_id
+
+
 ## Back onto the nearest road, facing the way the car was going, dropped from
 ## the spawn's own height; the start line where no road is within reach — a
-## car 300 m out in the harbour has no nearest street worth the name.
-func _pull_out() -> void:
+## car 300 m out in the harbour has no nearest street worth the name. Returns
+## the edge taken, -1 for the start line.
+func _back_onto_road() -> int:
 	var graph: RoadGraph = RoadGraph.shared()
 	var heading: Vector3 = -vehicle.global_transform.basis.z
 	var hit: RoadGraph.Hit = graph.nearest_edge(vehicle.global_position, heading)
@@ -472,19 +493,11 @@ func _pull_out() -> void:
 	if hit.edge_id >= 0:
 		var lift: float = vehicle.car.ray_length_m() + RoadSpawn.DROP_CLEARANCE_M
 		pose = Transform3D(RoadSpawn.basis_facing(hit.forward), hit.lane_centre + Vector3.UP * lift)
-	print(
-		(
-			"in the harbour (%d); back onto %s"
-			% [
-				_drownings,
-				"the start line" if hit.edge_id < 0 else "edge %d" % hit.edge_id,
-			]
-		)
-	)
 	if regions != null:
 		regions.hold_ground_at(pose.origin)
 	vehicle.place_at(pose)
 	_snap_camera()
+	return hit.edge_id
 
 
 ## Stop before the car falls for ever on a clone where the ETL has not been run.
