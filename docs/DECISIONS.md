@@ -14275,3 +14275,39 @@ clock".
   over about three times the fares; `--shift-s=` still compresses a shift for a handover frame.
 
 **See.** `Q160` · `Q162` · `Q222` · `Q225` · `game/tuning/day_to_night.md` · `game/tuning/shift.md`
+
+## `Q234` — The tram's doors are folding leaves, four at the entrance and two at the exit; its lenses are faceted
+
+**Asked** by the user, 2026-11-17: "draw the 4 tram doors properly with details and normal map on
+trams", then "also some normal map on the tram indicator lights maybe".
+
+**Status.** ✅ Built 2026-11-17 (`P3-88`). `pytest` 3,203; `tools/check.sh` passes every check but
+`gdformat` on `verify_day_cycle.gd`, another session's uncommitted edit. Not driven on the street.
+
+- **"The 4 doors" is read as the entrance's four leaves** — ⚠️ the model's reading, off Commons'
+  photograph of car 2 at Sheung Wan (`build/reference/vehicles/tram/tram_9.jpg`): four folding
+  leaves at the tail, panelled below, "MIND THE DOORS" on the outer two. The exit beside the driver
+  takes two (the ECCO car, `tram_8.jpg`). Both on the kerb side only; if he meant a doorway at each
+  corner, it is one tuple in `Shape.doors_m` and a side.
+- **`Shape.door_leaves`** `(2, 4)`, a count a door, replacing the two open dark doorways: each leaf
+  the body's green over the frame, a pressed panel below and a pane above at the saloon windows'
+  own foot and head, a yellow notice on the outer two. ⚠️ The glazed upper leaf is `tram_8`'s; car
+  2's is open above the panel. Glazed was taken because the pane lights with the saloon at night.
+- **The entrance is wider**: `doors_m` (7.64, 8.44) → (7.2, 8.44), 0.8 → 1.24 m, or four leaves
+  are 16 cm each. Nothing reads a tram's door position; the kerb-side glass ends at 6.3.
+- **The relief is `Q232`'s seat, with no shader change.** Each layer stands 2.5 mm or more off the
+  last (`DOOR_LEAF_PROUD_M`), over `vehicle_ink`'s 1.5 mm touch, so every leaf, panel and pane
+  takes its own inked edge and falls away into it. The notice ends at 11.5 mm of `SKIN_M`'s 12.
+- **The lamps are geometry, not a tilt** (`Shape.lens_bevel_m` 0.02, the tram alone): a lens is a
+  box, and a box's front face borders its own sides, so the ink marks no edge on it and `Q232`'s
+  seat never reached a lens. Each of the tram's eleven is now a face drawn in 2 cm inside the same
+  box — four facets, each its own flat shade and its own reflected sky. Inking a lens's fold
+  instead would have redrawn every vehicle's lamps, the player's taxi included; not asked.
+- 468 → 512 triangles; the footprint and the box unmoved. `parked.glb` regenerated.
+- Evidence: `build/driver/tramdoor/` — the kerb side before and after, the entrance close, the
+  tail, and the side at night (`--time-of-day=0.95`).
+- Not done: a moving tram seen from the taxi, day or night; a Compatibility frame (no shader line
+  moved); the facets judged at street distance — on a 12 × 4.5 cm indicator they are a few pixels
+  at ten metres; the route box beside the entrance in the photograph.
+
+**See.** `Q232` · `Q200` · `Q166` · `P3-85` · `.claude/rules/parked.md`

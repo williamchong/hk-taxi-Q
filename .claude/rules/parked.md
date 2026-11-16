@@ -94,6 +94,13 @@ traffic, and the bonus for threading them.
   box; a window's and a door's seat comes from the ink's edges and needs no field. A change owes
   the lineup sheet, `verify_parked`'s `pressed kinds:` line, a Compatibility frame and
   `grep -i "shader error"`; the dials are `vehicle_body.md`'s.
+- **The tram's doors are folding leaves and its lenses are faceted** (`Q234`): `Shape.door_leaves`
+  `(2, 4)` — the exit's two, the entrance's four, each a pressed panel under a pane with a notice
+  on the outer two — and `lens_bevel_m`. 🔴 A leaf's layers stand 2.5 mm apart
+  (`DOOR_LEAF_PROUD_M`): under `vehicle_ink`'s 1.5 mm touch a layer takes no line and no seat, and
+  past `SKIN_M` it leaves the box. ⚠️ A lens gets no seat from the ink (a box's face borders its
+  own sides), which is why the facets are geometry; they stay inside the box's extent. The bus's
+  doors and every other kind's lenses are as they were — do not "complete the set" unasked.
 - 🔴 **The bus and the tram are flat-sided** (`Shape.slab_sided`, `Q200`): one wall to a crowned
   roof, the windows applied (`side_glass` runs, `end_panes`), never two stacked glasshouses — that
   body stepped in at each deck and is gone. A window is refused off its flank, above the shoulder
