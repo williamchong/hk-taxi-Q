@@ -14,6 +14,7 @@ from __future__ import annotations
 import math
 import sys
 from dataclasses import replace
+from itertools import pairwise
 from pathlib import Path
 
 import numpy as np
@@ -41,6 +42,7 @@ from make_parked import (  # noqa: E402
     _axle_zs,
     _doors,
     _end_panes,
+    _ends,
     _glasshouse,
     _glazing,
     _liveried,
@@ -62,6 +64,7 @@ from make_vehicle import (  # noqa: E402
     GLASS,
     KERB_SIDE,
     LAMP,
+    LAMP_PARTS,
     MARKER_CABIN,
     MARKER_CABIN_DIM,
     MARKER_GLASS,
@@ -509,7 +512,63 @@ class TestTheDieCastPass:
                 # In the skin: proud of the body, inside the footprint.
                 assert np.abs(part.positions[:, 0]).max() < shape.half_width_m, part.name
             leaves = [part for part in parts if "_leaf_" in part.name]
-            assert bool(leaves) == shape.door_glass, shape.kind
+            assert bool(leaves) == (shape.door_glass or bool(shape.door_leaves)), shape.kind
+
+    def test_the_trams_doors_fold_in_two_leaves_and_four(self) -> None:
+        """Each leaf a panel under a pane, inside its frame, a notice on the
+        outer two; every layer far enough off the last to take a line."""
+        tram = _shape("tram")
+        assert tram.door_leaves == (2, 4)
+        parts = {part.name: part for part in _doors(tram)}
+        for k, count in enumerate(tram.door_leaves):
+            frame = parts[f"door_{k}_frame"].positions
+            leaves = [parts[f"door_{k}_leaf_{leaf}"].positions for leaf in range(count)]
+            assert f"door_{k}_leaf_{count}" not in parts
+            for leaf, (here, after) in enumerate(pairwise(leaves)):
+                assert here[:, 2].max() < after[:, 2].min(), (k, leaf)
+            for leaf, positions in enumerate(leaves):
+                name = f"door_{k}_leaf_{leaf}"
+                assert positions[:, 2].min() > frame[:, 2].min(), name
+                assert positions[:, 2].max() < frame[:, 2].max(), name
+                proud = [abs(positions[0, 0]) - abs(frame[0, 0])]
+                for inner in ("panel", "pane"):
+                    part = parts[f"{name}_{inner}"].positions
+                    assert positions[:, 2].min() < part[:, 2].min(), (name, inner)
+                    assert part[:, 2].max() < positions[:, 2].max(), (name, inner)
+                    proud.append(abs(part[0, 0]) - abs(positions[0, 0]))
+                assert parts[f"{name}_panel"].positions[:, 1].max() < (
+                    parts[f"{name}_pane"].positions[:, 1].min()
+                )
+                # Over `vehicle_ink`'s 1.5 mm touch, or no edge is inked.
+                assert min(proud) > 0.002, name
+                assert (f"{name}_notice" in parts) == (leaf in (0, count - 1)), name
+
+    def test_leaves_are_a_count_a_door_in_a_flat_sides_open_doorway(self) -> None:
+        tram = _shape("tram")
+        with pytest.raises(ValueError, match="a count for each door"):
+            replace(tram, door_leaves=(2,))
+        with pytest.raises(ValueError, match="folding leaves"):
+            replace(tram, door_glass=True)
+        with pytest.raises(ValueError, match="leave no panel"):
+            _doors(replace(tram, door_leaves=(2, 12)))
+
+    def test_the_trams_lenses_are_faceted_inside_the_boxs_extent(self) -> None:
+        tram = _shape("tram")
+        assert tram.lens_bevel_m > 0.0
+        facets = {part.name: part for part in _ends(tram)}
+        boxes = {part.name: part for part in _ends(replace(tram, lens_bevel_m=0.0))}
+        assert facets.keys() == boxes.keys()
+        lenses = [name for name in boxes if name.startswith(LAMP_PARTS)]
+        assert lenses
+        for name, plain in boxes.items():
+            part = facets[name]
+            assert np.allclose(part.positions.min(axis=0), plain.positions.min(axis=0)), name
+            assert np.allclose(part.positions.max(axis=0), plain.positions.max(axis=0)), name
+            leaning = np.any((np.abs(part.normals) > 0.05) & (np.abs(part.normals) < 0.95), axis=1)
+            assert leaning.any() == (name in lenses), name
+            # Outward: every face's normal points away from the lens's middle.
+            away = part.positions - part.positions.mean(axis=0)
+            assert np.all(np.einsum("ij,ij->i", part.normals, away) > 0.0), name
 
     def test_a_door_in_a_wheel_arch_is_refused(self) -> None:
         bus = _shape("bus")

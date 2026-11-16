@@ -44,6 +44,7 @@ import math
 import sys
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, replace
+from functools import partial
 from itertools import pairwise
 from pathlib import Path
 
@@ -158,6 +159,21 @@ SIDE_LAMP_HALF_M = (0.06, 0.05)
 SIDE_LAMP_INBOARD_M = 0.2
 # Space left above an arch's crown before the waist ring.
 WAIST_OVER_ARCH_M = 0.06
+# A folding door's leaves (`Shape.door_leaves`): the post each side of them,
+# the gap between two, how far a leaf clears the step and the head, and the
+# stile round its panel and its pane.
+DOOR_POST_M = 0.035
+DOOR_LEAF_GAP_M = 0.025
+DOOR_LEAF_CLEAR_M = 0.03
+DOOR_LEAF_STILE_M = 0.04
+# Over the door's frame: the leaf, its panel and pane, the notice. With the
+# frame's `FLANK_PROUD_M` the last is 11.5 mm of `SKIN_M`'s 12.
+DOOR_LEAF_PROUD_M = (0.003, 0.0055, 0.0075)
+# "Mind the doors": the yellow notice at the head of an outer leaf's panel,
+# its height and its margin inside the panel.
+DOOR_NOTICE = (232, 204, 52)
+DOOR_NOTICE_HEIGHT_M = 0.06
+DOOR_NOTICE_MARGIN_M = 0.025
 
 
 @dataclass(frozen=True)
@@ -271,6 +287,10 @@ class Shape:
     # The small lamps a tram runs with lit, on the side-lamp circuit: white
     # beside the head lamp, red inboard of each tail lens.
     side_lamps: bool = False
+    # Each lens's face drawn in this far from its seat on every side: the
+    # facets of a moulded lens, where a box's face is one flat shade (a
+    # tram's lamps). 0 is the box.
+    lens_bevel_m: float = 0.0
     # A saloon lit behind every window at night: the marker its glass takes.
     cabin: float | None = None
     # The roof of a box body standing behind the cab (`_lorry`).
@@ -318,6 +338,11 @@ class Shape:
     # Glazed leaves in those doors; off, the doorway stands open and dark (a
     # tram's, behind its turnstile).
     door_glass: bool = True
+    # Folding leaves in each of those doors, one count a door: a pressed panel
+    # under a pane at the saloon's windows, a notice on the outer two (a
+    # tram's four at its entrance, two at its exit). Empty is `door_glass`'s
+    # reading.
+    door_leaves: tuple[int, ...] = ()
     # A bar across each deck's side glass: (how far up the glass its centre
     # sits, its height in metres). A minibus's slider rails.
     window_bar: tuple[float, float] | None = None
@@ -345,6 +370,14 @@ class Shape:
         flat_only = self.side_glass or self.end_panes or self.glint or self.crown_m
         if flat_only and not self.slab_sided:
             raise ValueError(f"{self.kind}: applied glass and a crown are a flat-sided body's")
+        if self.door_leaves:
+            if len(self.door_leaves) != len(self.doors_m) or min(self.door_leaves) < 1:
+                raise ValueError(f"{self.kind}: `door_leaves` is a count for each door")
+            if self.door_glass or not self.slab_sided:
+                raise ValueError(
+                    f"{self.kind}: folding leaves stand in a flat side's own doorway, "
+                    "not behind `door_glass`"
+                )
         if self.joints_m is not None and self.crease_y_m is not None:
             raise ValueError(f"{self.kind}: a flank takes joints or a crease, one of them")
         crease = self.crease_y_m
@@ -999,6 +1032,9 @@ def _ends(shape: Shape) -> list[MeshData]:
                 )
             )
         z_lens = sorted((face - 0.01 * out, face + FIXTURE_PROUD_M * out))
+
+        # A lens: the plain box, or its face drawn in to facets.
+        lens = partial(_lens, out=out, bevel_m=shape.lens_bevel_m)
         for side, side_tag in ((-1.0, "l"), (1.0, "r")):
             x = side * (hw - shape.lamp_inset_m)
             lens_half = (0.08, 0.05) if rear else (0.11, 0.05)
@@ -1019,7 +1055,7 @@ def _ends(shape: Shape) -> list[MeshData]:
                 )
             if rear or shape.head_lamps == 2:
                 parts.append(
-                    box(
+                    lens(
                         (x - lens_half[0], lamp_y - lens_half[1], z_lens[0]),
                         (x + lens_half[0], lamp_y + lens_half[1], z_lens[1]),
                         RED if rear else LAMP,
@@ -1034,7 +1070,7 @@ def _ends(shape: Shape) -> list[MeshData]:
             # moving car winks or a stopping one flashes its hazards (`P3-3f`) —
             # a switched-off car's instance data leaves them dark.
             parts.append(
-                box(
+                lens(
                     (x - 0.06, lamp_y - 0.105, z_lens[0]),
                     (x + 0.06, lamp_y - 0.06, z_lens[1]),
                     AMBER,
@@ -1048,7 +1084,7 @@ def _ends(shape: Shape) -> list[MeshData]:
                     y_lamp -= 0.0825
                 half_x, half_y = SIDE_LAMP_HALF_M
                 parts.append(
-                    box(
+                    lens(
                         (x_lamp - half_x, y_lamp - half_y, z_lens[0]),
                         (x_lamp + half_x, y_lamp + half_y, z_lens[1]),
                         RED if rear else LAMP,
@@ -1057,7 +1093,7 @@ def _ends(shape: Shape) -> list[MeshData]:
                 )
         if shape.head_lamps == 1 and not rear:
             parts.append(
-                box(
+                lens(
                     (-0.09, lamp_y - 0.09, z_lens[0]),
                     (0.09, lamp_y + 0.09, z_lens[1]),
                     LAMP,
@@ -1077,6 +1113,33 @@ def _ends(shape: Shape) -> list[MeshData]:
                 )
             )
     return parts
+
+
+def _lens(
+    low: Point,
+    high: Point,
+    colour: Colour,
+    *,
+    out: float,
+    bevel_m: float,
+    name: str,
+) -> MeshData:
+    """A lens on an end face: a box, or with a bevel its outer face drawn in
+    by it on every side — four facets round a smaller face, inside the box's
+    own extent. The bevel is held to a third of the lens's lesser side."""
+    (x0, y0, z0), (x1, y1, z1) = low, high
+    if bevel_m <= 0.0:
+        return box(low, high, colour, name=name)
+    b = min(bevel_m, (x1 - x0) / 3.0, (y1 - y0) / 3.0)
+    seat, crown = (z0, z1) if out > 0.0 else (z1, z0)
+
+    def ring_(z: float, inset: float) -> list[tuple[float, float, float]]:
+        xa, xb, ya, yb = x0 + inset, x1 - inset, y0 + inset, y1 - inset
+        corners = [(xa, ya, z), (xa, yb, z), (xb, yb, z), (xb, ya, z)]
+        # `hexahedron` wants its rings anticlockwise seen from the far ring.
+        return corners if out > 0.0 else corners[::-1]
+
+    return hexahedron(ring_(seat, 0.0), ring_(crown, b), colour, name=name)
 
 
 def _side_fixtures(shape: Shape) -> list[MeshData]:
@@ -1241,7 +1304,7 @@ def _doors(shape: Shape) -> list[MeshData]:
             raise ValueError(f"{shape.kind}: door {k} stands in a wheel arch")
         parts.append(pane(z0, z1, step_y, head, 0.0, DARK, f"door_{k}_frame"))
         if shape.door_glass:
-            mid, post = (z0 + z1) / 2.0, 0.035
+            mid, post = (z0 + z1) / 2.0, DOOR_POST_M
             for leaf, (za, zb) in enumerate(
                 ((z0 + post, mid - post / 2.0), (mid + post / 2.0, z1 - post))
             ):
@@ -1256,6 +1319,8 @@ def _doors(shape: Shape) -> list[MeshData]:
                         f"door_{k}_leaf_{leaf}",
                     )
                 )
+        if shape.door_leaves:
+            parts.extend(_door_leaves(shape, k, z0, z1, step_y, head, pane))
         if g is None:
             continue
         # The posts over the side glass, leaning with it.
@@ -1264,6 +1329,64 @@ def _doors(shape: Shape) -> list[MeshData]:
             _leaning_strip(g, side, z, 0.03, DARK, f"door_{k}_post_{j}")
             for j, z in enumerate(posts)
         )
+    return parts
+
+
+def _door_leaves(
+    shape: Shape,
+    k: int,
+    z0: float,
+    z1: float,
+    step_y: float,
+    head: float,
+    pane: Callable[[float, float, float, float, float, Colour, str], MeshData],
+) -> list[MeshData]:
+    """Door `k`'s folding leaves, in its frame: each the body's paint with a
+    pressed panel below and a pane above, at the saloon windows' own foot and
+    head, and a notice on the outer two. Three steps of the skin over the
+    frame, each far enough off the last to take a line and a seat."""
+    runs = [run for run in shape.side_glass if KERB_SIDE in run.sides and run.y0_m < head]
+    if not runs:
+        raise ValueError(f"{shape.kind}: a leaf's pane stands at the saloon's windows")
+    foot, top = step_y + DOOR_LEAF_CLEAR_M, head - DOOR_LEAF_CLEAR_M
+    sill = min(run.y0_m for run in runs)
+    lintel = min(max(run.y1_m for run in runs), top - DOOR_LEAF_STILE_M)
+    count = shape.door_leaves[k]
+    width = (z1 - z0 - 2.0 * DOOR_POST_M - DOOR_LEAF_GAP_M * (count - 1)) / count
+    panel_foot, panel_top = foot + DOOR_LEAF_STILE_M, sill - DOOR_LEAF_STILE_M
+    notice_top = panel_top - DOOR_NOTICE_MARGIN_M
+    if (
+        width <= 2.0 * (DOOR_LEAF_STILE_M + DOOR_NOTICE_MARGIN_M)
+        or not panel_foot < notice_top - DOOR_NOTICE_HEIGHT_M
+        or not sill < lintel
+    ):
+        raise ValueError(f"{shape.kind}: door {k}'s {count} leaves leave no panel")
+    proud_leaf, proud_inner, proud_notice = DOOR_LEAF_PROUD_M
+    parts: list[MeshData] = []
+    for leaf in range(count):
+        za = z0 + DOOR_POST_M + leaf * (width + DOOR_LEAF_GAP_M)
+        zb = za + width
+        inner = (za + DOOR_LEAF_STILE_M, zb - DOOR_LEAF_STILE_M)
+        name = f"door_{k}_leaf_{leaf}"
+        parts.extend(
+            (
+                pane(za, zb, foot, top, proud_leaf, shape.paint, name),
+                pane(*inner, panel_foot, panel_top, proud_inner, shape.paint, f"{name}_panel"),
+                pane(*inner, sill, lintel, proud_inner, GLASS, f"{name}_pane"),
+            )
+        )
+        if leaf in (0, count - 1):
+            parts.append(
+                pane(
+                    inner[0] + DOOR_NOTICE_MARGIN_M,
+                    inner[1] - DOOR_NOTICE_MARGIN_M,
+                    notice_top - DOOR_NOTICE_HEIGHT_M,
+                    notice_top,
+                    proud_notice,
+                    DOOR_NOTICE,
+                    f"{name}_notice",
+                )
+            )
     return parts
 
 
@@ -1965,7 +2088,7 @@ ROSTER: tuple[RosterEntry, ...] = (
     ),
     # The tram, read off Tiny's model of one: flat sides from the skirt to a
     # dark crowned roof, rounded ends with the screens wrapping them, a top
-    # light over each upstairs window, five windows between two open doorways
+    # light over each upstairs window, five windows between two folding doors (`Q234`)
     # downstairs, one lamp on the dash. Plain green — the model wears no band.
     # Its skirt still runs down to the rails, the trucks hidden under it (the
     # user's call, `Q166`), where the model shows its truck.
@@ -1994,11 +2117,14 @@ ROSTER: tuple[RosterEntry, ...] = (
         head_lamps=1,
         mirrors=False,
         side_lamps=True,
+        lens_bevel_m=0.02,
         cabin=MARKER_CABIN,
-        # The exit beside the driver and the entrance at the tail, open
-        # doorways behind their gates.
-        doors_m=((0.45, 1.25), (7.64, 8.44)),
+        # The exit beside the driver, two folding leaves, and the entrance
+        # at the tail, four (Commons' photographs of 2 at Sheung Wan and of
+        # the ECCO and Marco Bicego cars, `build/reference/vehicles/tram/`).
+        doors_m=((0.45, 1.25), (7.2, 8.44)),
         door_glass=False,
+        door_leaves=(2, 4),
         door_head_m=2.45,
         slab_sided=True,
         crown_m=0.22,
