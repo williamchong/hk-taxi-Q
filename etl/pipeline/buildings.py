@@ -68,7 +68,7 @@ from shapely.geometry.base import BaseGeometry
 
 from pipeline import gdb
 from pipeline.basemap import BASEMAP_NAME, BASEMAP_SCHEMA
-from pipeline.colour import chroma_and_hue, with_hue
+from pipeline.colour import chroma_and_hue, with_hue, with_lightness
 from pipeline.config import (
     BuildingStyle,
     Config,
@@ -109,6 +109,9 @@ class Banding:
 
     cuts_mpd: tuple[float, ...]
     hues: tuple[Hue | None, ...]
+    # `L*` each band stands off the building's own, bottom first; empty is none
+    # (`Q240`: the street band's measured step, the rest 0).
+    lifts: tuple[float, ...] = ()
 
 
 class BandTables(NamedTuple):
@@ -734,6 +737,18 @@ def band_hue(hue: Hue, band: Hue, tower: Hue, band_noise: float, tower_noise: fl
     return (hue[0] + weight * gap_a, hue[1] + weight * gap_b)
 
 
+def band_lift(step: float, band_noise: float, tower_noise: float) -> float:
+    """A street band's `L*` step from its tower, as much of it as ships (`Q240`).
+
+    `band_hue`'s shrinkage on the lightness axis: `step² / (step² + noise)`,
+    the noise the two bands' own variance from their walls' disagreement in
+    `L*` (the survey's `noise_l`). A step the walls cannot resolve ships as
+    nothing, and the foot stays the building's own lightness.
+    """
+    gap2 = step * step
+    return step * gap2 / (gap2 + band_noise + tower_noise) if gap2 else 0.0
+
+
 def facade_bands(
     style: BuildingStyle, hue: dict[str, Hue], *, root: Path | None = None
 ) -> dict[str, Banding]:
@@ -757,6 +772,13 @@ def facade_bands(
         raise ValueError(
             f"{path}: facade_hue.bands is on, but this survey has no `bands` column — "
             "re-run tools/facade_survey.py, or turn bands off"
+        )
+    if style.facade_hue_band_lightness > 0.0 and not any(
+        "noise_l" in (row.get("bands") or {}) for row in table.values()
+    ):
+        raise ValueError(
+            f"{path}: facade_hue.band_lightness is set, but this survey's bands have no "
+            "`noise_l` — re-run tools/facade_survey.py, or set band_lightness to 0"
         )
     bands: dict[str, Banding] = {}
     try:
@@ -783,8 +805,23 @@ def facade_bands(
                 )
                 for lab, noise in zip(labs[:-1], noises[:-1], strict=True)
             ]
-            if any(band is not None for band in hues):
-                bands[key] = Banding(cuts_mpd=cuts, hues=(*hues, None))
+            lifts: tuple[float, ...] = ()
+            if style.facade_hue_band_lightness > 0.0 and labs[0] is not None:
+                if "noise_l" not in measured:
+                    raise ValueError(
+                        f"{path}: {key}'s bands have no `noise_l` — re-run "
+                        "tools/facade_survey.py, or set facade_hue.band_lightness to 0"
+                    )
+                noises_l = [float(noise) for noise in measured["noise_l"]]
+                if len(noises_l) != len(labs):
+                    raise ValueError(f"{key}: {len(noises_l)} lightness noises, {len(labs)} bands")
+                step = float(labs[0][0]) - float(tower[0])
+                street = style.facade_hue_band_lightness * band_lift(
+                    step, noises_l[0], noises_l[-1]
+                )
+                lifts = (street, *(0.0 for _ in labs[1:]))
+            if any(band is not None for band in hues) or any(lifts):
+                bands[key] = Banding(cuts_mpd=cuts, hues=(*hues, None), lifts=lifts)
     except (AttributeError, KeyError, TypeError, IndexError, ValueError) as exc:
         raise ValueError(f"{path}: facade hue survey bands are malformed ({exc})") from exc
     log.info("facade bands: %d buildings from %s", len(bands), path.name)
@@ -866,7 +903,7 @@ def band_colours(
     the wall.
     """
     tints = [hue if band is None else band for band in banding.hues]
-    return _rgba(style, class_id, mesh, bounds, hue, tints, podium)
+    return _rgba(style, class_id, mesh, bounds, hue, tints, podium, banding.lifts)
 
 
 def _rgba(
@@ -877,6 +914,7 @@ def _rgba(
     measured: Hue | None,
     tints: list[Hue | None],
     podium: int,
+    lifts: tuple[float, ...] = (),
 ) -> np.ndarray:
     """One RGBA row per tint: the material `measured` picks, carrying each tint."""
     low, high = bounds if bounds is not None else mesh.aabb()
@@ -884,10 +922,12 @@ def _rgba(
     jitter = style.jitter_for(class_id)
     factor = 1.0 + jitter * (2.0 * _seed(mesh) - 1.0) if jitter > 0.0 else None
     rows = []
-    for tint in tints:
+    for index, tint in enumerate(tints):
         red, green, blue = material
         if tint is not None:
             red, green, blue = with_hue((red, green, blue), tint, style.facade_hue_strength)
+        if index < len(lifts) and lifts[index]:
+            red, green, blue = with_lightness((red, green, blue), lifts[index])
         if factor is not None:
             red, green, blue = (
                 min(255, max(0, round(channel * factor))) for channel in (red, green, blue)
@@ -1488,7 +1528,10 @@ def _ship_line(banding: Banding, line_mpd: float | None) -> Banding | None:
     if line_mpd is not None and _same_line(banding, line_mpd):
         return banding
     street = banding.hues[0]
-    return None if street is None else Banding(banding.cuts_mpd[:1], (street, None))
+    lifts = banding.lifts[:1]
+    if street is None and not any(lifts):
+        return None
+    return Banding(banding.cuts_mpd[:1], (street, None), lifts)
 
 
 def cut_bands(tier: MeshData, bands: BandTables | None) -> MeshData:

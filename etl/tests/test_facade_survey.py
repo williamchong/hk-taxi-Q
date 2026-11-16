@@ -14,6 +14,7 @@ from facade_survey import (
     CLIP_LEVEL,
     FACES,
     FALLBACK_SPREAD_AB,
+    FALLBACK_SPREAD_L,
     MODAL_SHARE,
     PERCENTILE,
     VEGETATION_A,
@@ -21,6 +22,7 @@ from facade_survey import (
     _pack,
     _repeats,
     band_noise,
+    band_noise_l,
     coverage,
     estimate,
     face_of,
@@ -302,3 +304,13 @@ class TestBandNoise:
     def test_under_two_walls_take_the_city_spread(self, count: int) -> None:
         walls = [np.array([50.0, 0.0, 0.0])] * count
         assert band_noise(walls) == pytest.approx(FALLBACK_SPREAD_AB**2 / max(1, count))
+
+    def test_lightness_is_measured_on_its_own_axis(self) -> None:
+        walls = [np.array([50.0, 0.0, 0.0]), np.array([44.0, 3.0, 4.0])]
+        assert band_noise_l(walls) == pytest.approx(36.0 / 2)
+
+    @pytest.mark.parametrize("count", [0, 1])
+    def test_under_two_walls_take_the_city_lightness_spread(self, count: int) -> None:
+        walls = [np.array([50.0, 0.0, 0.0])] * count
+        assert FALLBACK_SPREAD_L > 0.0
+        assert band_noise_l(walls) == pytest.approx(FALLBACK_SPREAD_L**2 / max(1, count))

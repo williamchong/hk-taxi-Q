@@ -940,11 +940,18 @@ buildings:
   # pulled toward the tower's by how much the band's own walls disagree, so a
   # difference the photos cannot resolve ships as the tower's colour. Needs a
   # survey with the `bands` column; false is every building one colour.
+  #
+  # `band_lightness` (Q240, the user's call from frames): how much of the
+  # street band's measured `L*` step from its tower ships, 0 to 1, after the
+  # same shrinkage by the walls' disagreement. The street band only — the
+  # photographs' lightness stays refused for the building. Needs the survey's
+  # `noise_l`; 0.0 is hue only.
   facade_hue:
     source: facade_lab.json
     strength: 3.0
     vegetation_max: 0.5
     bands: true
+    band_lightness: 1.0
 
   # Vertex-clustering cell size per LOD tier, in metres, coarsest last.
   #

@@ -1157,6 +1157,7 @@ class TestBuildRegion:
                             "cuts_mpd": [base_mpd + 5.0, base_mpd + 30.0],
                             "lab": [[60.0, 12.0, 0.0], [60.0, 0.0, 12.0], [60.0, 0.0, 0.0]],
                             "noise": [0.0, 0.0, 0.0],
+                            "noise_l": [0.0, 0.0, 0.0],
                         },
                     },
                 }
@@ -1873,3 +1874,7 @@ class TestShipLine:
     def test_nothing_left_is_none(self) -> None:
         podium_only = Banding(cuts_mpd=(10.0, 30.0), hues=(None, (0.0, 5.0), None))
         assert _ship_line(podium_only, None) is None
+
+    def test_a_street_band_keeps_its_lightness_without_its_podium(self) -> None:
+        lit = Banding(cuts_mpd=(10.0, 30.0), hues=(None, None, None), lifts=(-8.0, 0.0, 0.0))
+        assert _ship_line(lit, None) == Banding((10.0,), (None, None), (-8.0,))

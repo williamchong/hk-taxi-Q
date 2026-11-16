@@ -183,6 +183,11 @@ BAND_FACE_TEXELS = 2000
 # spread, measured on the walls this survey reads.
 FALLBACK_SPREAD_AB = 6.5
 
+# The same on the lightness axis, `L*` (`Q240`): the six sheets' median of the
+# spread between two walls of one band (3,237 bands; quartiles 8.7 and 18.8),
+# for a band with fewer than two faces to measure its own.
+FALLBACK_SPREAD_L = 13.2
+
 # Compass names for the four horizontal quadrants, as (column, sign) into the
 # (x, z) pair `face_of` builds. On the Y-up axes `read_scene` produces, +X is
 # east, and north is -Z because the node matrix maps the source's +Y northing
@@ -573,6 +578,22 @@ def band_noise(face_labs: list[np.ndarray]) -> float:
     return float(spread**2 / count)
 
 
+def band_noise_l(face_labs: list[np.ndarray]) -> float:
+    """The variance of one band's lightness, `L*²`, from its walls' disagreement.
+
+    `band_noise` on the other axis: the median pairwise `|ΔL*|` between the
+    band's faces, squared over their number. A band with fewer than two faces
+    takes `FALLBACK_SPREAD_L`.
+    """
+    count = len(face_labs)
+    if count < 2:
+        return FALLBACK_SPREAD_L**2 / max(1, count)
+    spread = np.median(
+        [abs(face_labs[i][0] - face_labs[j][0]) for i in range(count) for j in range(i + 1, count)]
+    )
+    return float(spread**2 / count)
+
+
 def survey_bands(
     meshes: list[MeshData],
     decoded: dict[int, np.ndarray],
@@ -606,10 +627,12 @@ def survey_bands(
     bands = banded_texels(meshes, tuple(cuts), decoded)
     labs: list[list[float] | None] = []
     noises: list[float] = []
+    noises_l: list[float] = []
     for level, faces in enumerate(bands):
         if not faces:
             labs.append(None)
             noises.append(band_noise([]))
+            noises_l.append(band_noise_l([]))
             continue
         sampled = _subsample(faces, f"{name}/band{level}")
         offsets = np.cumsum([0, *(len(pixels) for pixels in sampled.values())])
@@ -627,10 +650,12 @@ def survey_bands(
             if per_face is not None:
                 face_labs.append(per_face[0])
         noises.append(round(band_noise(face_labs), 3))
+        noises_l.append(round(band_noise_l(face_labs), 3))
     return {
         "cuts_mpd": [round(cut, 3) for cut in cuts],
         "lab": labs,
         "noise": noises,
+        "noise_l": noises_l,
     }
 
 

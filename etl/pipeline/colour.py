@@ -261,3 +261,15 @@ def with_hue(
     lab = srgb_to_lab(np.array([rgb], dtype=np.float64))
     out = lab_to_srgb(lab_with_hue(lab, np.array([hue], dtype=np.float64), strength))[0]
     return int(out[0]), int(out[1]), int(out[2])
+
+
+def with_lightness(rgb: tuple[int, int, int], step: float) -> tuple[int, int, int]:
+    """`rgb` moved `step` in `L*`, its `a*` and `b*` kept (`Q240`).
+
+    Held inside `L*` 0 to 100; past the gamut the conversion clips, as it does
+    for `with_hue`.
+    """
+    lab = srgb_to_lab(np.array([rgb], dtype=np.float64))
+    lab[0, 0] = min(100.0, max(0.0, lab[0, 0] + step))
+    out = lab_to_srgb(lab)[0]
+    return int(out[0]), int(out[1]), int(out[2])

@@ -346,6 +346,12 @@ class BuildingStyle:
     # walls disagree. Off, every building is its tower colour floor to roof — the
     # city before `Q197`, and the city a survey without a `bands` column builds.
     facade_hue_bands: bool = False
+    # How much of a street band's measured lightness step from its tower ships,
+    # 0 to 1 (`Q240`), after the shrinkage by the walls' own disagreement. 0.0 is
+    # `Q197` as shipped: hue only, every band at the building's own lightness.
+    # ⚠️ The street band only: a building's own lightness stays the height
+    # ramp's — the photographs' `L*` is still refused for the building.
+    facade_hue_band_lightness: float = 0.0
 
     @property
     def height_bands(self) -> tuple[HeightBand, ...]:
@@ -689,6 +695,11 @@ def _building_style(body: dict[str, Any], where: str, table: _MaterialTable) -> 
     hue_bands = False if hue is None else hue.get("bands", False)
     if not isinstance(hue_bands, bool):
         raise ValueError(f"{where}:facade_hue.bands must be true or false, got {hue_bands!r}")
+    hue_band_lightness = (
+        0.0
+        if hue is None
+        else _scale(hue.get("band_lightness", 0.0), f"{where}:facade_hue.band_lightness", 1.0)
+    )
 
     # ⚠️ **Refused rather than ignored** (`Q102`). The vision reader this block
     # configured is gone, and so is the `TEXCOORD_1` payload it fed. A stale
@@ -820,6 +831,7 @@ def _building_style(body: dict[str, Any], where: str, table: _MaterialTable) -> 
         facade_hue_strength=hue_strength,
         facade_hue_vegetation_max=hue_vegetation_max,
         facade_hue_bands=hue_bands,
+        facade_hue_band_lightness=hue_band_lightness,
         lod_cell_sizes_m=cells,
         class_lod_cell_sizes_m=class_cells,
         collision_cell_m=collision_cell,

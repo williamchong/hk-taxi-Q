@@ -468,6 +468,16 @@ class TestBuildingStyle:
         with pytest.raises(ValueError, match=r"facade_hue\.vegetation_max"):
             load_config(rewrite(overdo_it))
 
+    @pytest.mark.parametrize("value", [-0.1, 1.5])
+    def test_facade_hue_band_lightness_outside_its_bound_is_rejected(self, rewrite, value) -> None:
+        """`Q240`: a share of a measured step, so 0 to 1 and never an amplifier."""
+
+        def overdo_it(doc: dict[str, Any]) -> None:
+            doc["buildings"]["facade_hue"]["band_lightness"] = value
+
+        with pytest.raises(ValueError, match=r"facade_hue\.band_lightness"):
+            load_config(rewrite(overdo_it))
+
     def test_facade_hue_needs_a_source(self, rewrite) -> None:
         """`strength` alone colours nothing, so the pair is refused rather than
         silently ignored."""

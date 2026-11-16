@@ -9,7 +9,14 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from pipeline.buildings import band_hue, colour_for, facade_bands, facade_hue
+from pipeline.buildings import (
+    band_colours,
+    band_hue,
+    band_lift,
+    colour_for,
+    facade_bands,
+    facade_hue,
+)
 from pipeline.colour import (
     _lab_to_encoded,
     chroma,
@@ -19,6 +26,7 @@ from pipeline.colour import (
     reflectance,
     srgb_to_lab,
     with_hue,
+    with_lightness,
 )
 from pipeline.config import BuildingStyle, HeightBand, Material, MaterialAssignment
 from tests.helpers import flat_mesh, style
@@ -176,6 +184,23 @@ def _style_with_hue(
         facade_hue_strength=strength,
         facade_hue_vegetation_max=vegetation_max,
     )
+
+
+class TestWithLightness:
+    """`Q240`: a street band's step moves `L*` and leaves the hue where it was."""
+
+    def test_the_step_lands_in_lightness_alone(self) -> None:
+        before = srgb_to_lab(np.array([[150.0, 120.0, 100.0]]))[0]
+        after = srgb_to_lab(np.array([with_lightness((150, 120, 100), -10.0)], dtype=float))[0]
+        assert after[0] - before[0] == pytest.approx(-10.0, abs=0.5)
+        assert after[1:] == pytest.approx(before[1:], abs=1.0)
+
+    def test_no_step_is_the_colour(self) -> None:
+        assert with_lightness((150, 120, 100), 0.0) == (150, 120, 100)
+
+    @pytest.mark.parametrize(("step", "end"), [(-200.0, (0, 0, 0)), (200.0, (255, 255, 255))])
+    def test_it_stops_at_black_and_white(self, step: float, end: tuple[int, int, int]) -> None:
+        assert with_lightness((128, 128, 128), step) == end
 
 
 class TestFacadeHue:
@@ -348,6 +373,22 @@ class TestBandHue:
         assert band_hue((3.0, -1.0), (5.0, 5.0), (5.0, 5.0), 1.0, 1.0) == (3.0, -1.0)
 
 
+class TestBandLift:
+    """`Q240`: a street band's lightness step, shrunk by its walls' disagreement."""
+
+    def test_no_noise_ships_the_whole_step(self) -> None:
+        assert band_lift(-12.0, 0.0, 0.0) == -12.0
+
+    def test_noise_equal_to_the_step_ships_half(self) -> None:
+        assert band_lift(-4.0, 8.0, 8.0) == pytest.approx(-2.0)
+
+    def test_a_brighter_foot_ships_brighter(self) -> None:
+        assert band_lift(6.0, 0.0, 0.0) == 6.0
+
+    def test_no_step_is_nothing(self) -> None:
+        assert band_lift(0.0, 3.0, 3.0) == 0.0
+
+
 class TestFacadeBands:
     """The survey's `bands` column reaching `Banding`, and every refusal."""
 
@@ -390,6 +431,65 @@ class TestFacadeBands:
         loaded = self.banded(tmp_path, {"B1": {"lab": [60.0, 0.0, 0.0]}})
         with pytest.raises(ValueError, match="no `bands` column"):
             facade_bands(loaded, facade_hue(loaded, root=tmp_path), root=tmp_path)
+
+    def lit(self, tmp_path: Path, table: dict) -> BuildingStyle:
+        return replace(self.banded(tmp_path, table), facade_hue_band_lightness=1.0)
+
+    @staticmethod
+    def dark_foot() -> dict:
+        row = TestFacadeBands.row()
+        row["bands"]["lab"][0] = [50.0, 6.0, 0.0]
+        row["bands"]["noise_l"] = [0.0, 1.0, 0.0]
+        return row
+
+    def test_hue_only_carries_no_lightness(self, tmp_path: Path) -> None:
+        loaded = self.banded(tmp_path, {"B1": self.dark_foot()})
+        bands = facade_bands(loaded, facade_hue(loaded, root=tmp_path), root=tmp_path)
+        assert bands["B1"].lifts == ()
+
+    def test_the_street_band_takes_its_measured_step(self, tmp_path: Path) -> None:
+        loaded = self.lit(tmp_path, {"B1": self.dark_foot()})
+        bands = facade_bands(loaded, facade_hue(loaded, root=tmp_path), root=tmp_path)
+        assert bands["B1"].lifts == (-10.0, 0.0, 0.0)
+
+    def test_the_step_is_shrunk_by_the_walls_disagreement(self, tmp_path: Path) -> None:
+        row = self.dark_foot()
+        row["bands"]["noise_l"] = [50.0, 1.0, 50.0]
+        loaded = self.lit(tmp_path, {"B1": row})
+        bands = facade_bands(loaded, facade_hue(loaded, root=tmp_path), root=tmp_path)
+        assert bands["B1"].lifts[0] == pytest.approx(-5.0)
+
+    def test_a_foot_of_the_towers_hue_still_takes_its_lightness(self, tmp_path: Path) -> None:
+        row = self.dark_foot()
+        row["bands"]["lab"][0] = [50.0, 0.0, 0.0]
+        loaded = self.lit(tmp_path, {"B1": row})
+        bands = facade_bands(loaded, facade_hue(loaded, root=tmp_path), root=tmp_path)
+        assert bands["B1"].lifts[0] == -10.0
+
+    def test_lightness_without_its_noise_column_is_refused(self, tmp_path: Path) -> None:
+        loaded = self.lit(tmp_path, {"B1": self.row()})
+        with pytest.raises(ValueError, match="no `noise_l`"):
+            facade_bands(loaded, facade_hue(loaded, root=tmp_path), root=tmp_path)
+
+    def test_a_lift_darkens_its_band_alone(self, tmp_path: Path) -> None:
+        loaded = self.lit(tmp_path, {"B1": self.dark_foot()})
+        hue = facade_hue(loaded, root=tmp_path)
+        banding = facade_bands(loaded, hue, root=tmp_path)["B1"]
+        mesh = flat_mesh("B1", 40.0)
+        rows = band_colours(
+            loaded, "BUILDING", mesh, banding, bounds=mesh.aabb(), hue=hue["B1"], podium=255
+        )
+        flat = band_colours(
+            loaded,
+            "BUILDING",
+            mesh,
+            replace(banding, lifts=()),
+            bounds=mesh.aabb(),
+            hue=hue["B1"],
+            podium=255,
+        )
+        assert rows[0, :3].sum() < flat[0, :3].sum()
+        assert (rows[1:] == flat[1:]).all()
 
     def test_mismatched_lengths_are_malformed(self, tmp_path: Path) -> None:
         row = self.row()
