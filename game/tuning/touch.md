@@ -59,6 +59,34 @@ is the alternative `Q220` named and left owed; 2.5 is the same step the other wa
 | 75% | 65% | 56% | 49% |
 | 100% | 100% | 100% | 100% |
 
+## `steer_attack_at_top_s = 2.0`
+
+The thumb's slew at speed (`Q230`, 2026-11-16, the user's report: "steer should be stable on
+straight high speed roads, esp on touch"). A thumb may add lock no faster than this many seconds to
+full with the car at its limiter; the limit grows from none at rest on the square of the car's share
+of the limiter, the keyboard's `attack_at_top_s` rule and its value (`Q174`). Easing off, a
+countersteer and drift mode pass through. Until it, a thumb reached the car as it read at every
+speed, and `keyboard_steer.md` had left the question to the handset; this is the handset's answer.
+
+Swept `tools/skidpad.sh --only=flick --steer=touch --sweep=touch.steer_attack_at_top_s=…`, the
+full-lock swap with the throttle held (`flick@held`), peak rear-axle slip:
+
+| Entry | 0 (was) | 1.0 | 1.5 | **2.0** | 3.0 |
+|---|---|---|---|---|---|
+| 86 kph | 6.8° | 6.9° | 6.6° | 6.3° | 5.6° |
+| 95 kph | 9.7° | 9.3° | 8.7° | 6.9° | 5.8° |
+| 110 kph | 20.8° | 18.5° | 11.9° | 7.2° | 6.1° |
+| 120 kph | 29.8° | 27.9° | 13.0° | 7.2° | 6.2° |
+| 150 kph | 31.4° | 32.2° | 11.9° | 7.2° | 6.3° |
+
+2.0 is the first value under the tyre's 8° peak at every speed; 1.5 still lets the tail go. At
+63 kph the limit is 0.2 s to full, the rack's own, so nothing changes there. ⚠️ The cost is a
+thumb's quick correction at speed: 20% of the lock at 120 kph takes 0.15 s to arrive. A desk pick
+on the pad's driver, which slams the lock as no thumb does; the handset grades it. A stick still
+passes through as it reads (`InputRouter.steer_from_thumb`).
+
+## `steer_curve_gentle` and `steer_curve_sharp`: the picks
+
 🔴 Desk picks, both: no thumb has driven either. At 2.5 the last quarter of the travel carries 51%
 of the lock, which may snatch; if it does, 2.3 before removing the choice. `verify_input.gd` holds
 the order — gentle over normal over sharp, none under 1 — and nothing about the values.

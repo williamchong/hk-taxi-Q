@@ -163,6 +163,12 @@ func _check_profile() -> void:
 			% [_touch.steer_curve_gentle, _touch.steer_curve, _touch.steer_curve_sharp]
 		)
 	)
+	# The thumb's slew at speed (`Q230`): 0 is off, and a missing key reads 0.
+	_expect(
+		_touch.steer_attack_at_top_s > 0.0,
+		"profile",
+		"steer_attack_at_top_s is %.2f" % _touch.steer_attack_at_top_s
+	)
 	# The guard in `_axis_from` keeps a bad edit from dividing by zero; this is
 	# what says the edit was bad. Below the band there is no usable travel at
 	# all and the axis is a switch.
@@ -419,6 +425,9 @@ func _check_keyboard_steer() -> void:
 	key.pressed = true
 	_router._input(key)
 	_expect(_router.steer_from_keys, "keys", "a steering key hands the steering to the keys")
+	_router.steer_from_thumb = true
+	_router._input(key)
+	_expect(not _router.steer_from_thumb, "keys", "and takes it from a thumb")
 
 	var resting := InputEventJoypadMotion.new()
 	resting.axis = JOY_AXIS_LEFT_X
@@ -516,6 +525,43 @@ func _check_keyboard_steer() -> void:
 	Input.action_release(&"steer_left")
 	_tick()
 	_expect(is_zero_approx(_router.steer_for(0.0, false, TICK)), "keys", "letting go is not ramped")
+
+	# A thumb is slewed at speed and never at rest (`Q230`): the same analogue
+	# reading, with the router told it is a thumb's.
+	var slew: float = _touch.steer_attack_at_top_s
+	_router.steer_from_keys = false
+	_router.steer_from_thumb = true
+	Input.action_press(&"steer_right", 0.6)
+	_tick()
+	_expect(
+		is_equal_approx(_router.steer_for(0.0, false, TICK), _steer()),
+		"keys",
+		"a thumb at rest reaches the car as it reads"
+	)
+	Input.action_release(&"steer_right")
+	_tick()
+	_router.steer_for(1.0, false, TICK)
+	Input.action_press(&"steer_right", 0.6)
+	_tick()
+	_expect(
+		is_equal_approx(_router.steer_for(1.0, false, TICK), TICK / slew),
+		"keys",
+		"at the limiter a thumb adds lock at steer_attack_at_top_s"
+	)
+	_expect(
+		is_equal_approx(_router.steer_for(1.0, true, TICK), _steer()),
+		"keys",
+		"a thumb's countersteer is not slewed"
+	)
+	Input.action_release(&"steer_right")
+	_tick()
+	_expect(
+		is_zero_approx(_router.steer_for(1.0, false, TICK)),
+		"keys",
+		"a thumb letting go is not slewed"
+	)
+	_router.steer_from_thumb = false
+	_router.steer_from_keys = true
 
 
 # -------------------------------------------------------------- override ----

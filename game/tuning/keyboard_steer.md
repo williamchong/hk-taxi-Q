@@ -40,9 +40,9 @@ sliding, even without pressing drift"): a full-lock lane change with the throttl
 | 110 kph | 20.8°, 22 kph shed | 6.3°, 8 kph gained |
 | 120 kph | 29.8°, 30 kph shed | 6.5° |
 
-🔴 That table was a KEY's: full lock in one tick is what slid the car. A thumb or a stick has no
-such ramp since `Q210`; whether one slams full lock at 110 kph is the handset's question, and if it
-does, the answer is the touch table's, not a car dial. Graded on `--only=flick` at 95 / 110 / 120 kph
+🔴 That table was a KEY's: full lock in one tick is what slid the car. A stick has no such ramp
+since `Q210`. A thumb had none either until the handset answered (`Q230`, 2026-11-16): it slams full
+lock at speed, and the touch table slews it (`touch.tres` `steer_attack_at_top_s`), never a car dial. Graded on `--only=flick` at 95 / 110 / 120 kph
 (`tools/skidpad.sh` steers as a key unless `--steer=analog`), sweep it as
 `--sweep=keyboard_steer.attack_at_top_s=…`.
 

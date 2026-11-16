@@ -32,6 +32,19 @@ const PATH: String = "res://tuning/handling.tres"
 ## Seconds to return to centre when input is released.
 @export_range(0.01, 1.0, 0.01, "suffix:s") var steer_release_s: float
 
+@export_group("Drive")
+## The car's own speed (`_car_kph`, so the pace's root times this on the road)
+## above which the drive eases off toward the limiter: full under it, none at
+## `CarSpec.max_speed_kph`. The game's, not the car's: the Crown Comfort's
+## power would carry it from 60 to 120 kph on the road in three seconds at
+## pace 2, and a city street is over in that time. Godot has no limiter of its
+## own, and a hard one flips the drive between full and nothing tick to tick.
+@export_range(0.0, 200.0, 1.0, "suffix:kph") var drive_fade_from_kph: float
+## The fade's shape: the drive left is the share of that band still ahead, to
+## this power. 1 is a straight line; 2 sheds the drive early, so the last of
+## the speed comes slowly.
+@export_range(0.5, 4.0, 0.1) var drive_fade_curve: float
+
 @export_group("Drift")
 ## Seconds for the drift to reach full engagement while the button is held.
 ##
@@ -93,5 +106,13 @@ const PATH: String = "res://tuning/handling.tres"
 ## that loses nothing. Crash reconstruction's, cited in `Q180`; a wall never reads
 ## it — it stays the arcade response above.
 @export_range(0.0, 1.0, 0.01) var collision_restitution: float
+## Seconds over which a wall turns the nose along it. The slide above turns
+## the car's TRAVEL along a face it clips and leaves the nose pointing into
+## it, so a 30° clip was 35–45° of slip on the next tick: the tyres scrubbed
+## the speed off against the wall and the car came to rest on it. While a wall
+## is touched the car is yawed toward its own travel at the angle between the
+## two over this many seconds. A wall only: a car or a tram that gives is left
+## to the push. 0 is off, the spin halved as it was.
+@export_range(0.0, 2.0, 0.01, "suffix:s") var collision_align_s: float
 ## Seconds before an upside-down car auto-rights itself.
 @export_range(0.0, 5.0, 0.05, "suffix:s") var auto_right_delay_s: float

@@ -339,6 +339,13 @@ func _slide_toward() -> float:
 	return signf((-global_basis.z).cross(rear_axle_velocity()).y)
 
 
+## The profile's fade stands down in drift mode, the limiter kept: a slide the
+## player asked for is held on the throttle, and at 86 kph the fade took a
+## third of it — the countersteered slide's dwell fell from 3.57 s to 1.02.
+func _drive_fade() -> float:
+	return _limiter_fade() if _drift_mode.engaged else super._drive_fade()
+
+
 ## The parent's pedals, taken back off the engine: `engine_force` and `brake`
 ## act through the friction this class has zeroed, so the drive is read here
 ## and both are applied as torque in `_apply_tyres` instead.

@@ -31,6 +31,12 @@ var steer: float = 0.0
 ## `Input.action_press` (`driver.gd`, the skidpad) steers as a key does; the
 ## skidpad's `--steer=analog` clears it.
 var steer_from_keys: bool = true
+## Whether the steering came last from a thumb, which `steer_for()` slews at
+## speed (`TouchProfile.steer_attack_at_top_s`) where a stick passes through as
+## it reads. Read only while `steer_from_keys` is false: set while a steering
+## thumb is down, which clears that, and cleared by a key or a stick; the
+## skidpad's `--steer=touch` sets it.
+var steer_from_thumb: bool = false
 ## Throttle, 0.0 to 1.0.
 var accelerate: float = 0.0
 ## Brake / reverse, 0.0 to 1.0.
@@ -339,6 +345,7 @@ func _note_steer_method(event: InputEvent) -> void:
 	if not (event.is_action_pressed(&"steer_left") or event.is_action_pressed(&"steer_right")):
 		return
 	steer_from_keys = not event is InputEventJoypadMotion
+	steer_from_thumb = false
 
 
 ## The steering the car drives on (`Q210`): a stick's or a thumb's as it reads,
@@ -350,19 +357,30 @@ func _note_steer_method(event: InputEvent) -> void:
 ## release ramp returns the wheel. A reversal ramps the whole way, as the car's
 ## rack did when it carried this ramp. Called once per physics tick, by the
 ## player's car alone: the ramp's state is the router's.
+##
+## A thumb is slewed at speed and never shaped (`steer_from_thumb`): it reads
+## as it is at rest, and toward the limiter it may add lock no faster than the
+## touch table's seconds to full, on the square of `speed_share` as the key's
+## ramp is. Easing off and the quick ramp pass through.
 func steer_for(speed_share: float, quick: bool, delta: float) -> float:
-	if not steer_from_keys or _keys == null:
+	var slewed: bool = steer_from_thumb and not steer_from_keys and _touch != null and not quick
+	if not slewed and (not steer_from_keys or _keys == null):
 		_key_steer = steer
 		return steer
+	if absf(steer) <= absf(_key_steer):
+		# Easing off is the car's release. Across centre, only down to the new
+		# magnitude: the rest of the way is a reversal, and that ramps.
+		_key_steer = steer if steer * _key_steer >= 0.0 else signf(_key_steer) * absf(steer)
+	if slewed:
+		var slew_s: float = _touch.steer_attack_at_top_s * speed_share * speed_share
+		# Under a tick to full there is nothing to slew.
+		_key_steer = move_toward(_key_steer, steer, delta / slew_s) if slew_s > delta else steer
+		return _key_steer
 	var seconds: float = (
 		_keys.attack_s
 		if quick
 		else lerpf(_keys.attack_s, _keys.attack_at_top_s, speed_share * speed_share)
 	)
-	if absf(steer) <= absf(_key_steer):
-		# Easing off is the car's release. Across centre, only down to the new
-		# magnitude: the rest of the way is a reversal, and that ramps.
-		_key_steer = steer if steer * _key_steer >= 0.0 else signf(_key_steer) * absf(steer)
 	if quick:
 		_key_steer = move_toward(_key_steer, steer, delta / seconds)
 		return _key_steer
@@ -383,6 +401,11 @@ func _progress_of(input: float) -> float:
 ## The keyboard's input assist, for the skidpad's `--sweep=keyboard_steer.…`.
 func keyboard_profile() -> KeyboardSteerProfile:
 	return _keys
+
+
+## The touch table, for the skidpad's `--sweep=touch.…`.
+func touch_profile() -> TouchProfile:
+	return _touch
 
 
 ## `--touch=mouse` only: one synthetic finger, pressed and dragged by the left
@@ -454,6 +477,7 @@ func _physics_process(_delta: float) -> void:
 	if _steer_thumb.is_down():
 		steer = _touch.steer_from(_steer_thumb.offset().x, _steer_curve)
 		steer_from_keys = false
+		steer_from_thumb = true
 	if _drive_thumb.is_down():
 		# One bipolar axis split into the two the vehicle reads (`Q83`), and
 		# centre is coast — which is the lift-off `P0-5b/c/d` requires in order

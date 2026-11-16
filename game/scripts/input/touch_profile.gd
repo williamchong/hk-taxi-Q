@@ -87,6 +87,14 @@ extends Resource
 @export_range(1.0, 4.0, 0.1) var steer_curve_gentle: float
 @export_range(1.0, 4.0, 0.1) var steer_curve_sharp: float
 
+## Seconds the steering thumb takes to add full lock with the car at its
+## limiter: the thumb's own slew at speed (`InputRouter.steer_for`). The limit
+## grows from none at rest on the square of the car's share of its limiter, as
+## the keyboard's `attack_at_top_s` does and for its reason (`Q174`): a thumb
+## thrown across at 120 kph is the full-lock swap that slid the car on a key.
+## Easing off is never slewed, nor a countersteer or drift mode. 0 is off.
+@export_range(0.0, 5.0, 0.05, "suffix:s") var steer_attack_at_top_s: float
+
 ## Path to the shipped table. Named here so `input_router.gd` and
 ## `verify_input.gd` cannot end up loading two different files — a check that
 ## names its own path can go green while the game reads something else.

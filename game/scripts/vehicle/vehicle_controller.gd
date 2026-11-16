@@ -72,10 +72,10 @@ var step_hit_with: Object = null
 ## How fast the car slid along whatever it touched in the last step, m/s: the
 ## scrape along a wall. 0 off every wall.
 var step_scrape_mps: float = 0.0
-## Fraction of top speed over which drive force eases to zero. Shapes the
-## approach to max_speed_kph rather than setting it, so it stays a structural
-## constant while the speed itself remains a profile dial.
-const TOP_SPEED_TAPER: float = 0.15
+## Fraction of top speed over which the limiter eases the drive to zero where
+## the profile's fade does not (`_limiter_fade`): the limiter's own shape, not
+## a feel dial — the feel is `HandlingProfile.drive_fade_*`.
+const LIMITER_TAPER: float = 0.15
 
 ## Sea-level air, kg/m³: a constant of the world, not a dial on the car.
 const AIR_DENSITY_KG_M3: float = 1.2
@@ -490,13 +490,11 @@ func _apply_drive() -> void:
 	var braking: float = 0.0
 
 	if throttle_input > 0.0:
-		# Ease off approaching top speed. A hard cutoff flips drive force between
+		# Eased off toward top speed. A hard cutoff flips drive force between
 		# full and zero tick to tick, which reads as a judder — and the louder the
 		# more engine force there is. Godot has no speed limiter of its own, so
 		# this is hand-written whichever vehicle class is underneath.
-		var top_kph: float = top_speed_kph()
-		var headroom: float = (top_kph - speed_kph) / (top_kph * TOP_SPEED_TAPER)
-		force = DRIVE_SIGN * _drive_force_n() * throttle_input * clampf(headroom, 0.0, 1.0)
+		force = DRIVE_SIGN * _drive_force_n() * throttle_input * _drive_fade()
 
 	if is_braking():
 		braking = _brake_per_wheel_n() * brake_input
@@ -507,6 +505,30 @@ func _apply_drive() -> void:
 	_brake_n = braking
 	# `VehicleBody3D.brake` is a force a tick, so the tick rate divides out.
 	brake = braking / float(Engine.physics_ticks_per_second)
+
+
+## The share of the drive left at this speed: 1 up to
+## `HandlingProfile.drive_fade_from_kph` of the car's own speed, easing to none
+## at the limiter on `drive_fade_curve`. A method so a subclass can stand it
+## down (`TyreVehicleController` does, in drift mode).
+func _drive_fade() -> float:
+	var top_kph: float = top_speed_kph()
+	var from_kph: float = profile.drive_fade_from_kph * _pace_root()
+	# Never more than the limiter leaves: a fade authored to start at or past the
+	# top speed would otherwise be the hard cutoff the limiter's taper prevents.
+	var limiter: float = _limiter_fade()
+	if speed_kph <= from_kph or from_kph >= top_kph:
+		return limiter
+	var ahead: float = clampf((top_kph - speed_kph) / (top_kph - from_kph), 0.0, 1.0)
+	return minf(limiter, pow(ahead, profile.drive_fade_curve))
+
+
+## The limiter alone: the whole drive until the last `LIMITER_TAPER` of the top
+## speed, where it eases to none. What the drive keeps wherever the fade above
+## stands down, and all there was before the fade.
+func _limiter_fade() -> float:
+	var top_kph: float = top_speed_kph()
+	return clampf((top_kph - speed_kph) / (top_kph * LIMITER_TAPER), 0.0, 1.0)
 
 
 ## Gravity as this body feels it. Read live off `gravity_scale`, which the
@@ -747,6 +769,7 @@ func place_at(pose: Transform3D) -> void:
 func _integrate_forces(state: PhysicsDirectBodyState3D) -> void:
 	var velocity: Vector3 = _velocity_into_step
 	var struck: bool = false
+	var walled: bool = false
 	var pushed: Dictionary[int, Vector3] = {}
 	step_hit_mps = 0.0
 	step_hit_with = null
@@ -779,6 +802,7 @@ func _integrate_forces(state: PhysicsDirectBodyState3D) -> void:
 		var pusher: Object = Pushable.owner_of(collider)
 		if pusher == null:
 			velocity = moving + slid
+			walled = true
 		else:
 			var at: Vector3 = _contact_middle(state, collider_id)
 			var gives: float = pusher.push_inverse_mass(collider, normal, at)
@@ -793,6 +817,24 @@ func _integrate_forces(state: PhysicsDirectBodyState3D) -> void:
 	if struck:
 		state.linear_velocity = velocity
 		state.angular_velocity *= SCRAPE_SPIN_RETAINED
+		if walled and profile.collision_align_s > 0.0:
+			state.angular_velocity.y = _align_yaw_rate(velocity)
+
+
+## The yaw rate that turns the car along `travel` in `collision_align_s`: the
+## nose toward it going forward, the tail going backward, so a car reversing
+## along a wall is not swung round. Nothing under 1 m/s. It replaces the yaw
+## the scrape's halving left, not adds to it: the wall, not the solver's spin,
+## says where the nose goes; roll and pitch keep the halving.
+func _align_yaw_rate(travel: Vector3) -> float:
+	var flat := Vector3(travel.x, 0.0, travel.z)
+	if flat.length() < 1.0:
+		return 0.0
+	var nose: Vector3 = -global_basis.z
+	var lead := Vector3(nose.x, 0.0, nose.z).normalized()
+	if lead.dot(flat) < 0.0:
+		lead = -lead
+	return lead.signed_angle_to(flat.normalized(), Vector3.UP) / profile.collision_align_s
 
 
 ## The middle of every point this tick's contacts touch `collider_id` at: a body

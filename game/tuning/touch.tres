@@ -10,3 +10,4 @@ jitter_deadzone_px = 6.0
 steer_curve = 2.0
 steer_curve_gentle = 2.5
 steer_curve_sharp = 1.5
+steer_attack_at_top_s = 2.0
