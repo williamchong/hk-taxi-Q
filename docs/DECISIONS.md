@@ -14024,6 +14024,50 @@ black taxi beside the player's: "a red taxi is not red next to me but im still r
 
 **See.** `Q76` · `Q167` · `Q200` · `P3-3e` · `game/scripts/city/prop_batch.gd`
 
+## `Q227` — A run after the first starts short of a stand drawn afresh
+
+**Asked** by the user, 2026-11-16: "when user 收工 a new shift should start at a randomized
+location".
+
+**Status.** ✅ Built 2026-11-16. The user's drive owed; no frame taken of a drawn start.
+
+- **The first run of a session starts where it did**: 20 m short of `f_004` under HKCEC, the
+  scene's `spawn_fare_id`. Every scripted run is a first run (`--menu=off` never reaches
+  `DriveLevel.play` twice), so no `drive.sh` timeline moves.
+- **Every run after it is drawn**: `DriveLevel.play` → `_draw_start_line`, uniformly over
+  `FareSystem.published_pickups()` — the stands and PUDO points of every resident region, where a
+  taxi would be waiting; never a street spot — and never the stand the last run started at. That
+  is 收工 → PLAY, 交更's AGAIN and a free drive's END DRIVE alike: the level cannot tell them
+  apart and nothing asked it to. ⚠️ Read wider than the ask's one word; narrowing it to 收工 is a
+  flag from `Main`.
+- **`Q142`'s opening holds at every one**: the drawn stand's customer is seated first
+  (`wait_at`, `Q203`) and the car is set down `spawn_setback_m` behind it, out of the hail's reach.
+- **A drawn start has no `verify_spawn` run behind it, so the bar moved into `RoadSpawn`**:
+  `starts_a_run` refuses a pose that is unresolved, on a road no car is allowed on, standing where
+  a car does not fit (`Q52`), on its stand instead of short of it (the setback backed round a
+  corner and was not taken), or within `MIN_LANE_OFFSET_M` of any centreline. A refused stand, or
+  one `wait_at` cannot seat, is passed over; with none left the line stays where it was.
+  ⚠️ `RoadSpawn` still places the SHIPPED line anyway and `verify_spawn` still refuses it —
+  `Q52`'s split is unmoved; the draw can afford to refuse because it has the other stands.
+- **The fall floor stays the boot line's.** It is measured 25 m under the HKCEC line (6.58 m);
+  measured again from a start higher up it would rise toward the Bypass tunnel (−9.08 m).
+  "Back to the start line" after a fall is the run's own line.
+- **The showroom reads `spawn_region`, so the draw writes neither export**: the run's stand is
+  `_start_region` / `_start_fare_id`, and `f_001` under the menu stays Wan Chai's.
+- Its own generator, randomised; `--fare-seed=` does not reach it, since no scripted run draws.
+- ⚠️ **Not checked: what is standing on the line.** The traffic ran under the menu and nothing
+  clears a drawn start of it, or of a parked vehicle — the showroom → start line move has had the
+  same exposure since `P6-1`.
+- Evidence: `verify_spawn`'s `draw:` line — 26 of the pair's 27 `pickup` nodes clear the bar, and
+  the shipped stand set down ON itself must fail it. Twelve runs back to back, headless, park then
+  play: eleven distinct stands across both regions (Leighton Road, Lockhart Road, Tung Lo Wan
+  Road in Causeway Bay, …), the car at rest 0.68 m over its edge as on the boot line, the first
+  waiting customer the drawn stand's at 20.0–20.9 m, the loop idle.
+
+**See.** `Q142` · `Q162` · `Q165` · `Q203` · `Q52` · `game/scripts/level/drive_level.gd` ·
+`game/scripts/city/road_spawn.gd`
+
+
 ## `Q229` — The pause has RESET CAR: back onto the nearest road, the run going on
 
 **Asked** by the user, 2026-11-16: "add a reset button in pause menu such that player has a way to
