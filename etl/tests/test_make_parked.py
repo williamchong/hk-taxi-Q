@@ -68,8 +68,11 @@ from make_vehicle import (  # noqa: E402
     MARKER_LAMP,
     MARKER_LIVERY,
     MARKER_PAINT,
+    MARKER_TRIM,
     MATERIAL_OF_PAYLOAD,
     RED,
+    RELIEF_COURSES,
+    RELIEF_UNIT_M,
     SILVER,
     Chassis,
     Proportions,
@@ -269,6 +272,64 @@ def test_the_trams_side_lamps_are_white_ahead_and_red_behind(
     for kind, other in by_name.items():
         if kind != "tram" and kind not in TAXIS:
             assert not np.any(other.uvs[:, 0] == CIRCUIT_SIDELAMP), kind
+
+
+# Joints along the body, a crease up each flank, or nothing: the taxis are
+# the player's body, which carries its detail as geometry, and a tram's
+# sides are smooth sheet (the user's photograph of 147, 2026-11-17).
+RELIEF_JOINTS = {"bus": 1.35, "lorry": 0.6}
+RELIEF_CREASE = {"car_a": 0.52, "car_b": 0.62, "minibus": 0.85, "van": 0.65}
+
+
+class TestRelief:
+    """The pressed panels (`make_vehicle.embossed`): a pitch in `COLOR_0.a`,
+    on paint a flank or a roof wears and nowhere else."""
+
+    @staticmethod
+    def _codes(mesh: MeshData) -> np.ndarray:
+        return 255 - mesh.colours[:, 3].astype(int)
+
+    def test_each_kind_carries_its_own_pitch_and_no_other(
+        self, by_name: dict[str, MeshData]
+    ) -> None:
+        for kind, mesh in by_name.items():
+            codes = set(self._codes(mesh).tolist()) - {0}
+            if kind in RELIEF_JOINTS:
+                assert codes == {round(RELIEF_JOINTS[kind] / RELIEF_UNIT_M)}, kind
+            elif kind in RELIEF_CREASE:
+                assert codes == {RELIEF_COURSES + round(RELIEF_CREASE[kind] / RELIEF_UNIT_M)}, kind
+            else:
+                assert codes == set(), kind
+
+    def test_only_paint_is_pressed(self, by_name: dict[str, MeshData]) -> None:
+        for kind, mesh in by_name.items():
+            pressed = self._codes(mesh) > 0
+            markers = set(mesh.uvs[pressed, 1].tolist())
+            assert markers <= {MARKER_PAINT, MARKER_LIVERY, MARKER_TRIM}, kind
+
+    def test_joints_run_along_the_body_and_a_crease_up_a_flank(
+        self, by_name: dict[str, MeshData]
+    ) -> None:
+        for kind, mesh in by_name.items():
+            codes = self._codes(mesh)
+            joints = (codes > 0) & (codes <= RELIEF_COURSES)
+            crease = codes > RELIEF_COURSES
+            # An end face has no run along the body, a roof none up it.
+            assert np.all(np.abs(mesh.normals[joints, 2]) < 0.5), kind
+            assert np.all(np.abs(mesh.normals[crease, 0]) > 0.5), kind
+
+    def test_a_crease_is_one_line_under_the_belt(self) -> None:
+        with pytest.raises(ValueError, match="one line"):
+            replace(_shape("van"), crease_y_m=0.3)
+        with pytest.raises(ValueError, match="one of them"):
+            replace(_shape("van"), joints_m=1.0)
+
+    def test_the_lorrys_ribs_are_on_its_box_alone(self, by_name: dict[str, MeshData]) -> None:
+        mesh, shape = by_name["lorry"], _shape("lorry")
+        pressed = self._codes(mesh) > 0
+        cab_rear_z = shape.front_z_m + shape.cabin_rear_m
+        assert pressed.any()
+        assert np.all(mesh.positions[pressed, 2] > cab_rear_z)
 
 
 class TestWinding:

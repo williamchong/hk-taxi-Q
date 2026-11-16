@@ -174,6 +174,19 @@ const VEHICLE: Dictionary = {
 	"vehicle_lamp_roofsign": Vector2(7.0, 2.0),
 }
 const VEHICLE_PREFIX: String = "vehicle_"
+## The pressed relief (`tools/make_vehicle.py`'s `embossed`): a painted slot's
+## `COLOR_0.a` is `255 - code`, and the code leaves here as `UV.y`'s FRACTION,
+## `code / RELIEF_SPAN` over the marker — so `floor(UV.y)` is still the marker
+## and an unstamped vertex (alpha 255) carries the payload it always did.
+## ⚠️ Moved rather than read where it lies: the web renderer hands a `MultiMesh`
+## with custom data and no colours a vertex alpha of 0 (`signal_head`'s finding,
+## 2026-10-30), and every traffic car is one. Paint, trim and livery only: the
+## shader presses nothing else. Must match `RELIEF_SPAN` in `vehicle_body.gdshader`.
+const RELIEF_SPAN: float = 256.0
+## Paint, trim and livery, as `VEHICLE` numbers them.
+const RELIEF_MARKERS: Array[float] = [0.0, 3.0, 4.0]
+## The last code `embossed` writes; an alpha of 0 is past it and reads flat.
+const RELIEF_CODE_MAX: int = 254
 ## The name of the merged surface and of the `.tres` it renders with — also
 ## what a body that arrives already stamped (the pre-`P5-23` form) is named,
 ## which `SHADERS` still dispatches as before.
@@ -235,10 +248,10 @@ static func vehicle_body(mesh: Mesh) -> ArrayMesh:
 		var base: int = positions.size()
 		positions.append_array(vertices)
 		normals.append_array(surface_normals)
+		var payload: Vector2 = VEHICLE[names[surface]]
 		var stamp := PackedVector2Array()
 		stamp.resize(vertices.size())
-		stamp.fill(VEHICLE[names[surface]])
-		uvs.append_array(stamp)
+		stamp.fill(payload)
 		var ink: Variant = arrays[Mesh.ARRAY_TEX_UV2]
 		if typeof(ink) == TYPE_PACKED_VECTOR2_ARRAY:
 			inks.append_array(ink)
@@ -247,6 +260,12 @@ static func vehicle_body(mesh: Mesh) -> ArrayMesh:
 		var colour: Variant = arrays[Mesh.ARRAY_COLOR]
 		if typeof(colour) == TYPE_PACKED_COLOR_ARRAY:
 			colours.append_array(colour)
+			if RELIEF_MARKERS.has(payload.y):
+				var painted: PackedColorArray = colour
+				for vertex: int in vertices.size():
+					var code: int = 255 - painted[vertex].a8
+					if code > 0 and code <= RELIEF_CODE_MAX:
+						stamp[vertex] = payload + Vector2(0.0, code / RELIEF_SPAN)
 		else:
 			var authored := materials[surface] as BaseMaterial3D
 			if authored == null:
@@ -261,6 +280,7 @@ static func vehicle_body(mesh: Mesh) -> ArrayMesh:
 			baked.resize(vertices.size())
 			baked.fill(authored.albedo_color.linear_to_srgb())
 			colours.append_array(baked)
+		uvs.append_array(stamp)
 		var index: Variant = arrays[Mesh.ARRAY_INDEX]
 		if typeof(index) == TYPE_PACKED_INT32_ARRAY:
 			for value: int in index:

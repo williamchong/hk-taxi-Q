@@ -76,6 +76,7 @@ from make_vehicle import (  # noqa: E402
     _rake_run_m,
     _wheel,
     door_hinge,
+    embossed,
     material_parts,
     taxi_door,
     taxi_parts,
@@ -320,6 +321,15 @@ class Shape:
     # A bar across each deck's side glass: (how far up the glass its centre
     # sits, its height in metres). A minibus's slider rails.
     window_bar: tuple[float, float] | None = None
+    # --- The pressed relief (`make_vehicle.embossed`): shading, not geometry,
+    # so none of it widens the box. A coach-built side's panel joints, this
+    # far apart along the flanks and the roof from amidships.
+    joints_m: float | None = None
+    # A pressed side's crease along each flank, this high. One line: twice
+    # its height must clear the belt.
+    crease_y_m: float | None = None
+    # A box body's ribs, as `joints_m` on the box alone.
+    box_ribs_m: float | None = None
 
     def __post_init__(self) -> None:
         if self.panel_share + self.glass_share >= 1.0:
@@ -335,6 +345,15 @@ class Shape:
         flat_only = self.side_glass or self.end_panes or self.glint or self.crown_m
         if flat_only and not self.slab_sided:
             raise ValueError(f"{self.kind}: applied glass and a crown are a flat-sided body's")
+        if self.joints_m is not None and self.crease_y_m is not None:
+            raise ValueError(f"{self.kind}: a flank takes joints or a crease, one of them")
+        crease = self.crease_y_m
+        if crease is not None and not self.belt_y_m / 2.0 < crease < self.belt_y_m:
+            raise ValueError(
+                f"{self.kind}: the crease is one line, over half the belt and under it"
+            )
+        if self.box_ribs_m is not None and self.cargo_top_m is None:
+            raise ValueError(f"{self.kind}: ribs are a box body's")
         if self.slab_sided and (self.blind_rear_share or self.window_bar):
             raise ValueError(f"{self.kind}: a blind quarter and a window bar lie on lofted glass")
 
@@ -1481,14 +1500,17 @@ def _lorry(shape: Shape) -> list[MeshData]:
             name=name,
         )
 
+    cargo = loft(
+        [ring(floor, hw, z0, z1, cut), ring(top, hw, z0, z1, cut)],
+        [shape.paint],
+        bottom=shape.paint,
+        top=shape.paint,
+        name="cargo",
+    )
+    if shape.box_ribs_m is not None:
+        cargo = embossed(cargo, joints_m=shape.box_ribs_m)
     return [
-        loft(
-            [ring(floor, hw, z0, z1, cut), ring(top, hw, z0, z1, cut)],
-            [shape.paint],
-            bottom=shape.paint,
-            top=shape.paint,
-            name="cargo",
-        ),
+        cargo,
         on_tail(-0.012, 0.012, "cargo_door_seam"),
         on_tail(-face_hw + inset, -face_hw + inset + post, "cargo_hinge_l"),
         on_tail(face_hw - inset - post, face_hw - inset, "cargo_hinge_r"),
@@ -1511,17 +1533,29 @@ DETAILS: dict[str, Callable[[Shape], list[MeshData]]] = {
 
 def vehicle(shape: Shape) -> MeshData:
     """One kind as one marked mesh, ready for `material_parts`."""
-    parts: list[MeshData] = [_lower(shape)]
+    panels = (shape.paint, shape.roof, shape.skirt_colour)
+
+    def pressed(part: MeshData, *, crease: bool) -> MeshData:
+        if shape.joints_m is not None:
+            return embossed(part, joints_m=shape.joints_m, colours=panels)
+        if crease and shape.crease_y_m is not None:
+            return embossed(part, crease_y_m=shape.crease_y_m, colours=panels)
+        return part
+
+    parts: list[MeshData] = [pressed(_lower(shape), crease=True)]
     if shape.arches:
         parts.extend(_wells(shape))
     if shape.slab_sided:
-        parts.append(_slab_upper(shape))
+        parts.append(pressed(_slab_upper(shape), crease=False))
         parts.extend(_slab_glass(shape))
         parts.extend(_end_panes(shape))
     else:
         parts.append(
-            _glasshouse(
-                shape, shape.belt_y_m, shape.roof_y_m, shape.roof, name="glasshouse", cap=True
+            pressed(
+                _glasshouse(
+                    shape, shape.belt_y_m, shape.roof_y_m, shape.roof, name="glasshouse", cap=True
+                ),
+                crease=False,
             )
         )
         parts.extend(_pillars(shape, shape.belt_y_m, shape.roof_y_m, name="glasshouse"))
@@ -1659,6 +1693,7 @@ def _car(kind: str, paint: Colour, roof: Colour) -> Shape:
         handles=True,
         nose_drop_m=0.1,
         tail_drop_m=0.06,
+        crease_y_m=0.52,
         hub_slots=6,
         bezels=True,
         shut_lines=True,
@@ -1774,6 +1809,7 @@ ROSTER: tuple[RosterEntry, ...] = (
         livery=NAVY,
         nose_drop_m=0.14,
         hub_slots=4,
+        crease_y_m=0.62,
         bezels=True,
         shut_lines=True,
         wipers=True,
@@ -1816,6 +1852,7 @@ ROSTER: tuple[RosterEntry, ...] = (
         doors_m=((2.15, 2.95),),
         # The sliding lights' rail across each window.
         window_bar=(0.5, 0.03),
+        crease_y_m=0.85,
     ),
     # The double-decker, in Citybus yellow over its blue skirt: an Enviro500
     # MMC's flat sides, read off Tiny's model of one — the lower deck's
@@ -1851,6 +1888,8 @@ ROSTER: tuple[RosterEntry, ...] = (
         slab_sided=True,
         crown_m=0.2,
         glint=GLINT,
+        # A panel to an upstairs window: 10.7 m over 8 bays.
+        joints_m=1.35,
         side_glass=(
             Glass(1.34, 2.3, 1.9, 5.2, 2, sides=(KERB_SIDE,), pillar_m=0.04, surround=DARK),
             Glass(1.34, 2.3, 6.6, 10.6, 3, sides=(KERB_SIDE,), pillar_m=0.04, surround=DARK),
@@ -1919,6 +1958,7 @@ ROSTER: tuple[RosterEntry, ...] = (
         # blind rear quarter, off Tiny's model of one.
         nose_drop_m=0.18,
         blind_rear_share=0.36,
+        crease_y_m=0.65,
         hub_slots=6,
         bezels=True,
         wipers=True,
@@ -2006,6 +2046,7 @@ ROSTER: tuple[RosterEntry, ...] = (
         panel_share=0.32,
         glass_share=0.5,
         cargo_top_m=3.0,
+        box_ribs_m=0.6,
         hub_slots=6,
         bezels=True,
         wipers=True,

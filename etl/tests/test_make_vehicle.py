@@ -61,6 +61,8 @@ from make_vehicle import (
     MARKER_PAINT,
     MARKER_TRIM,
     RED,
+    RELIEF_COURSES,
+    RELIEF_UNIT_M,
     SILVER,
     Chassis,
     Proportions,
@@ -74,6 +76,7 @@ from make_vehicle import (
     build_taxi,
     door_hinge,
     door_span_m,
+    embossed,
     opening_radius_m,
     player_detail,
     taxi_body,
@@ -1367,6 +1370,46 @@ class TestLampCircuits:
         _check_wiring(parts)
         with pytest.raises(ValueError, match="wired to nothing"):
             _check_wiring(parts[1:])
+
+
+class TestRelief:
+    """`embossed`: a pitch per face in `COLOR_0.a`, 255 the flat panel."""
+
+    @staticmethod
+    def _box() -> MeshData:
+        return box((-1.0, 0.0, -2.0), (1.0, 1.0, 2.0), RED, name="box")
+
+    def test_an_unstamped_part_is_flat(self) -> None:
+        assert np.all(self._box().colours[:, 3] == 255)
+
+    def test_joints_take_the_flanks_and_the_roof_and_leave_the_ends(self) -> None:
+        part = embossed(self._box(), joints_m=1.0)
+        code = 255 - part.colours[:, 3].astype(int)
+        ends = np.abs(part.normals[:, 2]) > 0.5
+        assert np.all(code[ends] == 0)
+        assert np.all(code[~ends] == round(1.0 / RELIEF_UNIT_M))
+
+    def test_a_crease_takes_the_flanks_alone(self) -> None:
+        part = embossed(self._box(), crease_y_m=0.5)
+        code = 255 - part.colours[:, 3].astype(int)
+        flanks = np.abs(part.normals[:, 0]) > 0.5
+        assert np.all(code[flanks] == RELIEF_COURSES + round(0.5 / RELIEF_UNIT_M))
+        assert np.all(code[~flanks] == 0)
+
+    def test_only_the_named_colours_are_pressed(self) -> None:
+        with pytest.raises(ValueError, match="no face"):
+            embossed(self._box(), joints_m=1.0, colours=[SILVER])
+
+    def test_a_pitch_the_byte_cannot_hold_is_refused(self) -> None:
+        for pitch in (0.0, RELIEF_UNIT_M * (RELIEF_COURSES + 1)):
+            with pytest.raises(ValueError, match="pitch"):
+                embossed(self._box(), joints_m=pitch)
+        with pytest.raises(ValueError, match="one of them"):
+            embossed(self._box(), joints_m=1.0, crease_y_m=0.5)
+
+    def test_the_players_taxi_carries_none(self) -> None:
+        body = taxi_body(Chassis(), Proportions())
+        assert np.all(body.colours[:, 3] == 255)
 
 
 class TestTheMaterialDoor:

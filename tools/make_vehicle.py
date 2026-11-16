@@ -2098,6 +2098,65 @@ def _marked(part: MeshData) -> MeshData:
     return replace(part, uvs=uvs)
 
 
+# The pressed-panel relief (`vehicle_body.gdshader`'s `relief` group): a pitch
+# per face, in `COLOR_0.a` as `255 - code`, so 255 — the byte every vertex has
+# always carried, and any DCC export's — is a flat panel. Codes 1 to
+# `RELIEF_COURSES` are a joint at every multiple of `code * RELIEF_UNIT_M`
+# metres ALONG the body (z); the codes above it are a crease at every multiple
+# UP it (y). ⚠️ A code, not opacity, as a tile's is (`Q195`) — and the engine
+# never reads it from there: the import door moves it into `UV.y`'s fraction,
+# because the web renderer hands a `MultiMesh` with custom data and no colours
+# a vertex alpha of 0.
+RELIEF_UNIT_M = 0.025
+RELIEF_COURSES = 127
+# How square to the axis a face must lie to carry a relief along it.
+_RELIEF_ACROSS = 0.5
+
+
+def embossed(
+    part: MeshData,
+    *,
+    joints_m: float | None = None,
+    crease_y_m: float | None = None,
+    colours: Sequence[Colour] | None = None,
+) -> MeshData:
+    """`part` with a relief stamped on its panels: joints along the body on
+    every face that runs along it (a flank, a roof), or a crease up each flank.
+
+    Only vertices wearing one of `colours`, where given: a loft's glass band
+    and a dark fixture stay flat. The body is flat-shaded, so a face's vertices
+    are its own and its normal says which way it lies.
+    """
+    if (joints_m is None) == (crease_y_m is None):
+        raise ValueError(f"'{part.name}': a relief is joints or a crease, one of them")
+    if part.colours is None:
+        raise ValueError(f"part '{part.name}': a relief is stamped in the vertex colours")
+    normals = np.abs(part.normals)
+    if joints_m is not None:
+        pitch, base = joints_m, 0
+        hit = normals[:, 2] < _RELIEF_ACROSS
+    else:
+        assert crease_y_m is not None
+        pitch, base = crease_y_m, RELIEF_COURSES
+        hit = (normals[:, 1] < _RELIEF_ACROSS) & (normals[:, 0] > _RELIEF_ACROSS)
+    code = round(pitch / RELIEF_UNIT_M)
+    if not 1 <= code <= RELIEF_COURSES:
+        raise ValueError(
+            f"'{part.name}': a relief's pitch is {RELIEF_UNIT_M} to "
+            f"{RELIEF_COURSES * RELIEF_UNIT_M} m, not {pitch}"
+        )
+    if colours is not None:
+        wearing = np.zeros(len(part.colours), dtype=bool)
+        for colour in colours:
+            wearing |= np.all(part.colours[:, :3] == np.array(colour, dtype=np.uint8), axis=1)
+        hit &= wearing
+    if not hit.any():
+        raise ValueError(f"'{part.name}': the relief lands on no face")
+    stamped = part.colours.copy()
+    stamped[hit, 3] = 255 - (base + code)
+    return replace(part, colours=stamped)
+
+
 # The payload as a MATERIAL NAME — the vehicle door (`P5-23`, `Q124`). The
 # written `.glb` carries one primitive per entry here and no UVs at all;
 # `game/tools/generated_scene_import.gd` stamps `(circuit, marker)` back into

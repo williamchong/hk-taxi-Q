@@ -326,16 +326,48 @@ uniform float ink_darkness : hint_range(0.0, 1.0) = 0.35;
 uniform float ink_speed_thin : hint_range(0.0, 1.0) = 0.33;
 uniform float ink_speed_fade : hint_range(0.0, 1.0) = 0.2;
 
+group_uniforms relief;
+
+// Pressed panels (`tools/make_vehicle.py`'s `embossed`): a bus's side is one
+// flat quad, and a flat quad under one sun is one shade. The relief is drawn by
+// tilting `NORMAL` — no texture, no UV (both sets are spent), no triangle — off
+// a pitch the generator stamps per face and the import door hands on as
+// `UV.y`'s fraction: a joint at every multiple of it along the body (a
+// coach-built side's panels) or up it (a pressed side's crease). The joints
+// are paint only; the seated edge below is every surface's.
+// Must match `RELIEF_UNIT_M` and `RELIEF_COURSES` in `tools/make_vehicle.py`,
+// and `RELIEF_SPAN` in `generated_scene_import.gd`.
+const float RELIEF_SPAN = 256.0;
+const float RELIEF_UNIT_M = 0.025;
+const float RELIEF_COURSES = 127.0;
+// Half the groove's width at a joint, and its walls' slope (rise over run).
+// ⚠️ Under a pixel and a half the groove is held that wide and its slope cut to
+// match, as the ink is: a V's two walls cancel inside one pixel, so a far bus
+// loses its joints to grey rather than to shimmer (`held_wall`).
+const float RELIEF_HELD_PX = 0.75;
+uniform float relief_groove_m : hint_range(0.0, 0.1) = 0.02;
+uniform float relief_groove_slope : hint_range(0.0, 2.0) = 1.2;
+// How far each panel between two joints bows out, as the slope at its edges:
+// the part of the relief a far vehicle keeps, since it is as wide as the panel.
+// Joints along the body only — one crease has no panel to bow.
+uniform float relief_pillow : hint_range(0.0, 0.5) = 0.04;
+// How far in from an inked edge a surface falls away into it, and how steeply:
+// a window in its frame, a frame on its wall. Glass and lenses too. Held to a
+// pixel and a half and cut to match, as the groove is.
+uniform float relief_edge_m : hint_range(0.0, 0.1) = 0.03;
+uniform float relief_edge_slope : hint_range(0.0, 2.0) = 0.6;
+
 varying flat float marker;
+// The relief on this face: its pitch in metres (0 for none), the body's axis it
+// repeats along in view space, and where along that axis the fragment is.
+varying flat float relief_pitch;
+varying flat float relief_bows;
+varying flat vec3 relief_axis;
+varying float relief_at;
 // `flat` for the same reason `marker` is: every vertex of a lens carries the
 // same circuit, and an interpolated one would land between two channels at the
 // seam between a lamp and the paint it is seated in.
 varying flat float circuit;
-// World space, for the reflected ray. Interpolated rather than `flat`: the
-// gradient has to vary *across* a screen, or a windscreen is one colour again
-// and the whole point of the three bands above is lost.
-varying vec3 world_pos;
-varying vec3 world_n;
 // What `INSTANCE_CUSTOM.a` says above the livery bit: 0 or 1 each.
 varying flat float running;
 varying flat float braking;
@@ -361,6 +393,14 @@ const float FADE_PATTERN[16] = float[](
 varying flat float faded;
 #endif
 
+// A wall's slope `off_m` from its line: `slope` inside `reach_m`, none past
+// it, the reach held to `RELIEF_HELD_PX` either side and the slope cut by as
+// much. Two lines at once, because an inked triangle carries two edges.
+vec2 held_wall(vec2 off_m, vec2 px_m, float reach_m, float slope) {
+	vec2 held_m = max(vec2(reach_m), RELIEF_HELD_PX * px_m);
+	return clamp((held_m - off_m) / px_m + 0.5, 0.0, 1.0) * slope * reach_m / held_m;
+}
+
 void vertex() {
 	marker = floor(UV.y);
 	circuit = floor(UV.x);
@@ -382,8 +422,12 @@ void vertex() {
 #ifdef VEHICLE_BATCHED
 	faded = mod(floor(bits / FADE_BIT), FADE_STEPS + 1.0) / FADE_STEPS;
 #endif
-	world_pos = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
-	world_n = normalize(MODEL_NORMAL_MATRIX * NORMAL);
+	float stamp = floor(fract(UV.y) * RELIEF_SPAN + 0.5);
+	bool courses = stamp > RELIEF_COURSES;
+	relief_pitch = (courses ? stamp - RELIEF_COURSES : stamp) * RELIEF_UNIT_M;
+	relief_bows = courses ? 0.0 : 1.0;
+	relief_at = courses ? VERTEX.y : VERTEX.z;
+	relief_axis = normalize(mat3(VIEW_MATRIX) * (courses ? MODEL_MATRIX[1].xyz : MODEL_MATRIX[2].xyz));
 }
 
 void fragment() {
@@ -403,6 +447,56 @@ void fragment() {
 	bool is_glass = is_cabin || is_cabin_dim || abs(marker - MARKER_GLASS) < 0.5;
 	bool is_lamp = abs(marker - MARKER_LAMP) < 0.5;
 
+	// The relief, before anything reads `NORMAL`: the mirror below and the
+	// engine's lighting both shade the pressed surface.
+	// Every derivative is taken out here, ahead of the branches: inside one, a
+	// pixel quad that straddles a glass edge has none.
+	vec2 edge_m = (1.0 - UV2) * INK_SPAN_M;
+	vec2 edge_dx = dFdx(edge_m);
+	vec2 edge_dy = dFdy(edge_m);
+	vec2 edge_px_m = abs(edge_dx) + abs(edge_dy);
+	float joint_px_m = max(fwidth(relief_at), 1e-5);
+	vec3 across = dFdx(VERTEX);
+	vec3 down = dFdy(VERTEX);
+	vec3 flat_n = normalize(NORMAL);
+	vec3 tilt = vec3(0.0);
+	if (relief_pitch > 0.0 && !is_glass && !is_lamp) {
+		// The height's slope along the axis: up out of the groove on either
+		// side of a joint, and down the bow toward the next one.
+		float cell = fract(relief_at / relief_pitch);
+		float wall = held_wall(
+			vec2(min(cell, 1.0 - cell) * relief_pitch),
+			vec2(joint_px_m),
+			relief_groove_m,
+			relief_groove_slope
+		).x;
+		float slope = (cell < 0.5 ? wall : -wall)
+				+ relief_bows * relief_pillow * (1.0 - 2.0 * cell);
+		// Along the face only: an end face has no run along the body, so
+		// the tangent is nothing there and the face stays flat.
+		tilt += (relief_axis - flat_n * dot(flat_n, relief_axis)) * slope;
+	}
+	// A seated edge: every edge the ink is drawn on — a pane in its frame, a
+	// frame on its wall, a lens, a band — falls away into the joint, so the
+	// pane reads as set in and the frame as standing proud. The distance is
+	// the ink's own (`UV2`), linear over a triangle, so its screen derivatives
+	// are exact and the slope's direction is read off them. A face with no
+	// inked edge carries 0 in both channels and skips the lot.
+	if (relief_edge_slope > 0.0 && max(UV2.x, UV2.y) >= 1e-5) {
+		vec3 r_across = cross(down, flat_n);
+		vec3 r_down = cross(flat_n, across);
+		float area = dot(across, r_across);
+		if (abs(area) > 1e-12) {
+			vec2 wall = held_wall(
+				edge_m, max(edge_px_m, vec2(1e-5)), relief_edge_m, relief_edge_slope
+			);
+			// Selected, not multiplied: a channel with no edge may hold an inf.
+			wall = mix(vec2(0.0), wall, greaterThanEqual(UV2, vec2(1e-5)));
+			tilt += (r_across * dot(edge_dx, wall) + r_down * dot(edge_dy, wall)) / area;
+		}
+	}
+	NORMAL = normalize(flat_n - tilt);
+
 	// The painted sky, read by glass and lenses only. Paint takes none of it since
 	// `Q215` — its rim and sun lobe are `CLEARCOAT`'s own — and paint is most of a
 	// car body, so all four terms sit behind the same guard: unguarded, the `pow`s,
@@ -420,8 +514,7 @@ void fragment() {
 		// The mirror. Where the reflected ray points decides what it sees, so a
 		// screen darkens toward the city as the car turns and brightens toward the
 		// zenith as it pitches — which a single colour cannot do at any strength.
-		vec3 to_surface = normalize(world_pos - INV_VIEW_MATRIX[3].xyz);
-		vec3 bounced = reflect(to_surface, normalize(world_n));
+		vec3 bounced = mat3(INV_VIEW_MATRIX) * reflect(-VIEW, NORMAL);
 		mirrored = mix(
 			ground_reflection,
 			mix(sky_horizon, sky_zenith, clamp(bounced.y, 0.0, 1.0)),
@@ -518,8 +611,7 @@ void fragment() {
 	// channel with no edge is 0 and is masked rather than left to the clamp:
 	// its distance over a zero derivative is a number a phone's half floats
 	// cannot hold.
-	vec2 edge_m = (1.0 - UV2) * INK_SPAN_M;
-	vec2 px_per_m = 1.0 / max(fwidth(edge_m), vec2(1e-6));
+	vec2 px_per_m = 1.0 / max(edge_px_m, vec2(1e-6));
 	float width_m = ink_width_m * (1.0 - ink_speed_thin * outline_speed);
 	vec2 width_px = min(width_m * px_per_m, vec2(ink_max_px));
 	vec2 drawn = clamp(max(width_px, vec2(1.0)) - edge_m * px_per_m, 0.0, 1.0)

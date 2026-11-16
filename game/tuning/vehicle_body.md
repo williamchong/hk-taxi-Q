@@ -95,3 +95,22 @@ one that still reads on a tram at 115 kph. A black panel takes no darker line at
 
 ⚠️ `global uniform float outline_speed` must be declared OUTSIDE a `group_uniforms` block. Inside
 the `ink` group it compiled without an error and the city's façades drew with wrong colours.
+
+## relief_groove_m, relief_groove_slope, relief_pillow, relief_edge_m, relief_edge_slope
+
+The pressed panels (`P3-87`, `Q232`, the user's ask 2026-11-17: "some basic normal map for
+vechicles such that bus side is not one flat surface"). No texture: the shader tilts `NORMAL`.
+
+- `relief_groove_m` 0.02 / `relief_groove_slope` 1.2: a joint's half-width and its walls' slope,
+  at every multiple of the pitch `tools/make_parked.py` gives a kind (`joints_m`, `crease_y_m`,
+  `box_ribs_m`). 0.6 was shot first and the joint did not read past a bus length.
+- `relief_pillow` 0.04: how far a panel between two joints bows, as the slope at its edges.
+  ⚠️ The one term no real vehicle has — it is what a far bus keeps when the joints go under a
+  pixel. 0.08 read as quilting; 0 is flat sheet between the joints.
+- `relief_edge_m` 0.03 / `relief_edge_slope` 0.6: every edge the ink is drawn on falls away into
+  it, so a pane sits in its frame and a frame stands on its wall. Wider than the 2 cm ink, or the
+  line would cover it.
+
+Under a pixel and a half a groove or a seat is held that wide and its slope cut to match. Every
+slope at 0 is the vehicle before `Q232`. ⚠️ **Not yet the user's pick**: the sheet is off, joints
+alone, 0.04 and 0.08.

@@ -45,6 +45,13 @@ const LIT_CABINS: Dictionary[String, float] = {
 	"minibus": CABIN_DIM_MARKER, "bus": CABIN_MARKER, "tram": CABIN_MARKER
 }
 
+## The kinds `tools/make_parked.py` presses a relief into (`joints_m`,
+## `crease_y_m`, `box_ribs_m`), and the markers the import door hands one on
+## for: paint, trim, livery. `RELIEF_SPAN` is the door's and the shader's.
+const PRESSED: Array[String] = ["car_a", "car_b", "minibus", "bus", "van", "lorry"]
+const RELIEF_MARKERS: Array[float] = [0.0, 3.0, 4.0]
+const RELIEF_SPAN: float = 256.0
+
 var _problems: PackedStringArray = []
 
 
@@ -71,6 +78,7 @@ func _init() -> void:
 				_check_join(document, library)
 				_check_liveries(library)
 				_check_cabins(library)
+				_check_relief(library)
 			_check_entries(document)
 	for problem: String in _problems:
 		printerr("  FAIL  ", problem)
@@ -184,6 +192,38 @@ func _check_cabins(library: Dictionary[String, Mesh]) -> void:
 			marked.keys() == wanted,
 			"'%s' carries cabin markers %s, and should carry %s" % [kind, marked.keys(), wanted]
 		)
+
+
+## The pressed relief came through the import door as `UV.y`'s fraction, a
+## whole code over `RELIEF_SPAN`, on painted vertices of the pressed kinds and
+## on nothing else: a door that drops it ships every side flat and no error,
+## and a fraction on glass or a lens would be read as a marker's by nothing.
+func _check_relief(library: Dictionary[String, Mesh]) -> void:
+	var pressed: PackedStringArray = []
+	for kind: String in library:
+		var arrays: Array = library[kind].surface_get_arrays(0)
+		var codes: Dictionary[int, bool] = {}
+		var stray: int = 0
+		for uv: Vector2 in arrays[Mesh.ARRAY_TEX_UV] as PackedVector2Array:
+			var code: float = (uv.y - floorf(uv.y)) * RELIEF_SPAN
+			if is_zero_approx(code):
+				continue
+			if not is_equal_approx(code, roundf(code)) or not RELIEF_MARKERS.has(floorf(uv.y)):
+				stray += 1
+			codes[roundi(code)] = true
+		_expect(
+			stray == 0, "'%s': %d vertices carry a relief that is no code on paint" % [kind, stray]
+		)
+		_expect(
+			codes.size() == (1 if PRESSED.has(kind) else 0),
+			(
+				"'%s' carries relief codes %s; a pressed kind carries one, and they are %s"
+				% [kind, codes.keys(), PRESSED]
+			)
+		)
+		if not codes.is_empty():
+			pressed.append("%s %d" % [kind, codes.keys()[0]])
+	print("  info  pressed kinds: %s" % ", ".join(pressed))
 
 
 ## Every entry's `hours` is a window or null and its `chance` a share.
