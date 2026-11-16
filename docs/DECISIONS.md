@@ -14048,3 +14048,27 @@ The user's own stuck car owed — no wedged spot was reproduced.
 
 **See.** `Q165` · `Q223` · `game/scripts/level/drive_level.gd` · `game/scripts/ui/start_menu.gd` ·
 `.claude/rules/hud.md`
+
+## `Q231` — The boot menu is lit at its own hour: 12:44, the stand in the sun
+
+**Asked** by the user, 2026-11-16: "can the main menu scene be brighter? now its on early morning
+where everything is grey and washed out, not attractive for main menu first sight".
+
+**Status.** ✅ Built 2026-11-16. Frames in `build/driver/menu_hour/` (`base` before, `after`).
+
+- **The grey was a shadow, not the hour.** The showroom (`f_001`, the Harbour Road stand) is north
+  of HKCEC. Menu frames at eleven hours: in the building's shadow at 0, 0.174 (the authored day),
+  0.27, 0.31, 0.57, 0.71 and 0.79; in the sun only at 0.36, 0.41 and 0.46.
+- **`DriveLevel.showroom_time_of_day = 0.41`** on `city_drive.tscn`, 12:44 on the shift's clock:
+  past noon's flat overhead light, the trees' and the car's shadows short across the forecourt.
+  0.46 is the longer-shadowed alternative. Negative leaves the hour the clock opens on.
+- **Boot only.** `Main` calls `DriveLevel.light_showroom` after the boot's `park`; a menu over a
+  finished or ended run keeps the hour that run reached. `DayClock.show_hour` moves the rig under
+  the clock's own bar, so a rig pinned by `--time-of-day=` or with no cycle stays put, and the
+  next `restart` — every PLAY — puts the run's own hour back: the 07:00 morning, or the resting
+  authored day. `verify_day_cycle`'s `showroom` lines hold all four.
+- ⚠️ A `--menu=on` frame is now this hour, not the authored day. A scripted drive is unmoved.
+- Not done: moving the showroom to a stand that is sunlit at the authored hour; the click from
+  the menu into a run was not driven by hand.
+
+**See.** `Q160` · `Q222` · `P6-1` · `game/scenes/city_drive.md` · `game/scripts/level/drive_level.gd`
