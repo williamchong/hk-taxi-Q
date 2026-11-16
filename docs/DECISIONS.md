@@ -14249,3 +14249,29 @@ the option sheet is `build/driver/relief/options_bus.png`.
   windows judged at the chase camera's distance.
 
 **See.** `Q196` · `Q200` · `Q226` · `P3-84` · `P3-85` · `game/tuning/vehicle_body.md` · `.claude/rules/parked.md`
+
+## `Q233` — A second driven is a minute on the clock: the shift is 14 minutes
+
+**Asked** by the user, 2026-11-17: "slower shift and clock time to 1s real time = 1min in ingame
+clock".
+
+**Status.** ✅ Built 2026-11-17. `tools/check.sh` passes; not driven by hand.
+
+- **One number**: `day_to_night.tres` `length_s` 300 → 840. 特更's 07:00 → 21:00 is 14 hours, so
+  840 s of driving is 60 s an hour; it was about 21. `shift.tres` is unmoved and still takes its
+  length from the rig's table, so the sky and the HUD's clock slowed together.
+- **Free mode too.** The looping day (`Q225`) runs the same table: 600 s of night where it was
+  214, 1440 s a lap — 24 minutes for 24 hours.
+- **Nothing was re-solved.** Keyframes are fractions of the cycle, so every hour lands where it
+  did and the daylight legs still share one speed: 0.216 °/s where it was 0.604.
+  `showroom_time_of_day` (`Q231`) is a fraction too.
+- ⚠️ **The rate is not a dial of its own.** It is `length_s` over `shift.tres`'s hours; move the
+  hours and 840 moves with them, or the minute stops being a second.
+- ⚠️ **`GAME_DESIGN.md`'s pillar still says three-minute sessions.** A shift is now nearly three
+  times the five minutes it replaced; the pillar is left as written for the user to call.
+- ⚠️ A best total saved from a 300 s shift stays in `shift_best_hkd` and is easy to beat now. Not
+  reset.
+- Not done: a whole 14-minute shift driven by hand; whether the fare pools and the combo hold up
+  over about three times the fares; `--shift-s=` still compresses a shift for a handover frame.
+
+**See.** `Q160` · `Q162` · `Q222` · `Q225` · `game/tuning/day_to_night.md` · `game/tuning/shift.md`
