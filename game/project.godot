@@ -122,8 +122,8 @@ look_back={
 renderer/rendering_method="mobile"
 textures/vram_compression/import_etc2_astc=true
 anti_aliasing/quality/msaa_3d=2
-anti_aliasing/quality/msaa_3d.mobile=1
 occlusion_culling/use_occlusion_culling=true
+anti_aliasing/quality/msaa_3d.mobile=1
 
 [shader_globals]
 
