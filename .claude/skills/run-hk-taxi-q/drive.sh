@@ -78,7 +78,7 @@ case " $* " in
 *" --lang="*) ;;
 *) set -- "$@" --lang=zh ;;
 esac
-# The touch steering's response and the thumbs' sides are saved options too
+# The touch steering's response, the thumbs' sides and their anchor are saved options too
 # (Q223, `ControlOptions`): named here for the same reason, at their defaults.
 case " $* " in
 *" --touch-steer="*) ;;
@@ -87,6 +87,10 @@ esac
 case " $* " in
 *" --touch-side="*) ;;
 *) set -- "$@" --touch-side=left ;;
+esac
+case " $* " in
+*" --touch-anchor="*) ;;
+*) set -- "$@" --touch-anchor=relative ;;
 esac
 
 # Godot reports a failure with any of these and still exits 0.

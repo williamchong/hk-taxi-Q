@@ -906,6 +906,10 @@ func _parse_args() -> bool:
 				if not ControlOptions.STEERINGS.has(value):
 					_fail("--touch-steer=%s is not gentle, normal or sharp" % value)
 					return false
+			"--touch-anchor":
+				if not ControlOptions.ANCHORS.has(value):
+					_fail("--touch-anchor=%s is not relative or fixed" % value)
+					return false
 			"--touch-side":
 				if not [ControlOptions.SIDE_LEFT, ControlOptions.SIDE_RIGHT].has(value):
 					_fail("--touch-side=%s is not left or right" % value)

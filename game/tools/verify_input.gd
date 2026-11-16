@@ -910,6 +910,94 @@ func _check_pause() -> void:
 	_roll()
 
 
+# ---------------------------------------------------------------- anchor ----
+
+
+## Controls that stand still (`Q239`): each thumb is read from the middle of
+## its rest, where its control is drawn, wherever in the zone it came down.
+func _check_anchor() -> void:
+	_expect(
+		(
+			ControlOptionsScript.resolve_anchor("FIXED", "relative") == "fixed"
+			and ControlOptionsScript.resolve_anchor("", "fixed") == "fixed"
+			and ControlOptionsScript.resolve_anchor("static", "") == "relative"
+		),
+		"anchor",
+		"the anchor reads the flag, then the saved pick, then relative"
+	)
+	# ⚠️ Landed at the zones' middles, never at the rests: a headless canvas is
+	# square, and its zones (anchored mid-screen) do not reach its rests
+	# (anchored at the foot). A thumb is claimed by its zone and read from its
+	# rest, and the two are apart here by more than on any screen.
+	var wheel: Vector2 = _zone("SteerRest").get_center()
+	var pedals: Vector2 = _zone("DriveRest").get_center()
+	var steer_at: Vector2 = _zone("SteerZone").get_center()
+	var drive_at: Vector2 = _zone("DriveZone").get_center()
+	var steer_travel: float = _touch.steer_travel_px
+	var drive_travel: float = _touch.drive_travel_px
+
+	SettingsScript.set_anchor("fixed")
+	_router.refresh_options()
+	_press(FINGER_A, steer_at)
+	_press(FINGER_B, drive_at)
+	var landed: float = _touch.steer_from(steer_at.x - wheel.x, _touch.steer_curve)
+	_expect(
+		not is_zero_approx(landed) and is_equal_approx(_steer(), landed),
+		"anchor",
+		"fixed, a thumb down off the wheel's middle steers at once: %.3f" % _steer()
+	)
+	_expect(
+		(
+			_router.steer_touch()[0].is_equal_approx(wheel)
+			and _router.drive_touch()[0].is_equal_approx(pedals)
+		),
+		"anchor",
+		"and each control is drawn at its rest, not under the thumb"
+	)
+	_move(FINGER_A, wheel + Vector2(steer_travel, 0.0))
+	_move(FINGER_B, pedals + Vector2(0.0, -drive_travel))
+	_expect(
+		is_equal_approx(_steer(), 1.0) and is_equal_approx(_accelerate(), 1.0),
+		"anchor",
+		"a travel from each rest's middle is full lock and full throttle"
+	)
+	_move(FINGER_A, wheel)
+	_move(FINGER_B, pedals + Vector2(0.0, drive_travel))
+	_expect(
+		is_zero_approx(_steer()) and is_equal_approx(_brake(), 1.0),
+		"anchor",
+		"the middle of the wheel is straight ahead, and below the pedals' is the brake"
+	)
+	# A fixed wheel is slid across, never gone round: under its middle is
+	# straight ahead, as its sideways offset says.
+	_move(FINGER_A, wheel + Vector2(steer_travel, 0.0))
+	_move(FINGER_A, wheel + Vector2(steer_travel, steer_travel))
+	_move(FINGER_A, wheel + Vector2(0.0, steer_travel))
+	_expect(
+		is_zero_approx(_steer()), "anchor", "fixed, a thumb gone round to the bottom is centred"
+	)
+	# A wheel left turned is not added to: a fixed wheel is where the thumb is.
+	_move(FINGER_A, wheel + Vector2(steer_travel, 0.0))
+	_lift(FINGER_A, wheel)
+	_lift(FINGER_B, pedals)
+	_press(FINGER_A, steer_at)
+	_expect(
+		is_equal_approx(_steer(), landed),
+		"anchor",
+		"a thumb landing on a turned wheel reads where it is, not what was left"
+	)
+	_lift(FINGER_A, wheel)
+	_roll()
+
+	SettingsScript.set_anchor("relative")
+	_router.refresh_options()
+	_press(FINGER_A, steer_at)
+	_expect(
+		is_zero_approx(_steer()), "anchor", "relative again, a thumb steers nothing where it lands"
+	)
+	_lift(FINGER_A, steer_at)
+
+
 # --------------------------------------------------------------- options ----
 
 
@@ -935,6 +1023,8 @@ func _check_options() -> void:
 		"options",
 		"the thumbs' sides read the flag, then the saved pick"
 	)
+
+	_check_anchor()
 
 	var home: Vector2 = _zone("SteerZone").get_center()
 	var half: float = (

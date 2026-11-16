@@ -16,6 +16,7 @@ const KEY_SOUND: String = "sound"
 const KEY_VOLUME: String = "volume"
 const KEY_STEERING: String = "steering"
 const KEY_STEER_ON_RIGHT: String = "steer_on_right"
+const KEY_ANCHOR: String = "anchor"
 const KEY_FRAME_CAP: String = "frame_cap"
 ## The frame caps a phone is offered (`Q223`): the project's own 60
 ## (`application/run/max_fps.mobile`) and half of it, which is a whole number
@@ -110,6 +111,16 @@ static func steering() -> String:
 
 static func set_steering(choice: String) -> void:
 	_write(KEY_STEERING, choice)
+
+
+## Where the thumbs' controls stand as saved (`Q239`), or "" where none was:
+## `ControlOptions.anchor` reads this after its flag and names the default.
+static func anchor() -> String:
+	return str(_read().get_value(SECTION, KEY_ANCHOR, ""))
+
+
+static func set_anchor(choice: String) -> void:
+	_write(KEY_ANCHOR, choice)
 
 
 ## Whether the steering thumb is the right one, the pedals under the left

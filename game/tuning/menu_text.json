@@ -118,6 +118,18 @@
       "en": "SHARP",
       "zh": "靈敏"
     },
+    "anchor": {
+      "en": "CONTROLS",
+      "zh": "操控位置"
+    },
+    "anchor_relative": {
+      "en": "FOLLOW THUMB",
+      "zh": "跟隨手指"
+    },
+    "anchor_fixed": {
+      "en": "FIXED",
+      "zh": "固定"
+    },
     "side": {
       "en": "STEERING THUMB",
       "zh": "軚盤位置"

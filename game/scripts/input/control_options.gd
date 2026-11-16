@@ -1,7 +1,8 @@
 class_name ControlOptions
 extends RefCounted
 ## The player's picks that change how a drive handles or runs (`Q223`): the
-## touch steering's response, which thumb steers, and a phone's frame cap.
+## touch steering's response, whether the thumbs' controls stand still (`Q239`),
+## which thumb steers, and a phone's frame cap.
 ##
 ## ⚠️ **A dev flag beats a saved option**, as `Locale.language()` reads
 ## `--lang=` first: a scripted touch run must steer the same on every machine
@@ -14,11 +15,20 @@ const STEER_ARG: String = "--touch-steer="
 ## Left is the scheme as first shipped, the pedals under the right thumb.
 const SIDE_ARG: String = "--touch-side="
 
+## `--touch-anchor=relative|fixed`: where the thumbs' controls stand (`Q239`).
+const ANCHOR_ARG: String = "--touch-anchor="
+
 const GENTLE: String = "gentle"
 const NORMAL: String = "normal"
 const SHARP: String = "sharp"
 ## In the order the menu offers them.
 const STEERINGS: PackedStringArray = [GENTLE, NORMAL, SHARP]
+## Each control stands where its thumb lands and reads from there (`Q83`), the
+## scheme as first shipped; or it stays at its rest and reads from its middle,
+## so a thumb put down off-centre is already steering or on a pedal.
+const RELATIVE: String = "relative"
+const FIXED: String = "fixed"
+const ANCHORS: PackedStringArray = [RELATIVE, FIXED]
 const SIDE_LEFT: String = "left"
 const SIDE_RIGHT: String = "right"
 const MAX_FPS_SETTING: String = "application/run/max_fps"
@@ -36,6 +46,19 @@ static func steering() -> String:
 ## pedals under the left.
 static func steer_on_right() -> bool:
 	return resolve_steer_on_right(Cmdline.value(SIDE_ARG), Settings.steer_on_right())
+
+
+## Where the thumbs' controls stand this run: one of `ANCHORS`.
+static func anchor() -> String:
+	return resolve_anchor(Cmdline.value(ANCHOR_ARG), Settings.anchor())
+
+
+## `flag`, else `saved`, else RELATIVE: the first that names one.
+static func resolve_anchor(flag: String, saved: String) -> String:
+	for asked: String in [flag.to_lower(), saved]:
+		if asked in ANCHORS:
+			return asked
+	return RELATIVE
 
 
 ## `flag`, else `saved`, else NORMAL: the first that names a response. Apart

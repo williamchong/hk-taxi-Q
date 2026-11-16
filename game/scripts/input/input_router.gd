@@ -100,7 +100,8 @@ const _MOUSE_INDEX: int = -2
 
 ## One thumb: which zone it may land in, and where it is now.
 ##
-## ⚠️ **`origin` is where the finger LANDED, not the middle of the zone.** Both
+## ⚠️ **`origin` is where the finger LANDED, not the middle of the zone** —
+## unless the player asked for controls that stand still (`fixed`, `Q239`). Both
 ## thumbs are relative (`Q83`) — that is what lets the rests stay fingertip-
 ## sized instead of needing a slider's travel area, which measured out at 20 px
 ## of clearance against the HUD.
@@ -109,6 +110,11 @@ class Thumb:
 
 	## The invisible Control that resolves this thumb's zone on the real screen.
 	var zone: Control = null
+	## This thumb's rest, where its control is drawn while it is up; and whether
+	## the control stays there (`ControlOptions.FIXED`, `Q239`): the thumb is
+	## then read from the rest's middle, wherever in the zone it landed.
+	var home: Control = null
+	var fixed: bool = false
 	## The finger currently claiming this thumb, or -1 for none.
 	var index: int = -1
 	var origin: Vector2 = Vector2.ZERO
@@ -128,7 +134,7 @@ class Thumb:
 		if is_down() or zone == null or not zone.get_global_rect().has_point(at):
 			return false
 		index = finger
-		origin = at
+		origin = home.get_global_rect().get_center() if fixed and home != null else at
 		current = at
 		return true
 
@@ -265,6 +271,8 @@ func _build_zones() -> void:
 
 	_steer_thumb.zone = _zone(layout, root, "SteerZone", layout.steer_zone())
 	_drive_thumb.zone = _zone(layout, root, "DriveZone", layout.drive_zone())
+	_steer_thumb.home = _rest(layout, root, "SteerRest", layout.steer_rest())
+	_drive_thumb.home = _rest(layout, root, "DriveRest", layout.drive_rest())
 
 
 ## Read the player's steering pick again (`ControlOptions`): the options menu
@@ -272,6 +280,10 @@ func _build_zones() -> void:
 func refresh_options() -> void:
 	if _touch != null:
 		_steer_curve = _touch.curve_for(ControlOptions.steering())
+	# From each thumb's next landing: one that is down keeps the origin it has.
+	var fixed: bool = ControlOptions.anchor() == ControlOptions.FIXED
+	_steer_thumb.fixed = fixed
+	_drive_thumb.fixed = fixed
 
 
 ## Build the zones afresh: the thumbs swapped sides (`Q223`). Both thumbs are
@@ -286,6 +298,8 @@ func rebuild_zones() -> void:
 	_zones = null
 	_steer_thumb.zone = null
 	_drive_thumb.zone = null
+	_steer_thumb.home = null
+	_drive_thumb.home = null
 	_wheel = 0.0
 	_build_zones()
 
@@ -298,6 +312,16 @@ func _zone(layout: HudLayout, root: Control, zone_name: String, design: Rect2) -
 	# notch's strip still steers (`Q204`).
 	layout.place_to_glass(root, zone, design)
 	return zone
+
+
+## A thumb's rest, placed as the HUD places the hint it draws there, so a fixed
+## control reads from the middle of its own drawing.
+func _rest(layout: HudLayout, root: Control, rest_name: String, design: Rect2) -> Control:
+	var rest := Control.new()
+	rest.name = rest_name
+	rest.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	layout.place(root, rest, design)
+	return rest
 
 
 ## The steering thumb's landing point and where it is now, in canvas units, or
@@ -329,10 +353,10 @@ func wheel_turn() -> float:
 
 ## The middle of the wheel the steering thumb is on, in canvas units, for the
 ## sticks to draw it at: a radius below where the thumb landed, so the thumb is
-## on its twelve o'clock (`Q238`).
+## on its twelve o'clock (`Q238`); or, fixed, the rest's own middle (`Q239`).
 ## Means nothing while no thumb is down: the sticks ask only under one.
 func wheel_centre() -> Vector2:
-	if _touch == null:
+	if _touch == null or _steer_thumb.fixed:
 		return _steer_thumb.origin
 	return _steer_thumb.origin + Vector2(0.0, _touch.wheel_radius_px)
 
@@ -461,7 +485,12 @@ func _return_wheel(speed_share: float, delta: float) -> void:
 ## so sideways along the top is hardly an angle at all and on down the side is
 ## a large one — which is the whole of how a spin is told from a slide: it is
 ## not told, it is read, and `_thumb_wheel` takes the larger of the two.
+##
+## Not for a fixed wheel (`Q239`), whose thumb is read from its middle: there a
+## thumb landing on the hub would have no bearing to start from.
 func _go_round(from: Vector2, to: Vector2) -> void:
+	if _steer_thumb.fixed:
+		return
 	var centre: Vector2 = wheel_centre()
 	# The whole move, not its two ends: a flick across the wheel between two
 	# events reads as half a turn, either way round. ⚠️ A move the hub
@@ -541,7 +570,8 @@ func _finger(index: int, at: Vector2, pressed: bool) -> void:
 		_drive_thumb.release(index)
 		return
 	if _steer_thumb.claim(index, at):
-		_wheel_at_landing = _wheel
+		# A fixed wheel is where the thumb is on it, whatever it was left at.
+		_wheel_at_landing = 0.0 if _steer_thumb.fixed else _wheel
 		_bearing_deg = 0.0
 		return
 	_drive_thumb.claim(index, at)

@@ -517,8 +517,9 @@ func _display(column: VBoxContainer) -> void:
 		)
 
 
-## The thumbs (`Q223`): how sharply the steering one answers, and — on the
-## boot menu alone, since it is a new HUD — which side it is on.
+## The thumbs (`Q223`): how sharply the steering one answers, whether their
+## controls follow them or stand still (`Q239`), and — on the boot menu alone,
+## since it is a new HUD — which side the steering one is on.
 func _controls(column: VBoxContainer) -> void:
 	var steerings: Array = []
 	for steering: String in ControlOptions.STEERINGS:
@@ -531,6 +532,18 @@ func _controls(column: VBoxContainer) -> void:
 		"steering",
 		steerings,
 		ControlOptions.STEERINGS.find(ControlOptions.steering())
+	)
+	# Where the controls stand (`Q239`). The pause offers it too: the sticks
+	# draw where the router says a thumb's control is, so it needs no new HUD.
+	_choices(
+		column,
+		"Anchors",
+		"anchor",
+		[
+			["Relative", "anchor_relative", _pick_anchor.bind(ControlOptions.RELATIVE)],
+			["Fixed", "anchor_fixed", _pick_anchor.bind(ControlOptions.FIXED)],
+		],
+		ControlOptions.ANCHORS.find(ControlOptions.anchor())
 	)
 	if not pausing:
 		_choices(
@@ -567,6 +580,17 @@ func _pick_steering(choice: String) -> void:
 	Settings.set_steering(choice)
 	if ControlOptions.steering() != choice:
 		push_warning("menu: --touch-steer= pins the steering this run; the choice is saved")
+		return
+	steering_changed.emit()
+	_relabel.call_deferred()
+
+
+## Save where the thumbs' controls stand and say so, as the response is said:
+## the router reads both on the one signal.
+func _pick_anchor(choice: String) -> void:
+	Settings.set_anchor(choice)
+	if ControlOptions.anchor() != choice:
+		push_warning("menu: --touch-anchor= pins the controls this run; the choice is saved")
 		return
 	steering_changed.emit()
 	_relabel.call_deferred()
