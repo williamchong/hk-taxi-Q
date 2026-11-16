@@ -168,8 +168,7 @@ func _ready() -> void:
 	# The process-wide globals outlive a scene, so a rig entering after a night
 	# one must put the day back rather than inherit the dark.
 	_set_globals(Color.WHITE, 0.0)
-	fit_shadow(Handset.is_phone(OS.has_feature))
-	fit_scale(Handset.is_phone(OS.has_feature), get_viewport())
+	fit_handset(OS.has_feature, get_viewport())
 	if cycle == null or not cycle.usable():
 		return
 	for child: Node in get_children():
@@ -222,14 +221,22 @@ func fit_shadow(phone: bool) -> void:
 			sun.directional_shadow_max_distance = phone_shadow_max_distance_m
 
 
-## On a phone, draw the 3D scene at `phone_scale_3d` of the window (`P2-6`):
-## fill rate is what a phone runs out of first, and the HUD is not scaled with
-## it. Anywhere else, or at 1, the viewport stays as the project set it.
-## `phone` and `viewport` are handed in so a check can ask from a desk.
-func fit_scale(phone: bool, viewport: Viewport) -> void:
-	if not phone or phone_scale_3d >= 1.0 or viewport == null:
+## In a phone's app, draw the 3D scene at `phone_scale_3d` of the window
+## (`P2-6`): fill rate is what a phone runs out of first, and the HUD is not
+## scaled with it. Anywhere else, or at 1, the viewport stays as the project
+## set it. `app` and `viewport` are handed in so a check can ask from a desk.
+func fit_scale(app: bool, viewport: Viewport) -> void:
+	if not app or phone_scale_3d >= 1.0 or viewport == null:
 		return
 	viewport.scaling_3d_scale = phone_scale_3d
+
+
+## Both phone exceptions, each asked of its own test: the shadow reach of any
+## phone, the 3D scale of the app alone (`Handset.is_app` has why).
+## `has_feature` answers `OS.has_feature`'s question.
+func fit_handset(has_feature: Callable, viewport: Viewport) -> void:
+	fit_shadow(Handset.is_phone(has_feature))
+	fit_scale(Handset.is_app(has_feature), viewport)
 
 
 func set_time_of_day(value: float) -> void:

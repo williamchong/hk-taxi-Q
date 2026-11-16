@@ -319,24 +319,50 @@ func _check_the_phone() -> void:
 		"phone",
 		"on a phone it reaches %.0f m, its cascades as authored" % rig.phone_shadow_max_distance_m
 	)
-	# The 3D scale (`P2-6`): shipped at 1, where no viewport is written; a dial
-	# under 1 reaches a phone's viewport and never a desk's.
+	# The 3D scale (`P2-6`): the rig's dial reaches a phone's viewport and never
+	# a desk's; a dial of 1 writes no viewport at all.
 	var view := SubViewport.new()
-	rig.fit_scale(true, view)
-	_expect(
-		rig.phone_scale_3d == 1.0 and view.scaling_3d_scale == 1.0,
-		"phone",
-		"the rig ships a 3D scale of 1, and a phone's viewport is left alone"
-	)
-	rig.phone_scale_3d = 0.75
+	var shipped: float = rig.phone_scale_3d
 	rig.fit_scale(false, view)
 	var desk: float = view.scaling_3d_scale
 	rig.fit_scale(true, view)
 	_expect(
-		desk == 1.0 and view.scaling_3d_scale == 0.75,
+		shipped < 1.0 and desk == 1.0 and view.scaling_3d_scale == shipped,
 		"phone",
-		"a dial of 0.75 draws a phone's scene at 0.75 and a desk's at 1"
+		"a phone's scene is drawn at the rig's %.2f and a desk's at 1" % shipped
 	)
+	rig.phone_scale_3d = 1.0
+	view.scaling_3d_scale = 0.5
+	rig.fit_scale(true, view)
+	_expect(view.scaling_3d_scale == 0.5, "phone", "a dial of 1 leaves a phone's viewport alone")
+	# Which builds get which: the shadow reach is any phone's, the scale the
+	# app's alone. A fresh rig a build, since neither fit can be undone.
+	for build: Array in [
+		[["mobile"], true, true],
+		[["web", "web_ios"], true, false],
+		[["web", "web_android"], true, false],
+		[["web", "pc"], false, false],
+	]:
+		var features: Array = build[0]
+		var fresh := packed.instantiate() as LightingRig
+		var fresh_sun: DirectionalLight3D = (
+			_child(fresh, "DirectionalLight3D") as DirectionalLight3D
+		)
+		var fresh_view := SubViewport.new()
+		fresh.fit_handset(func(feature: String) -> bool: return feature in features, fresh_view)
+		_expect(
+			(
+				(fresh_sun.directional_shadow_max_distance < authored) == build[1]
+				and (fresh_view.scaling_3d_scale < 1.0) == build[2]
+			),
+			"phone",
+			(
+				"%s: the phone's shadow reach %s, the app's 3D scale %s"
+				% [features, build[1], build[2]]
+			)
+		)
+		fresh_view.free()
+		fresh.free()
 	view.free()
 	rig.free()
 

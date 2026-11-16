@@ -61,12 +61,13 @@ rig moves only when something sets `time_of_day`** — `city_drive.tscn`'s `DayC
 `--time-of-day=` for a frame — so the two dev scenes that instance this rig with no clock render
 the noon they always did, and `verify_day_cycle.gd` holds that a rig at 0 writes nothing.
 
-## `phone_scale_3d` — unset, so 1.0
+## `phone_scale_3d = 0.75`
 
-The share of the window the 3D scene is drawn at on a phone (`P2-6`); `LightingRig.fit_scale`
-writes the viewport's `scaling_3d_scale` at `_ready` on a phone only, and the HUD keeps the
-window's resolution. **Shipped at 1.0, which writes nothing** — the dial exists so a handset that
-runs out of fill rate can be answered from data, and no handset has been measured yet. Godot's
-writer drops a value at its default, so the scene file does not name it. Set it under 1 only
-with a `--perf-log` run on the device before and after, and a frame to judge the softening by:
-0.75 is 56% of the pixels.
+The share of the window the 3D scene is drawn at in a phone's app (`P2-6`, `Q236`);
+`LightingRig.fit_scale` writes the viewport's `scaling_3d_scale` at `_ready`, and the HUD keeps the
+window's resolution. 0.75 is 56% of the pixels: on the iPhone Air it took the video memory from
+358.9 MB to 270.4, and the user took the softening from 1:1 crops — small sign plates and the roof
+sign's lettering blur, the ink line comes out about a third thicker, flat faces do not change.
+**The app only, never a phone's browser** (`Handset.is_app`): under the web's renderer the same
+dial came out stair-stepped on the itch.io build. `golden_hour.tscn` leaves it unset, so 1.0.
+Move it only with a `--perf-log` run on the device before and after, and a frame to judge by.

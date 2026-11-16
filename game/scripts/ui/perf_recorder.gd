@@ -63,7 +63,7 @@ var _viewport_rid: RID = RID()
 ## Summarised frames over `BUDGET_MS` that also instantiated a tile.
 var _hitches_tiled: int = 0
 var _done: bool = false
-## Read in `_ready`, where the viewport is certain to exist.
+## Read as the summary is built; a recorder outside the tree keeps these.
 var _scale_3d: float = 1.0
 var _msaa_3d: int = -1
 
@@ -144,10 +144,7 @@ func _ready() -> void:
 	# Before every other node's `_process`, so a frame's row is the gap between
 	# two starts of a frame rather than wherever this sorted in the tree.
 	process_priority = -1000
-	var viewport: Viewport = get_viewport()
-	_scale_3d = viewport.scaling_3d_scale
-	_msaa_3d = int(viewport.msaa_3d)
-	_viewport_rid = viewport.get_viewport_rid()
+	_viewport_rid = get_viewport().get_viewport_rid()
 	RenderingServer.viewport_set_measure_render_time(_viewport_rid, true)
 	_file = FileAccess.open(path, FileAccess.WRITE)
 	if _file == null:
@@ -266,6 +263,11 @@ static func _percentiles(series: PackedFloat32Array) -> String:
 func summary_lines() -> PackedStringArray:
 	var s: Dictionary = summarize(_frames_ms)
 	var window: Vector2i = DisplayServer.window_get_size()
+	# Read here and never in `_ready`: this node readies under an autoload,
+	# before the lighting rig has written a phone's 3D scale.
+	if is_inside_tree():
+		_scale_3d = get_viewport().scaling_3d_scale
+		_msaa_3d = int(get_viewport().msaa_3d)
 	return PackedStringArray(
 		[
 			"perf: %s, %s" % [OS.get_model_name(), "debug" if OS.is_debug_build() else "release"],
