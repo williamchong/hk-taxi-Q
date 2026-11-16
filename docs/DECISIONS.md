@@ -14023,3 +14023,28 @@ black taxi beside the player's: "a red taxi is not red next to me but im still r
   lamps back, and a traffic taxi red at `t20.00`. `check.sh` passes.
 
 **See.** `Q76` · `Q167` · `Q200` · `P3-3e` · `game/scripts/city/prop_batch.gd`
+
+## `Q229` — The pause has RESET CAR: back onto the nearest road, the run going on
+
+**Asked** by the user, 2026-11-16: "add a reset button in pause menu such that player has a way to
+continue gameplay when car is stuck at a non-escapable state".
+
+**Status.** ✅ Built 2026-11-16. Frames in `build/driver/reset_zh`, `reset_en`, `reset_touch`; a
+reset fired mid-drive put the car at rest on edge 651 and it drove on (`build/driver/reset_probe`).
+The user's own stuck car owed — no wedged spot was reproduced.
+
+- **RESET CAR / 重置的士, second on PAUSE under RESUME**, on a shift's pause and a free drive's.
+  `StartMenu.reset` → `Main._on_reset` unpauses → `DriveLevel.recover`. The menu never reaches the
+  level, as for every other way off the page.
+- **It is the harbour's recovery** (`_back_onto_road`, what `_pull_out` was): the nearest drivable
+  edge on the car's level, its lane centre, facing the way the car was pointing, dropped from the
+  spawn's height, at rest; the start line where no road is within `nearest_edge`'s 60 m.
+- **It costs nothing but the time**: the fare aboard, its clock, the meter and the tally are not
+  touched, and no penalty is booked. ⚠️ So it is also a free un-wedge from a wall or a wrong-way
+  street mid-fare; a charge or a cooldown is `P3-*`'s respawn rules and the user's call.
+- 重置的士, not 重置車輛: 輛 is in neither subset, and the wording was chosen over a `make_fonts.py`
+  run. `verify_menu` holds the key in both languages and the button's one signal on both pauses.
+- Not built: a hold-to-confirm, an automatic "stuck" detector, a HUD button outside the pause.
+
+**See.** `Q165` · `Q223` · `game/scripts/level/drive_level.gd` · `game/scripts/ui/start_menu.gd` ·
+`.claude/rules/hud.md`
