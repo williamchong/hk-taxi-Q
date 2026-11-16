@@ -133,8 +133,8 @@ func pause() -> void:
 	if not shown.pausing_shift and is_instance_valid(level.fares):
 		shown.pause_tally = level.fares.tally
 	shown.resumed.connect(_release_pause)
-	# The one option under a pause that something outside the menu must hear.
 	shown.reset.connect(_on_reset)
+	# The one option under a pause that something outside the menu must hear.
 	# Never the side: that is a new HUD, which the pause does not offer.
 	shown.steering_changed.connect(_on_steering_changed)
 	shown.ended.connect(_on_run_ended)
@@ -149,13 +149,13 @@ func _release_pause() -> void:
 	get_tree().paused = false
 
 
-## Out of a paused run: the level parks under a fresh HOME as at boot, or a
 ## RESET CAR (`Q229`): the run goes on from the nearest road.
 func _on_reset() -> void:
 	_release_pause()
 	level.recover()
 
 
+## Out of a paused run: the level parks under a fresh HOME as at boot, or a
 ## free drive's REPORT, and the next PLAY starts clean through
 ## `DriveLevel.play`. Read before the park: nothing resets the books but
 ## `play`, and the tally was banked as the pause opened.
