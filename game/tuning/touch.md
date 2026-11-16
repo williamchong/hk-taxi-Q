@@ -90,3 +90,60 @@ passes through as it reads (`InputRouter.steer_from_thumb`).
 🔴 Desk picks, both: no thumb has driven either. At 2.5 the last quarter of the travel carries 51%
 of the lock, which may snatch; if it does, 2.3 before removing the choice. `verify_input.gd` holds
 the order — gentle over normal over sharp, none under 1 — and nothing about the values.
+
+## `steer_return_at_top_s = 0.05`
+
+The wheel between touches (`Q238`, 2026-11-17, the user's report: players expect the wheel not to
+spring back to centre). A lifted thumb leaves the wheel where it was; it returns in proportion to
+the car's speed, this many seconds from full lock at the limiter, and a thumb landing again takes it
+up from there. Until it, the steering was zero the tick the thumb lifted.
+
+| Speed (140 kph limiter) | Full lock to centre |
+|---|---|
+| standing | never: it holds |
+| 5 kph | 1.4 s |
+| 10 kph | 0.7 s |
+| 30 kph | 0.23 s |
+| 60 kph | 0.12 s |
+| 120 kph | 0.06 s |
+
+Linear in the wheel's position, so on `steer_curve` 2.0 the steering itself is down to a quarter at
+half the time. 🔴 A desk pick: lifting the thumb is how a turn or a catch is ended, and the number is
+set so that at street pace the return is near the car's own `steer_release_s` (0.08 s). If a lift
+at 20–30 kph keeps the car turning, lower it; 0 is the old snap at every speed. No pad row reads it:
+the pad steers through the action map and never leaves a wheel turned (`--only=flick --steer=touch`
+byte-identical before and after).
+
+## `wheel_radius_px = 77.0`, `wheel_hub_px = 24.0`, `spin_lock_deg = 120.0`
+
+The wheel hangs from the thumb (`Q238`'s amendment, the user's design, 2026-11-17: "since movement of
+spin and slide would be the same on top of wheel … place the top of wheel onto the thumb", "then an
+intentional spin would be very obvious movement towards bottom of wheel"). Where the thumb lands is
+the wheel's twelve o'clock and its middle is 77 units below — the radius it was already drawn at
+(0.55 of `steer_travel_px`), about 6 mm on the iPhone Air. The thumb's angle round that middle turns
+the wheel, 120° for full lock, the angle the drawn wheel turns; inside 24 units of the middle
+nothing is read.
+
+🔴 **A slide along the top is not moved by it, and that is arithmetic, not tuning.** Both readings
+go through one dead band and the larger steers. A thumb `x` along the top is `77·atan(x/77)` of rim,
+always under `x`, over a rim travel of 161 units against the slide's 140 — so the slide is the
+larger at every offset. `verify_input.gd` walks 41 offsets and requires the rim travel over the
+slide's: a smaller `wheel_radius_px` or `spin_lock_deg` (under 105° at this radius) breaks it.
+
+| Thumb on the rim | Slide alone | Round the wheel | Steers (curve 2.0) |
+|---|---|---|---|
+| 1 o'clock (30°) | 20% of the wheel | 22% | 5% of the lock |
+| 3 o'clock (90°) | 53% | 74% | 55% |
+| 4 o'clock (120°) | 45% | 100% | 100% |
+| 6 o'clock (180°) | 0 | 100% | 100% |
+| 9 o'clock, by the bottom | 53% the OTHER way | 100% | 100% |
+
+⚠️ Costs. The wheel is drawn under the heel of the thumb, not round it. A thumb landing in the
+bottom 6 mm of the glass has its wheel's middle off the screen: it slides, it cannot go round. A
+slide that sinks most of a radius while it is out to the side begins to read as a turn — at
+`(40, 100)` from the landing it is full lock where the slide alone says 6%. What was wound is
+unwound: a thumb gone twice round comes twice back.
+
+🔴 Desk picks, and the third way this was read in a day: the SLIDE / SPIN option and a spin told
+from the path's curving (60° of it, which the handset refused: a thumb coming back on itself hooks
+through half a turn) are in `Q238`. The fixed wheel (`Q239`) is slid across and never gone round.

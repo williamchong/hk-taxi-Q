@@ -118,6 +118,7 @@ func _run() -> void:
 	_check_steer()
 	_check_drive()
 	_check_two_thumbs()
+	_check_wheel()
 	_check_override()
 	_check_keyboard_steer()
 	_check_deferred()
@@ -168,6 +169,32 @@ func _check_profile() -> void:
 		_touch.steer_attack_at_top_s > 0.0,
 		"profile",
 		"steer_attack_at_top_s is %.2f" % _touch.steer_attack_at_top_s
+	)
+	# The wheel's return (`Q238`): a missing key reads 0, which is a wheel
+	# that snaps to centre as it did before.
+	_expect(
+		_touch.steer_return_at_top_s > 0.0,
+		"profile",
+		"steer_return_at_top_s is %.3f" % _touch.steer_return_at_top_s
+	)
+	# The slide must be the larger reading along the wheel's top, or going
+	# round would move it: the rim's travel over the slide's (`spin_share`).
+	_expect(
+		(
+			_touch.wheel_radius_px > _touch.wheel_hub_px
+			and _touch.wheel_hub_px > 0.0
+			and _touch.rim_travel_px() >= _touch.steer_travel_px
+		),
+		"profile",
+		(
+			"the wheel is %.0f units round a %.0f hub, its lock %.0f of rim to the slide's %.0f"
+			% [
+				_touch.wheel_radius_px,
+				_touch.wheel_hub_px,
+				_touch.rim_travel_px(),
+				_touch.steer_travel_px
+			]
+		)
 	)
 	# The guard in `_axis_from` keeps a bad edit from dividing by zero; this is
 	# what says the edit was bad. Below the band there is no usable travel at
@@ -292,8 +319,14 @@ func _check_steer() -> void:
 		is_equal_approx(_steer(), 1.0), "steer", "a thumb dragged outside its own zone still steers"
 	)
 
+	# The wheel is the car's, not the thumb's (`Q238`): let go on a standing
+	# car it stays turned, and it comes back as the car rolls.
 	_lift(FINGER_A, home)
-	_expect(is_zero_approx(_steer()), "steer", "lifting the thumb returns the wheel to centre")
+	_router.steer_for(0.0, false, 1.0)
+	_tick()
+	_expect(is_equal_approx(_steer(), 1.0), "steer", "a lifted thumb leaves a standing car's wheel")
+	_roll()
+	_expect(is_zero_approx(_steer()), "steer", "and a rolling car returns it to centre")
 
 	# A finger that never landed in a zone owns nothing, and dragging it moves
 	# nothing. The failure this catches is a zone test that accepts every touch.
@@ -394,6 +427,7 @@ func _check_two_thumbs() -> void:
 	# catches is a shared release path, which reads as the throttle dropping
 	# every time the player lets go of the wheel.
 	_lift(FINGER_A, steer_home)
+	_roll()
 	_expect(
 		is_zero_approx(_steer()) and is_equal_approx(_accelerate(), 1.0),
 		"thumbs",
@@ -605,6 +639,138 @@ func _check_override() -> void:
 	_tick()
 
 
+# ----------------------------------------------------------------- wheel ----
+
+
+## The wheel between touches, and the thumb that spins it (`Q238`).
+func _check_wheel() -> void:
+	var home: Vector2 = _zone("SteerZone").get_center()
+	var travel: float = _touch.steer_travel_px
+	var curve: float = _touch.steer_curve
+	var back: float = _touch.steer_return_at_top_s
+
+	# A thumb landing on a turned wheel takes it up from there.
+	_press(FINGER_A, home)
+	_move(FINGER_A, home + Vector2(travel, 0.0))
+	_lift(FINGER_A, home)
+	_press(FINGER_A, home)
+	_expect(is_equal_approx(_steer(), 1.0), "wheel", "a thumb landing on a turned wheel holds it")
+	_move(FINGER_A, home + Vector2(-travel, 0.0))
+	_expect(is_zero_approx(_steer()), "wheel", "and a full travel back is centre, not the far lock")
+	_move(FINGER_A, home)
+
+	# The return is the car's speed's: half the table's seconds at the limiter
+	# is half the wheel, and at half the limiter a quarter.
+	_lift(FINGER_A, home)
+	_router.steer_for(1.0, false, back * 0.5)
+	_expect(
+		is_equal_approx(_router.wheel_turn(), pow(0.5, curve)),
+		"wheel",
+		"half the return's seconds at the limiter leaves %.3f" % _router.wheel_turn()
+	)
+	_router.steer_for(0.5, false, back * 0.5)
+	_tick()
+	_expect(
+		is_equal_approx(_steer(), pow(0.25, curve)),
+		"wheel",
+		"and as long again at half the limiter leaves %.3f" % _steer()
+	)
+
+	# A key takes the steering, and the wheel a thumb left with it.
+	Input.action_press(&"steer_left")
+	_tick()
+	Input.action_release(&"steer_left")
+	_tick()
+	_expect(is_zero_approx(_steer()), "wheel", "a key takes a held wheel, and leaves none behind")
+
+	_check_spin(home)
+
+
+## A thumb that goes round the wheel turns it (`Q238`): the wheel hangs from
+## where the thumb landed, so the thumb is on its twelve o'clock, and the turn
+## is the thumb's angle round its middle. Nothing tells a spin from a slide.
+func _check_spin(home: Vector2) -> void:
+	var travel: float = _touch.steer_travel_px
+	var curve: float = _touch.steer_curve
+	var radius: float = _touch.wheel_radius_px
+	var middle: Vector2 = home + Vector2(0.0, radius)
+
+	_press(FINGER_A, home)
+	_expect(
+		_router.wheel_centre().is_equal_approx(middle) and _router.steer_touch()[0] == home,
+		"spin",
+		"the wheel's middle is a radius under where the thumb landed"
+	)
+	# 🔴 Along the top the slide is what steers, at every offset: the reading a
+	# slide gave before there was a wheel to go round.
+	var same: bool = true
+	for i: int in 41:
+		var x: float = travel * 1.5 * (i - 20) / 20.0
+		_move(FINGER_A, home + Vector2(x, 0.0))
+		same = same and is_equal_approx(_steer(), _touch.steer_from(x, curve))
+	_expect(same, "spin", "a thumb sliding along the wheel's top steers as a slide alone does")
+	_move(FINGER_A, home)
+
+	# Round the rim, clockwise from the top, a twenty-fourth at a time.
+	for i: int in 6:
+		_move(FINGER_A, _on_circle(middle, radius, i + 1))
+	var quarter: float = _touch.shape(_touch.spin_share(90.0), curve)
+	_expect(
+		is_equal_approx(_steer(), quarter) and quarter > _touch.steer_from(radius, curve),
+		"spin",
+		"a quarter round to three o'clock is %.3f, more than its sideways offset is worth" % quarter
+	)
+	for i: int in 6:
+		_move(FINGER_A, _on_circle(middle, radius, i + 7))
+	_expect(
+		is_equal_approx(_steer(), 1.0),
+		"spin",
+		"at the bottom, with no sideways offset left, the wheel is at its lock"
+	)
+	for i: int in 6:
+		_move(FINGER_A, _on_circle(middle, radius, i + 13))
+	_expect(
+		is_equal_approx(_steer(), 1.0),
+		"spin",
+		"on round to nine o'clock the turn steers, not the offset now on the other side"
+	)
+	# Back the way it came: what was wound is unwound, and no more.
+	for i: int in 18:
+		_move(FINGER_A, _on_circle(middle, radius, 17 - i))
+	_expect(is_zero_approx(_steer()), "spin", "back round to the top is straight ahead")
+	for i: int in 12:
+		_move(FINGER_A, _on_circle(middle, radius, -(i + 1)))
+	_expect(
+		is_equal_approx(_steer(), -1.0), "spin", "and anticlockwise to the bottom is the other lock"
+	)
+	_lift(FINGER_A, home)
+	_roll()
+
+	# Straight down through the hub: no bearing is read off a finger on it.
+	_press(FINGER_A, home)
+	var hub_step: float = _touch.wheel_hub_px * 0.5
+	var down: float = 0.0
+	while down < radius * 2.0:
+		down += hub_step
+		_move(FINGER_A, home + Vector2(0.0, down))
+	_expect(is_zero_approx(_steer()), "spin", "a thumb drawn down through the hub turns nothing")
+	_lift(FINGER_A, home)
+	_roll()
+	# And in one move, both ends clear of the hub and the line between them
+	# through it: read end to end that is half a turn, one way or the other.
+	_press(FINGER_A, home)
+	_move(FINGER_A, home + Vector2(_touch.jitter_deadzone_px * 0.5, radius * 2.0))
+	_expect(is_zero_approx(_steer()), "spin", "a flick across the wheel turns nothing")
+	_lift(FINGER_A, home)
+	_roll()
+
+
+## The point `twentyfourths` of the way round a circle, clockwise on the glass
+## from its top.
+func _on_circle(middle: Vector2, radius: float, twentyfourths: int) -> Vector2:
+	return middle + Vector2.from_angle(-PI * 0.5 + TAU * twentyfourths / 24.0) * radius
+
+
 # -------------------------------------------------------------- deferred ----
 
 
@@ -671,7 +837,10 @@ func _check_mouse() -> void:
 
 	# Motion with the button up is not a finger. Without this the pointer would
 	# steer the car whenever it crossed the lower-left of the window.
+	# The wheel it left turned comes back first (`Q238`): what is asked here is
+	# whether the pointer moves it, which full left lock would show.
 	_mouse_button(home, false)
+	_roll()
 	_mouse_move(home + Vector2(-_touch.steer_travel_px, 0.0))
 	_expect(is_zero_approx(_steer()), "mouse", "a released mouse steers nothing")
 
@@ -738,6 +907,7 @@ func _check_pause() -> void:
 	_move(FINGER_A, steer_home + Vector2(_touch.steer_travel_px, 0.0))
 	_expect(is_equal_approx(_steer(), 1.0), "pause", "a thumb lands afresh after the pause")
 	_lift(FINGER_A, steer_home)
+	_roll()
 
 
 # --------------------------------------------------------------- options ----
@@ -867,6 +1037,13 @@ func _move(index: int, to: Vector2) -> void:
 ## would report the previous tick and pass or fail for the wrong reason.
 func _tick() -> void:
 	_router._physics_process(TICK)
+
+
+## A second at the limiter with no thumb down: a wheel left turned is back at
+## centre (`Q238`), as the car the router is not under here would have had it.
+func _roll() -> void:
+	_router.steer_for(1.0, false, 1.0)
+	_tick()
 
 
 func _steer() -> float:

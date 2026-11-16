@@ -9,6 +9,14 @@ extends Control
 ## fills from there to the finger, clamped at the travel `touch.tres` gives, so
 ## the player sees how hard they are steering and pressing.
 ##
+## 🔴 **The wheel shows where the steering IS, not where the thumb is**
+## (`Q238`): a lifted thumb leaves it turned at its rest, and it comes back as
+## the car rolls. 🔴 **Under a thumb the wheel HANGS from it**: the thumb is on
+## its twelve o'clock and its middle is a radius below (`InputRouter.
+## wheel_centre`), so a thumb that goes on round the rim turns it and one that
+## slides along the top does what it always did. The pedals still stand where
+## their thumb landed.
+##
 ## 🔴 **Steering draws its sideways travel only and the pedals their upright
 ## travel only.** The other axis of each thumb drives nothing, and the driving
 ## thumb's sideways one is kept for the handbrake (`input_router.gd`): a stick
@@ -27,9 +35,8 @@ const TRACK_SHARE: float = 0.35
 const LOOK_TRACKS: String = "tracks"
 const LOOK_WHEEL_PEDALS: String = "wheel_pedals"
 const LOOK_WHEEL_LEVER: String = "wheel_lever"
-## How far the drawn wheel turns at full lock: a quarter turn and a third, so a
-## half-lock reads as a turn and not a twitch.
-const WHEEL_LOCK_DEG: float = 120.0
+## The least turn of the wheel worth a redraw, as a share of its lock.
+const WHEEL_TURN_STEP: float = 1.0 / 256.0
 
 var style: HudStyle = null
 ## The current car's wheel, drawn under the steering thumb; null draws a bare rim.
@@ -82,7 +89,9 @@ func _process(_delta: float) -> void:
 	var steer: PackedVector2Array = _router.steer_touch()
 	var drive: PackedVector2Array = _router.drive_touch()
 	var values := Vector2(
-		_router.steer if steer.size() == 2 else 0.0,
+		# Snapped to half a degree of the drawn wheel: a standing car's jitter
+		# returns it by less than a pixel a frame, and each would be a mesh.
+		snappedf(_router.wheel_turn(), WHEEL_TURN_STEP),
 		_router.accelerate - _router.brake_reverse if drive.size() == 2 else 0.0
 	)
 	if steer != _steer_drawn or drive != _drive_drawn or values != _values_drawn:
@@ -105,7 +114,9 @@ func _draw() -> void:
 	var drive_at: Vector2 = to_local * drive[0] if drive.size() == 2 else _centre(_drive_home)
 	match style.touch_look:
 		LOOK_WHEEL_PEDALS, LOOK_WHEEL_LEVER:
-			_wheel(points, colours, steer_at, travel.x, _values_drawn.x, steer.size() == 2)
+			if steer.size() == 2:
+				steer_at = to_local * _router.wheel_centre()
+			_wheel(points, colours, steer_at, _values_drawn.x, steer.size() == 2)
 			var push: float = _values_drawn.y
 			if style.touch_look == LOOK_WHEEL_PEDALS:
 				_pedals(points, colours, drive_at, travel.y, push, drive.size() == 2)
@@ -158,17 +169,12 @@ func _stick(
 ## A steering wheel round the thumb: rim, three spokes and the stripe at the
 ## top that shows how far it has turned, and a small arrow either side of it.
 func _wheel(
-	points: PackedVector2Array,
-	colours: PackedColorArray,
-	at: Vector2,
-	travel: float,
-	turn: float,
-	held: bool
+	points: PackedVector2Array, colours: PackedColorArray, at: Vector2, turn: float, held: bool
 ) -> void:
 	var ink: Color = style.touch_live if held else style.touch_hint
 	var width: float = style.touch_px
-	var radius: float = travel * 0.55
-	var spin: float = deg_to_rad(WHEEL_LOCK_DEG) * turn
+	var radius: float = _router.wheel_radius_px()
+	var spin: float = deg_to_rad(_router.wheel_lock_deg()) * turn
 	_ring(points, colours, at, radius, width, ink)
 	# Kept under a thumb too (`Q228`): the arrows are what teach the gesture.
 	for side: float in [-1.0, 1.0]:

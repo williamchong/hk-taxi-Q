@@ -163,6 +163,17 @@ var _touch: TouchProfile = null
 ## The steering thumb's curve, the player's pick of `_touch`'s three (`Q223`):
 ## read when the zones are built and on `refresh_options`, never per tick.
 var _steer_curve: float = 1.0
+## The touch wheel's position, -1.0 to 1.0, before its curve (`Q238`). Carried
+## between touches: a lifted thumb leaves it where it was, `steer_for` returns
+## it to centre as the car rolls, and a thumb landing again takes it up from
+## there. Zero whenever anything but a thumb steers.
+var _wheel: float = 0.0
+## Where the wheel was as the sliding thumb landed: its slide adds to this.
+var _wheel_at_landing: float = 0.0
+## How far round the wheel's middle the steering thumb has gone since it
+## landed on its twelve o'clock, in degrees, clockwise positive (`_go_round`).
+## Not wrapped: a thumb that has been right round has turned it 360.
+var _bearing_deg: float = 0.0
 ## The layer the zones stand on, kept so `rebuild_zones` can retire it.
 var _zones: CanvasLayer = null
 ## The keyboard's input assist (`Q210`), or null when it did not load — then a
@@ -200,6 +211,7 @@ func _notification(what: int) -> void:
 	_mouse_is_down = false
 	# And a held key ramps afresh after it, never from where the pause found it.
 	_key_steer = 0.0
+	_wheel = 0.0
 
 
 ## Resolve the two touch zones onto the real screen, as Controls.
@@ -274,6 +286,7 @@ func rebuild_zones() -> void:
 	_zones = null
 	_steer_thumb.zone = null
 	_drive_thumb.zone = null
+	_wheel = 0.0
 	_build_zones()
 
 
@@ -302,6 +315,37 @@ static func _thumb_points(thumb: Thumb) -> PackedVector2Array:
 	if not thumb.is_down():
 		return PackedVector2Array()
 	return PackedVector2Array([thumb.origin, thumb.current])
+
+
+## How far round the drawn wheel is, -1.0 to 1.0 of its lock: the steering the
+## touch wheel gives, under a thumb or left by one. It stays where a lifted
+## thumb left it and comes back as the car rolls (`Q238`); 0 while anything but
+## a thumb steers.
+func wheel_turn() -> float:
+	if _touch == null:
+		return 0.0
+	return _touch.shape(_wheel, _steer_curve)
+
+
+## The middle of the wheel the steering thumb is on, in canvas units, for the
+## sticks to draw it at: a radius below where the thumb landed, so the thumb is
+## on its twelve o'clock (`Q238`).
+## Means nothing while no thumb is down: the sticks ask only under one.
+func wheel_centre() -> Vector2:
+	if _touch == null:
+		return _steer_thumb.origin
+	return _steer_thumb.origin + Vector2(0.0, _touch.wheel_radius_px)
+
+
+## The radius the wheel is drawn at, which is the one a thumb is read on.
+func wheel_radius_px() -> float:
+	return _touch.wheel_radius_px if _touch != null else 0.0
+
+
+## The degrees the drawn wheel turns at full lock: the angle a thumb goes round
+## it for one, so the rim keeps up with the finger.
+func wheel_lock_deg() -> float:
+	return _touch.spin_lock_deg if _touch != null else 0.0
 
 
 ## How far each thumb may travel, for the sticks to draw: steer, then drive.
@@ -346,6 +390,7 @@ func _note_steer_method(event: InputEvent) -> void:
 		return
 	steer_from_keys = not event is InputEventJoypadMotion
 	steer_from_thumb = false
+	_wheel = 0.0
 
 
 ## The steering the car drives on (`Q210`): a stick's or a thumb's as it reads,
@@ -362,7 +407,11 @@ func _note_steer_method(event: InputEvent) -> void:
 ## as it is at rest, and toward the limiter it may add lock no faster than the
 ## touch table's seconds to full, on the square of `speed_share` as the key's
 ## ramp is. Easing off and the quick ramp pass through.
+##
+## And a wheel a thumb let go of comes back here (`_return_wheel`, `Q238`): this
+## is the one place the router is told the car's speed.
 func steer_for(speed_share: float, quick: bool, delta: float) -> float:
+	_return_wheel(speed_share, delta)
 	var slewed: bool = steer_from_thumb and not steer_from_keys and _touch != null and not quick
 	if not slewed and (not steer_from_keys or _keys == null):
 		_key_steer = steer
@@ -391,6 +440,52 @@ func steer_for(speed_share: float, quick: bool, delta: float) -> float:
 	progress = move_toward(progress, _progress_of(steer), delta / seconds)
 	_key_steer = signf(progress) * pow(absf(progress), _keys.curve)
 	return _key_steer
+
+
+## Bring a wheel no thumb is holding back toward centre (`Q238`): in proportion
+## to the car's speed, so it holds at a standstill and is all but at once at
+## pace, where lifting the thumb is how a turn or a catch is ended. Linear in
+## the wheel's position, so the steering itself falls away on the curve.
+func _return_wheel(speed_share: float, delta: float) -> void:
+	if _touch == null or _steer_thumb.is_down() or is_zero_approx(_wheel):
+		return
+	if _touch.steer_return_at_top_s <= 0.0:
+		_wheel = 0.0
+	else:
+		_wheel = move_toward(_wheel, 0.0, delta * speed_share / _touch.steer_return_at_top_s)
+	steer = wheel_turn()
+
+
+## The steering thumb moved from `from` to `to`: add the angle that is round
+## the wheel's middle (`Q238`). The thumb landed on the wheel's twelve o'clock,
+## so sideways along the top is hardly an angle at all and on down the side is
+## a large one — which is the whole of how a spin is told from a slide: it is
+## not told, it is read, and `_thumb_wheel` takes the larger of the two.
+func _go_round(from: Vector2, to: Vector2) -> void:
+	var centre: Vector2 = wheel_centre()
+	# The whole move, not its two ends: a flick across the wheel between two
+	# events reads as half a turn, either way round. ⚠️ A move the hub
+	# swallows is not made up afterwards — a thumb drawn through it has the
+	# wheel where it was, and goes round from there.
+	var nearest: Vector2 = Geometry2D.get_closest_point_to_segment(centre, from, to)
+	if nearest.distance_to(centre) < _touch.wheel_hub_px:
+		return
+	var was: Vector2 = from - centre
+	var now: Vector2 = to - centre
+	# Screen Y runs down, so a positive angle here is clockwise on the glass.
+	_bearing_deg += rad_to_deg(was.angle_to(now))
+
+
+## The wheel the thumb that is down has: where it was at the landing, and the
+## larger of the thumb's slide and its turn round the wheel. Along the top the
+## slide is always the larger (`TouchProfile.spin_share`); down the side the
+## turn is. Where the two disagree on the WAY the thumb has been round past the
+## bottom, and its sideways offset has come back across: the turn.
+func _thumb_wheel() -> float:
+	var slid: float = _touch.steer_share(_steer_thumb.offset().x)
+	var spun: float = _touch.spin_share(_bearing_deg)
+	var turn: float = spun if slid * spun < 0.0 or absf(spun) > absf(slid) else slid
+	return clampf(_wheel_at_landing + turn, -1.0, 1.0)
 
 
 ## The slow ramp's progress that gives `input`, the inverse of its `curve`.
@@ -446,12 +541,16 @@ func _finger(index: int, at: Vector2, pressed: bool) -> void:
 		_drive_thumb.release(index)
 		return
 	if _steer_thumb.claim(index, at):
+		_wheel_at_landing = _wheel
+		_bearing_deg = 0.0
 		return
 	_drive_thumb.claim(index, at)
 
 
 func _drag(index: int, at: Vector2) -> void:
+	var was: Vector2 = _steer_thumb.current
 	if _steer_thumb.drag(index, at):
+		_go_round(was, at)
 		return
 	_drive_thumb.drag(index, at)
 
@@ -475,9 +574,20 @@ func _physics_process(_delta: float) -> void:
 	# beneath it — so the first fifth of every thumb's travel would vanish, on a
 	# control whose whole design is that small travel is available (`Q97`).
 	if _steer_thumb.is_down():
-		steer = _touch.steer_from(_steer_thumb.offset().x, _steer_curve)
+		# From where the wheel was as the thumb landed (`Q238`): centre,
+		# unless it landed on a wheel a standing car was still holding.
+		_wheel = _thumb_wheel()
+		steer = wheel_turn()
 		steer_from_keys = false
 		steer_from_thumb = true
+	elif not is_zero_approx(_wheel):
+		# The thumb lifted and the wheel is where it left it; `steer_for`
+		# brings it back as the car rolls. A key or a stick takes the steering
+		# and the wheel with it.
+		if is_zero_approx(steer) and steer_from_thumb and not steer_from_keys:
+			steer = wheel_turn()
+		else:
+			_wheel = 0.0
 	if _drive_thumb.is_down():
 		# One bipolar axis split into the two the vehicle reads (`Q83`), and
 		# centre is coast — which is the lift-off `P0-5b/c/d` requires in order
