@@ -202,6 +202,7 @@ func _run() -> void:
 	_expect(moved[0] == before_rest + 1, "day", "a resting rig asked to rest writes nothing")
 
 	await _check_the_clock(rig)
+	_check_the_showroom(rig)
 	await _check_the_shift(rig)
 	await _check_the_pause(rig)
 	rig.time_of_day = 1.0
@@ -398,6 +399,39 @@ func _check_the_clock(rig: LightingRig) -> void:
 			)
 		)
 		flipped.free()
+	SettingsScript.use_file(SettingsScript.PATH)
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(SCRATCH))
+
+
+## The boot menu's hour (`DriveLevel.showroom_time_of_day`): the level lights
+## the parked rig at it, the clock's restart at PLAY puts the run's own hour
+## back, and a negative one or a pinned rig is left alone.
+func _check_the_showroom(rig: LightingRig) -> void:
+	SettingsScript.use_file(SCRATCH)
+	SettingsScript.set_day_cycle(false)
+	var clock := DayClock.new()
+	clock.rig = rig
+	# Never in the tree: only the level's light is asked for, not its boot.
+	var level := DriveLevel.new()
+	level.clock = clock
+	rig.rest()
+	level.light_showroom()
+	_expect(rig.resting, "showroom", "a level with no showroom hour leaves the rig at rest")
+	level.showroom_time_of_day = 0.4
+	rig.pinned = true
+	level.light_showroom()
+	_expect(rig.resting, "showroom", "a rig pinned for a frame is not moved")
+	rig.pinned = false
+	level.light_showroom()
+	_expect(
+		is_equal_approx(rig.time_of_day, 0.4) and not rig.resting,
+		"showroom",
+		"the parked level is lit at its showroom hour"
+	)
+	clock.restart()
+	_expect(rig.resting, "showroom", "PLAY with the day held puts the authored day back")
+	level.free()
+	clock.free()
 	SettingsScript.use_file(SettingsScript.PATH)
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(SCRATCH))
 

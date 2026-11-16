@@ -81,6 +81,7 @@ func _ready() -> void:
 		get_tree().create_timer(PAUSE_PAGE_AFTER_S, false, true).timeout.connect(pause)
 		return
 	level.park()
+	level.light_showroom()
 	if is_instance_valid(hud):
 		hud.visible = false
 	_follow_menu(menu)

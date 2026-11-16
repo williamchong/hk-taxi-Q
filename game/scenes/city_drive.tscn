@@ -30,6 +30,7 @@ regions = NodePath("Regions")
 camera_rig = NodePath("CameraRig")
 attract = NodePath("Attract")
 showroom_fare_id = "f_001"
+showroom_time_of_day = 0.41
 guide = NodePath("FareGuide")
 fares = NodePath("Fares")
 clock = NodePath("DayClock")

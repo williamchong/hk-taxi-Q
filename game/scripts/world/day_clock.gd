@@ -105,6 +105,13 @@ func restart() -> void:
 	set_physics_process(_moves_rig() or mode == Mode.SHIFT)
 
 
+## Stand the rig at `at` with no game time passing: the boot menu's hour
+## (`DriveLevel.light_showroom`). The next `restart` puts the run's own back.
+func show_hour(at: float) -> void:
+	if _moves_rig():
+		rig.time_of_day = at
+
+
 ## Whether a shift is running and has not yet closed.
 func on_shift() -> bool:
 	return _shift_s > 0.0 and not _closed

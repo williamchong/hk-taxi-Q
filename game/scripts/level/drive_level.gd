@@ -113,6 +113,12 @@ const AUTHORED_DRIFT_M: float = 1.0
 ## car back to the line the drive begins on.
 @export var showroom_fare_id: String = ""
 
+## The hour the boot menu is lit at, on the rig's `time_of_day`; negative
+## leaves the hour the clock opens on. The showroom is the game's first frame
+## and stands in HKCEC's shadow all morning (`city_drive.md`). The run's own
+## hour comes back at `play`, through the clock's `restart`.
+@export_range(-1.0, 1.0, 0.01) var showroom_time_of_day: float = -1.0
+
 ## The world-space fare guide (`fare_guide.gd`), hidden while the menu is up:
 ## it draws the pending customers' rings and the arrow, which under the menu
 ## are a game telling you where to go before you have pressed start. Assign
@@ -215,6 +221,14 @@ func park() -> void:
 		camera_rig.set_physics_process(false)
 	if attract != null:
 		attract.begin()
+
+
+## Light the parked level at `showroom_time_of_day` (`Main`'s call, at boot
+## only: a menu over a finished run keeps the hour the run reached). A rig
+## pinned for a frame, or with no cycle to move through, stays as it is.
+func light_showroom() -> void:
+	if showroom_time_of_day >= 0.0 and clock != null:
+		clock.show_hour(showroom_time_of_day)
 
 
 ## Put the parked car's camera where the menu's page wants it (`Main`'s call),

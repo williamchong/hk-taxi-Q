@@ -125,7 +125,16 @@ which `DriveLevel.park` and `resume` switch. Its numbers are
 `tuning/menu.tres`. The harness's `showroom_fare_id = "f_001"` is where the
 car stands for it: the Harbour Road stand, HKCEC's old wing behind it, not the
 start line under the Phase II podium (`menu.md`); `resume` puts the car back
-on the line. `guide` is the `FareGuide` below, hidden under the menu and shown
+on the line. `showroom_time_of_day = 0.41` is the hour the boot menu is lit at
+(the user's ask, 2026-11-16: the menu "on early morning where everything is
+grey and washed out, not attractive for main menu first sight"): 12:44 on the
+shift's clock. Picked from menu frames at eleven hours (`build/driver/menu_hour/`,
+gitignored): the stand is north of HKCEC and in its shadow at 0, 0.174 (the
+authored day), 0.27, 0.31, 0.57, 0.71 and 0.79, and in the sun only at 0.36,
+0.41 and 0.46; 0.41 is past noon's flat overhead light, with the trees' and the
+car's shadows thrown short across the forecourt. Boot only — a menu over a
+finished run keeps the hour the run reached — and `play` puts the run's own
+hour back through `DayClock.restart`. `guide` is the `FareGuide` below, hidden under the menu and shown
 again by its own next sample.
 
 ## `[node name="Camera3D" type="Camera3D" parent="CameraRig"]`
