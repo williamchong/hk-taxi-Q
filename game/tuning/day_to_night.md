@@ -72,20 +72,21 @@ the floor handset is not measured, and this is still the lever there.
 | 0.36 (12:00) | `noon.tres` | 80° up, due south, `(1, 1, 0.98)`, 2.20 | white | 0 |
 | 0.57 (15:00) | `clean_daylight.tres` | 47.2° up in the WSW, the day's colour, 0.90 | white | 0 |
 | 0.71 (17:00) | `clean_daylight.tres` | 22.3° up in the WSW, `(1, 0.9, 0.76)`, 0.88 | `(1, 0.95, 0.88)` | 0 |
-| 0.79 (18:00) | `dusk.tres` | 8° up in the WSW, `(1, 0.62, 0.36)`, 0.80 | `(1, 0.74, 0.58)` | 0.25 |
+| 0.79 (18:00) | `dusk.tres` | 8° up in the WSW, `(1, 0.82, 0.34)`, 0.80 | `(1, 0.9, 0.54)` | 0.25 |
 | 0.86 (19:00) | `twilight.tres` | on the horizon, 0.00 | `(0.3, 0.3, 0.45)` | 0.80 |
 | 0.93 (20:00) | `night.tres` | the moon, 38° up, `(0.62, 0.72, 1)`, 0.30 | `(0.1, 0.11, 0.18)` | 1.00 |
 | 1.464 (03:30) | `night.tres` | the moon, 10° up in the west, 0.30 | night's | 1.00 |
 | 1.536 (04:30) | `night.tres` | the moon on the western horizon, 0.00 | night's | 1.00 |
 | 1.607 (05:30) | `twilight.tres` | the sun on the SSE horizon, 0.00 | twilight's | 0.80 |
-| 1.661 (06:15) | `dawn.tres` | 7° up in the SSE, `(1, 0.72, 0.6)`, 0.60 | `(0.95, 0.78, 0.74)` | 0.25 |
+| 1.661 (06:15) | `dawn.tres` | 7° up in the SSE, `(0.8, 0.86, 1)`, 0.60 | `(0.7, 0.82, 1)` | 0.25 |
 
 - **The rows past 1.0 are the free drive's night and dawn** (`Q225`), and the last leg blends back
   to the 07:00 row across `loop_at`. The moon sets in the west with its energy fading to 0.00 at
   04:30; first light is 0.00 too, so the key light crosses from the western horizon to where the
   sun rises unseen — the 19:00 trick mirrored. The 06:15 sun is on the morning's own arc, 9.7°
   before the 07:00 one, so the wrap leg runs at the daylight speed. Dawn has its own look,
-  `dawn.tres` — rose and misty where dusk is orange — so the sunrise is not the sunset backwards;
+  `dawn.tres` — blue and misty where dusk is yellow (`Q235`) — so the hour reads off the colour and
+  the sunrise is not the sunset backwards;
   first light still borrows `twilight.tres`. 🔴 `verify_day_cycle.gd` holds that the widest swing of
   the key light between two keyframes is on a leg dark at both ends, and that the wrap leg runs at
   the daylight speed.

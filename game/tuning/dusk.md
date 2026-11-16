@@ -6,7 +6,12 @@ file as a whole. Why it lives here and not in the file: `Q119`.
 ## Overview
 
 One of the looks `day_to_night.tres` blends the rig through (`Q160`); `day_to_night.md` has the
-table and the order. The low warm sun: an orange horizon under a blue-violet zenith, the fog thick with it (`fog_sun_scatter` 0.25).
+table and the order. The low warm sun: a yellow horizon under a grey-blue zenith, the fog thick with it (`fog_sun_scatter` 0.25).
+
+**Yellow since `Q235`** (the user's ask, 2026-11-17), where it was orange: the horizon, fog, ambient,
+key light and `sky_light` moved together so the evening is told from the blue dawn by colour, the
+middle of three strengths rendered beside the orange (`build/driver/dawn_dusk/options.png`,
+gitignored). ⚠️ The model's pick of the three; the user has not chosen.
 
 A copy of `clean_daylight.tres` with only the blended values moved. ⚠️ **Only what
 `LightingRig.BLENDED` and `BLENDED_SKY` name is ever read from this file** — the ambient, the
