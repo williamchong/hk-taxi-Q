@@ -27,6 +27,7 @@
 extends SceneTree
 
 const GeneratedFares = preload("res://scripts/city/generated_fares.gd")
+const GeneratedRegions = preload("res://scripts/city/generated_regions.gd")
 
 ## The profile the drive scene runs, for the wheel-ray length the drop height is
 ## built from. Loaded rather than assumed so a retuned car moves this check with
@@ -45,9 +46,14 @@ const MIN_TRANSPOSE_ANGLE_DEG: float = 10.0
 ## than any error the bug produces and looser than float32 rounding.
 const MAX_FACING_ERROR_DEG: float = 0.1
 
-## The car must start off the centreline — that is where opposed carriageway
-## ribbons overlap and a suspension ray hunts between two coplanar triangles.
-const MIN_LANE_OFFSET_M: float = 0.5
+## The car must start off the centreline; `RoadSpawn` is the home of why, since
+## a start drawn at play time is held to the same bar (`Q227`).
+const MIN_LANE_OFFSET_M: float = RoadSpawn.MIN_LANE_OFFSET_M
+
+## The fewest stands a run after the first must be able to start short of. Under
+## it the draw is a choice of one, or none, and every shift starts where the
+## last did with nothing on screen to say why.
+const MIN_DRAWN_STARTS: int = 2
 
 ## `city.json`'s "no cross-section was judged here", spelled short enough to fit
 ## the case table in `_check_the_guard_can_fire`.
@@ -216,9 +222,9 @@ func _check(graph: RoadGraph, fares: Dictionary, car: CarSpec) -> PackedStringAr
 	# The first fare starts when the player pulls forward into the stand: ahead
 	# of the car, and out of the hail's reach where it is set down.
 	var hail_m: float = (load(FARES_PATH) as FareProfile).hail_radius_m
-	var to_stand: Vector3 = pose.stand - pose.point
-	var short_m: float = RoadGraph.plan_distance(pose.lane_centre, pose.stand)
-	if to_stand.dot(pose.forward) <= 0.0 or short_m <= hail_m:
+	if not pose.short_of_stand(hail_m):
+		var to_stand: Vector3 = pose.stand - pose.point
+		var short_m: float = RoadGraph.plan_distance(pose.lane_centre, pose.stand)
 		(
 			problems
 			. append(
@@ -269,6 +275,9 @@ func _check(graph: RoadGraph, fares: Dictionary, car: CarSpec) -> PackedStringAr
 	# --- P2-3: the orientation, against the edge vector --------------------
 	problems.append_array(_check_facing(pose))
 
+	# --- a later run's start is drawn, and held to the same bar (Q227) -----
+	problems.append_array(_check_the_draw(graph, fares, ride, hail_m))
+
 	# --- the car starts in its lane, directly above the target -------------
 	var offset: float = RoadGraph.plan_distance(pose.transform.origin, pose.lane_centre)
 	if offset > 0.001:
@@ -317,6 +326,50 @@ func _check(graph: RoadGraph, fares: Dictionary, car: CarSpec) -> PackedStringAr
 				% [pose.fare_id, pose.edge_id, pose.road_name_en, to_lane.length(), lift]
 			)
 		)
+	return problems
+
+
+## Every stand a run after the first may be drawn short of (`Q227`), judged by
+## the bar `DriveLevel` draws with — `RoadSpawn.starts_a_run` — over every
+## resident region's pickups. Counted on the document's `pickup` nodes, a
+## superset of the fare loop's pool (the cross-harbour stands are in it), so
+## this holds the bar and the floor under the draw, not the pool's rules.
+##
+## The bar is proven able to refuse on the shipped stand itself: set down ON it,
+## with no setback, it is inside the hail's reach and must not pass.
+func _check_the_draw(
+	graph: RoadGraph, fares: Dictionary, ride: float, hail_m: float
+) -> PackedStringArray:
+	var problems: PackedStringArray = []
+	var on_the_stand: RoadSpawn.Pose = RoadSpawn.at_fare_node(
+		graph, fares, RoadSpawn.DEFAULT_FARE_ID, ride, "", 0.0
+	)
+	if RoadSpawn.starts_a_run(graph, on_the_stand, hail_m):
+		problems.append("a start ON its stand passed the bar a drawn start is held to")
+
+	var drawn: int = 0
+	var refused: int = 0
+	for region: String in GeneratedRegions.resident():
+		var document: Dictionary = GeneratedFares.load_fares(GeneratedFares.path(region))
+		for node: Dictionary in document.get("nodes", []) as Array:
+			if not bool(node.get("pickup", false)):
+				continue
+			var pose: RoadSpawn.Pose = RoadSpawn.at_node(
+				graph, node, str(node.get("id", "")), ride, region, RoadSpawn.DEFAULT_SETBACK_M
+			)
+			if RoadSpawn.starts_a_run(graph, pose, hail_m):
+				drawn += 1
+			else:
+				refused += 1
+	if drawn < MIN_DRAWN_STARTS:
+		problems.append(
+			(
+				"only %d of %d pickups can start a run, under the %d a drawn start needs"
+				% [drawn, drawn + refused, MIN_DRAWN_STARTS]
+			)
+		)
+	else:
+		print("  draw:  %d pickups can start a run, %d refused" % [drawn, refused])
 	return problems
 
 

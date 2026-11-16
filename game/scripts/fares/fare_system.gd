@@ -513,6 +513,17 @@ func pool() -> Array[Fare.Stop]:
 	return _pool + _pool_street
 
 
+## The published pickups alone — stands and PUDO points, where a taxi would be
+## waiting: what a run's start is drawn from (`Q227`). A copy, as `pool` is.
+func published_pickups() -> Array[Fare.Stop]:
+	return _pool.duplicate()
+
+
+## How near a stopped car a waiting customer boards from, in metres.
+func hail_radius_m() -> float:
+	return _profile.hail_radius_m if _profile != null else 0.0
+
+
 ## Every stop a fare may end at, published then street.
 func dropoffs() -> Array[Fare.Stop]:
 	return _dropoffs + _dropoffs_street

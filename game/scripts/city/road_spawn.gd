@@ -67,6 +67,11 @@ const DROP_CLEARANCE_M: float = 0.30
 ## setback to be taken: within about 45°.
 const SETBACK_MIN_DOT: float = 0.7
 
+## How far the start must stand from every centreline, its own edge's included:
+## that is where opposed carriageway ribbons overlap and a suspension ray hunts
+## between two coplanar triangles.
+const MIN_LANE_OFFSET_M: float = 0.5
+
 
 ## A resolved start line, or an unresolved one carrying why.
 class Pose:
@@ -138,6 +143,15 @@ class Pose:
 			return false
 		return clear_width_m < lane_width_m
 
+	## True where the car starts behind its stand and out of `reach_m` of it —
+	## the hail's — so the fare begins when the player pulls forward
+	## (`DEFAULT_SETBACK_M`). False where the setback was not taken.
+	func short_of_stand(reach_m: float) -> bool:
+		return (
+			(stand - point).dot(forward) > 0.0
+			and RoadGraph.plan_distance(lane_centre, stand) > reach_m
+		)
+
 	## True when the query and the published projection name the same edge.
 	##
 	## Not an error on its own — a fare node on a junction can legitimately be
@@ -208,6 +222,24 @@ static func at_fare_node(
 	if node.is_empty():
 		pose.problem = "no fare node '%s' in %s" % [fare_id, GeneratedFares.path(region)]
 		return pose
+	return at_node(graph, node, fare_id, ride_height_m, region, setback_m)
+
+
+## The start line at a fare node already in hand — `at_fare_node`'s work once
+## the document has given up the node, for a caller that holds many (`Q227`).
+static func at_node(
+	graph: RoadGraph,
+	node: Dictionary,
+	fare_id: String,
+	ride_height_m: float,
+	region: String = "",
+	setback_m: float = 0.0
+) -> Pose:
+	var pose := Pose.new()
+	pose.fare_id = fare_id
+	if graph == null or graph.is_empty():
+		pose.problem = "the road graph is empty"
+		return pose
 	pose.published_edge_id = graph.edge_id_in(region, int(node.get("nearest_edge", -1)))
 
 	var at: Variant = GeneratedFares.position_of(node)
@@ -241,3 +273,17 @@ static func at_fare_node(
 		hit.lane_centre + Vector3.UP * (maxf(ride_height_m, 0.0) + DROP_CLEARANCE_M)
 	)
 	return pose
+
+
+## Whether a run may start on `pose` unseen (`Q227`): a start drawn at play
+## time has no `verify_spawn` run behind it, so everything that tool refuses on
+## the shipped line is refused here — unresolved, on a road no car is allowed
+## on, standing where a car does not fit (`Q52`), on the stand instead of short
+## of it, or on a seam. `reach_m` is the hail's.
+static func starts_a_run(graph: RoadGraph, pose: Pose, reach_m: float) -> bool:
+	if not pose.resolved() or pose.blocked() or not graph.is_drivable(pose.edge_id):
+		return false
+	if not pose.short_of_stand(reach_m):
+		return false
+	var nearest: RoadGraph.Hit = graph.nearest_edge(pose.lane_centre)
+	return nearest.hit() and nearest.distance >= MIN_LANE_OFFSET_M

@@ -130,6 +130,13 @@ const AUTHORED_DRIFT_M: float = 1.0
 @export var clock: DayClock
 
 var _spawn: Transform3D
+## The stand the run starts short of, where its first customer waits: the
+## scene's until a run has been played, a drawn one after (`Q227`).
+var _start_region: String = ""
+var _start_fare_id: String = ""
+## Whether a run has started through `play`. The first starts on the scene's line.
+var _played: bool = false
+var _start_rng := RandomNumberGenerator.new()
 var _floor_m: float = 0.0
 var _falls: int = 0
 var _drownings: int = 0
@@ -154,6 +161,9 @@ func _boot() -> void:
 		set_physics_process(false)
 		return
 
+	_start_region = spawn_region if not spawn_region.is_empty() else GeneratedRegions.selected()
+	_start_fare_id = spawn_fare_id
+	_start_rng.randomize()
 	_spawn = _place_on_start_line()
 	_floor_m = _spawn.origin.y - fall_margin_m
 	_load_sea()
@@ -173,17 +183,24 @@ func _boot() -> void:
 ## Start a run in `mode` from its first second (`Q162`), from the menu: the
 ## clock back to the opening hour, the fare loop emptied, and the car out of
 ## the showroom onto the start line. The first run and every one after it go
-## through here, so AGAIN is the same start as START.
+## through here, so AGAIN is the same start as START — but not the same place
+## (`Q227`, the user's ask): the first run starts on the scene's line, and
+## every run after it short of a stand drawn afresh.
 func play(mode: DayClock.Mode) -> void:
 	if clock != null:
 		clock.mode = mode
 		clock.restart()
 	if is_instance_valid(fares) and fares.usable():
 		fares.reset()
-		_seat_start_customer()
+		# A draw that finds no stand leaves the line and its stand as they were.
+		if not _played or not _draw_start_line():
+			_seat_start_customer()
+	_played = true
 	if showroom_fare_id.is_empty():
 		# `resume` moves the car only out of a showroom; a run after a shift
 		# starts on the line all the same.
+		if regions != null:
+			regions.hold_ground_at(_spawn.origin)
 		vehicle.place_at(_spawn)
 		_snap_camera()
 	resume()
@@ -363,24 +380,54 @@ func _place_on_start_line() -> Transform3D:
 ## A customer waits at the stand the car starts behind (`Q203`): the game
 ## starts when the player pulls forward into a fare, as `Q142` set it.
 func _seat_start_customer() -> void:
-	var region: String = (
-		spawn_region if not spawn_region.is_empty() else GeneratedRegions.selected()
-	)
-	if not fares.wait_at(region, spawn_fare_id):
+	if not fares.wait_at(_start_region, _start_fare_id):
 		push_warning(
 			(
 				"No customer waits at the start stand %s/%s: not a pickup, or it reaches nowhere."
-				% [region, spawn_fare_id]
+				% [_start_region, _start_fare_id]
 			)
 		)
 
 
-func _report_spawn(pose: RoadSpawn.Pose, authored: Transform3D) -> void:
+## Move the start line short of another stand, drawn uniformly from the fare
+## loop's published pickups in every resident region, and seat its customer
+## (`Q227`). A stand is passed over where `RoadSpawn.starts_a_run` refuses the
+## line or nobody can be seated there, and the one the last run started at is
+## never drawn twice running. False, with the line where it was and nobody
+## seated, where no stand will do. The car is not moved: `resume` does that.
+##
+## The fall floor stays the boot line's. It is a height nothing drivable is
+## under, and one measured from a start on a flyover would rise into the tunnel.
+func _draw_start_line() -> bool:
+	var graph: RoadGraph = RoadGraph.shared()
+	var ride: float = vehicle.car.ray_length_m()
+	var reach: float = fares.hail_radius_m()
+	var stands: Array[Fare.Stop] = fares.published_pickups()
+	while not stands.is_empty():
+		var stand: Fare.Stop = stands.pop_at(_start_rng.randi_range(0, stands.size() - 1))
+		if stand.region == _start_region and stand.id == _start_fare_id:
+			continue
+		var pose: RoadSpawn.Pose = RoadSpawn.at_node(
+			graph, stand.node, stand.id, ride, stand.region, spawn_setback_m
+		)
+		if not RoadSpawn.starts_a_run(graph, pose, reach):
+			continue
+		if not fares.wait_at(stand.region, stand.id):
+			continue
+		_start_region = stand.region
+		_start_fare_id = stand.id
+		_spawn = pose.transform
+		_say_start_line(stand.key(), pose)
+		return true
+	return false
+
+
+func _say_start_line(stand: String, pose: RoadSpawn.Pose) -> void:
 	print(
 		(
 			"start line: %s on edge %d (%s), facing %.1f° — %s"
 			% [
-				pose.fare_id,
+				stand,
 				pose.edge_id,
 				pose.road_name_en,
 				CityManifest.bearing_deg(pose.forward),
@@ -388,6 +435,10 @@ func _report_spawn(pose: RoadSpawn.Pose, authored: Transform3D) -> void:
 			]
 		)
 	)
+
+
+func _report_spawn(pose: RoadSpawn.Pose, authored: Transform3D) -> void:
+	_say_start_line(pose.fare_id, pose)
 	# Both halves of the clearance answer, in one place: the car is placed either
 	# way — `RoadSpawn` says why it does not move it — and this is where a player
 	# would otherwise find out by driving into it. After the line above rather

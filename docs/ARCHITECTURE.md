@@ -1717,6 +1717,8 @@ resizes nothing, so `HudLayout.inset_for_safe_area` gives both sides the larger 
 - The spawn is resolved at runtime: `drive_level.gd` asks `RoadSpawn.at_fare_node` for
   `spawn_fare_id`, default `f_004` — "Expo Drive eastbound underneath HKCEC Phase II", a real taxi
   stand.
+- That is a session's first run. Each run after it starts short of another published pickup,
+  drawn in `DriveLevel._draw_start_line` and held to `RoadSpawn.starts_a_run` (`Q227`).
 - The heading is not supplied. A zero heading makes `nearest_edge` take the edge's vertex order,
   which `P1-3` made the legal direction; passing the car's rotation would let the car decide which
   way a street runs.
