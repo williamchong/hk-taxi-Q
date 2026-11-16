@@ -112,5 +112,5 @@ vechicles such that bus side is not one flat surface"). No texture: the shader t
   line would cover it.
 
 Under a pixel and a half a groove or a seat is held that wide and its slope cut to match. Every
-slope at 0 is the vehicle before `Q232`. ⚠️ **Not yet the user's pick**: the sheet is off, joints
-alone, 0.04 and 0.08.
+slope at 0 is the vehicle before `Q232`. `relief_pillow` 0.04 is the user's pick (2026-11-17) of
+off, joints alone, 0.04 and 0.08; ⚠️ the groove and the seat are the model's, not yet his.

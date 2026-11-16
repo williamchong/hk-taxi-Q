@@ -14216,8 +14216,8 @@ needed", "also add proper normal map for details like windows and frame instead 
 and of the tram, with a photograph of 147: "the windows and doors should have normal for tram, but
 not random relief on body".
 
-**Status.** ✅ Built 2026-11-17 (`P3-87`). The dials are the model's, **not yet the user's pick**:
-the option sheet is `build/driver/relief/options_bus.png`.
+**Status.** ✅ Built 2026-11-17 (`P3-87`). The bow is the user's pick the same day, 0.04 of the
+option sheet (`build/driver/relief/options_bus.png`); the groove and the seat are the model's.
 
 - **No texture and no new vertex channel.** `ART_DESIGN.md` refuses the texture-map workflow, and
   both UV sets are spent (`UV` the payload, `UV2` the ink). `vehicle_body.gdshader` tilts `NORMAL`
