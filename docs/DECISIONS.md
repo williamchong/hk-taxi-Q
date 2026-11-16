@@ -14446,3 +14446,67 @@ each side shot twice and identical: both columns gone, the corner's NO ENTRY kep
   a stage-level test — the helper is unit-tested, the wiring is evidenced by the counters above.
 
 **See.** `Q57` · `Q78` · `Q129` · `Q131` · `Q199` · `etl/pipeline/drawnroad.py`
+
+## `Q238` — The touch wheel is the car's: it stays turned when the thumb lifts, comes back with speed, and a thumb that goes round it turns it
+
+**Asked** by the user, 2026-11-17, off players' reports: "some mobile user confused that they should
+spin the thumb to turn the wheel, and that the wheel should not auto reset to center". Then the
+design, in his words: "ease back when moving in all cases", "default to left right relative, but do
+spinning when we detect player is really spinning the wheel", "drop separate CONTROLS option".
+
+**Status.** ✅ Built 2026-11-17. `tools/check.sh` passes; `tools/skidpad.sh --only=flick
+--steer=touch` byte-identical before and after. 🔴 Every number is a desk pick and the handset
+drive is owed: no thumb has spun it.
+
+- **The drawn wheel invited both.** `Q204` drew the steering thumb as the taxi's wheel, and a wheel
+  is spun and stays where it is put; the input under it was a sideways slide that read zero the tick
+  the thumb lifted.
+- **The wheel has a position now** (`InputRouter._wheel`, before the response curve). A sliding
+  thumb adds to where the wheel was as it landed; a lifted thumb leaves it; `steer_for` — the one
+  place the router is told the car's speed — returns it in proportion to speed
+  (`touch.steer_return_at_top_s`), so it holds on a standing car and is all but at once at pace,
+  where a lift ends a turn or a catch. A key or a stick takes the steering and the wheel with it;
+  a pause zeroes it. `TouchSticks` draws `wheel_turn()`, so the wheel at its rest stays turned and
+  unwinds.
+- **A spin is told from the path, not from a centre** (`_follow_path`; ⚠️ replaced the same day,
+  see **Amended**): a path round a circle turns
+  its heading through the angle gone round, whatever the circle's size or middle, so `Q83`'s
+  relative thumb stands and the wheel is still drawn where the thumb landed. A slide that curves one
+  way through `spin_detect_deg` with no corner (`spin_corner_deg`) becomes a spin until the lift,
+  and carries on from the slide's own value — which is already rising the right way a sixth of the
+  way round. `spin_lock_deg` of curving is full lock.
+- **Built and withdrawn the same day**: a SLIDE / SPIN choice on CONTROLS with the wheel standing at
+  its rest and the thumb's bearing round its centre read. The user's call was one scheme and no
+  option; a fixed centre also made a thumb below the wheel steer backwards for anyone sliding.
+- ⚠️ Costs. A touch that became a spin does not slide again until it lifts. A slide that hooks
+  through 60° in small steps is taken for a spin. A lift at crawl speed leaves lock on for up to a
+  second (`touch.md`'s table).
+- Not done: a hint that teaches the spin (the ◀ ▶ still say slide); haptics; the pedals' ideas
+  offered beside this (an echo on the speed dial, an animated idle hint).
+
+**Amended** the same day, off the handset: "it seems the spin detection is not reliable and detect
+normal slide control as spin". The path rule's 60° of steady curving is what a thumb coming back on
+itself draws — a hook, not a corner. The user's design replaces it: "since movement of spin and
+slide would be the same on top of wheel, can the relative position of wheel be not in center of
+thumb, but we place the top of wheel onto the thumb instead?", "then an intentional spin would be
+very obvious movement towards bottom of wheel".
+
+- **The wheel hangs from the thumb.** The landing is its twelve o'clock, its middle
+  `wheel_radius_px` below (`InputRouter.wheel_centre`), and the turn is the thumb's angle round that
+  middle (`_go_round`, `_bearing_deg`), `spin_lock_deg` for full lock, nothing read inside
+  `wheel_hub_px`. Nothing is detected and there is no spin state: both readings are taken every
+  tick and the larger steers (`_thumb_wheel`), the turn alone once the thumb is past the bottom and
+  its offset has come back across.
+- **A slide along the top is unchanged by construction**: the rim a sideways thumb covers is always
+  under its offset and the rim's travel is over the slide's (`TouchProfile.spin_share`);
+  `verify_input.gd` walks it and holds the order of the two travels.
+- **Withdrawn**: `_follow_path` and `spin_step_px` / `spin_corner_deg` / `spin_detect_deg`. A
+  tightening (225° of curving round a nearly square box) was built, mutation-checked against drawn
+  hooks and laps, and dropped unshipped for this: it could only ever catch a spin most of the way
+  round, and jumped the wheel when it did.
+- ⚠️ Costs, in `touch.md`: the wheel sits under the heel of the thumb; a thumb in the bottom 6 mm
+  of the glass cannot go round; a slide that sinks a radius while out to the side reads as a turn.
+  The fixed wheel (`Q239`) is slid across and never gone round. 🔴 Desk picks still.
+
+**See.** `Q83` · `Q204` · `Q210` · `Q220` · `Q223` · `Q230` · `game/tuning/touch.md` ·
+`game/scripts/input/input_router.gd` · `game/tools/verify_input.gd`

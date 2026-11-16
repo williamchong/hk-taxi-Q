@@ -272,6 +272,10 @@ Moved verbatim from the root `CLAUDE.md`, which keeps the trigger and points her
   ⚠️ At 86 kph `hold` sits on its own cliff (about 3.1 s to 83 kph, about 1.4 from 90) — read
   76–95 kph before trusting one cell there. ⚠️ `--sweep` refuses a field in both tables — the tyre dial was
   renamed `side_force_depth` after a shared `roll_influence` swept the wrong table silently.
+- ⚠️ **`touch.steer_return_at_top_s`, `wheel_radius_px`, `wheel_hub_px` and `spin_lock_deg` have NO pad row** (`Q238`): the pad
+  steers through the action map, which never leaves a wheel turned and never goes round one, so
+  `--steer=touch` is unmoved by them by construction. `verify_input.gd` holds their logic; the
+  handset grades their values.
 - 🔴 **Three game-layer dials since `Q230` (2026-11-16), each with its own row**:
   `drive_fade_from_kph` / `drive_fade_curve` (the drive easing off from 59 kph on the road) are
   graded on speed after N seconds — `--only=brake --run-up=2…20`, read `entry` — with `hold` at

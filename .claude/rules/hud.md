@@ -44,7 +44,7 @@ Moved verbatim from the root `CLAUDE.md`, which keeps the trigger and points her
   the zones run to the glass while text stays inside the safe line. 🔴 **A pedal shows its push as a
   level, never as opacity** (`Q228`, the user's ask from a new player): green up the accelerator,
   red down the brake, growing away from the thumb (`TouchSticks.level_box`, `touch_go` /
-  `touch_stop`), ▲ ▼ by the pedals and ◀ ▶ by the wheel at rest AND under a thumb, a pedal's arrow
+  `touch_stop`), ▲ ▼ by the pedals and ◀ ▶ by the wheel at rest AND under a thumb (🔴 the wheel draws `InputRouter.wheel_turn()`, the steering itself — it stays turned at its rest after a lift and unwinds as the car rolls; under a relative thumb it HANGS from the landing, twelve o'clock on the thumb, at `InputRouter.wheel_centre()`, so a thumb going on round the rim turns it, `Q238`; never draw it off the thumb's offset or centred on the thumb again), a pedal's arrow
   white until its direction is pressed and then its pedal's colour — do not put the fade back. 🚫 **No screen
   blur in the drive**: `backdrop_blur.gdshader` is the menu's, paid only while the level is parked;
   in the drive it would be a back-buffer copy and a mip chain every frame on a phone.
