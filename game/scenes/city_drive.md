@@ -1,8 +1,8 @@
 # city_drive.tscn
 
 The drive level: the car on the streamed city. `main.tscn` boots it under `World`.
-(`city_preview.tscn` is for looking at ETL output with a free camera.) See
-`docs/ARCHITECTURE.md` "To drive it".
+(`city_preview.tscn` is for looking at ETL output with a free camera.) To drive
+it: `.claude/skills/run-hk-taxi-q/SKILL.md`.
 
 - `CityDrive` (`drive_level.gd`): the harness. `showroom_fare_id = "f_001"` is where the car
   stands under the start menu (the Harbour Road stand, `menu.md`); `resume` puts it back on the
