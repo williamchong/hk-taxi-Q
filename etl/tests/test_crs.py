@@ -34,7 +34,7 @@ GRID_ORIGIN_LAT = 22 + 18 / 60 + 43.68 / 3600
 FALSE_EASTING = 836694.05
 FALSE_NORTHING = 819069.80
 
-# docs/DATA_SOURCES.md, "Region of interest". Hardcoded rather than read from
+# docs/DATA_SOURCES.md, "Regions and sheets". Hardcoded rather than read from
 # hong_kong.yaml on purpose: these tests check the CRS maths, and taking their
 # inputs from the config under test would make them agree with it by
 # construction. Holding the YAML to these numbers is test_config.py's job.

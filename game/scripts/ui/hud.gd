@@ -4,10 +4,10 @@ extends CanvasLayer
 ##
 ## Two readouts, the minimap (`P3-44`) and the fare's three panels ship — the
 ## 咪錶 top-right, the tip clock top-left, the bilingual callout top-centre —
-## and two slots stay reserved for `P3-2a`/`b` (`Q138`). The fare panels are
-## painted from `FareFace`, which decides every string; this file only puts
-## them in their rects.
-## The slots are laid out and checked **now**, empty, because a HUD that grows
+## and one slot stays reserved for `P3-2b`'s fare combo (`Q138`). The fare
+## panels are painted from `FareFace`, which decides every string; this file
+## only puts them in their rects.
+## The slot is laid out and checked **now**, empty, because a HUD that grows
 ## into whatever space is left is how the touch controls end up under the speed.
 ##
 ## **Everything positional comes from `tuning/hud_layout.tres`**, including the
@@ -96,7 +96,7 @@ var _dial: SpeedDial = null
 var _speed_chip: AccentBar = null
 var _readout: Label = null
 ## The reserved, empty slots. Outlined under the dev overlay so the space this
-## HUD holds for `P3-2a`/`b` can be SEEN rather than taken on trust
+## HUD holds for `P3-2b`'s fare combo can be SEEN rather than taken on trust
 ## from a `.tres`, and invisible in every shipped frame.
 var _slots: Array[ChamferPanel] = []
 ## The wrong-way sign. Hidden in every ordinary frame.

@@ -36,7 +36,7 @@
 // What is deliberately not here: turn arrows, road text and box junctions. Not
 // because a glyph is impossible without a texture, but because nothing in the
 // seventeen Road Network v2 layers says which lane turns where or which junction
-// carries a box — `docs/DATA_SOURCES.md`, "Lane counts do not exist". See `Q53`.
+// carries a box — `docs/DATA_SOURCES.md`, "Road Network (2nd Generation)". See `Q53`.
 shader_type spatial;
 
 render_mode cull_back;
