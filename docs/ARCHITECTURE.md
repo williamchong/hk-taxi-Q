@@ -1563,7 +1563,9 @@ the button is a handbrake, and the drift is what the car and the player make of 
 ## Performance budget
 
 ⚠️ One tier ships, the desktop one, with two phone exceptions read off `Handset.is_phone`:
-the 成績表's SAVE button, and the sun's shadow reach (`LightingRig.fit_shadow`, `P2-6`). All other
+the 成績表's SAVE button, and the sun's shadow reach (`LightingRig.fit_shadow`, `P2-6`) — and one
+read off `Handset.is_app`, the app and never a phone's browser: the 3D scene drawn at 0.75 of the
+window (`LightingRig.fit_scale`, `Q236`). All other
 platform branching is the `.mobile` / `.web` suffixes in `project.godot`. The mobile tier is unbuilt and blocked on `P0-3b` (signing identity, the two
 floor handsets).
 

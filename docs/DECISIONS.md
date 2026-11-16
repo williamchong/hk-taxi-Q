@@ -13482,7 +13482,7 @@ found `AreaReport`'s two refusals printed nowhere — Wan Chai 63 under-covered,
 | a far car refused on one axis before its distance (`FAR_SLACK_M`) | `verify_traffic` 143 → **135** s, whole output byte-identical |
 | the lane rules read one road's cars (`_cars_on`: by `edge` and `next_edge`, in fleet order, rebuilt when a car's road changes) | `verify_traffic` 135 → **126** s on Wan Chai, byte-identical in both regions |
 | squared plan distances where only a bar is asked (`RoadGraph.plan_distance_sq`: five traffic tests, the trams' look) | byte-identical in both regions; too small to time |
-| `LightingRig.phone_scale_3d`, shipped at 1 | nothing, by design: a dial for a measured handset |
+| `LightingRig.phone_scale_3d`, shipped at 1 | nothing, by design: a dial for a measured handset (0.75 in the app since `Q236`) |
 
 ⚠️ The per-tick medians move ±1 ms between identical desk runs (traffic read 3.31, 2.02 and 2.90
 on three), so only the deterministic readings above are claims.
@@ -14342,3 +14342,53 @@ user has not chosen.
 
 **See.** `Q225` · `Q222` · `Q160` · `game/tuning/day_to_night.md` · `game/tuning/dawn.md` ·
 `game/tuning/dusk.md`
+
+## `Q236` — The phone's app draws the 3D scene at 0.75 of the window; a phone's browser does not
+
+**Asked** by the user, 2026-11-17: "anyway we can save on video memory?", then the pick from 1:1
+crops, then "keep 0.75 to the app, web stays at 1.0".
+
+**Status.** ✅ Built 2026-11-17. `tools/check.sh` passes; measured on the iPhone Air.
+
+- **Where the memory is.** A desk probe at 1368×630 held about 196 MB, most of it render targets
+  and not the city: every mesh buffer together is 30 MB. By dial, on the desk: the 3D scale 1.0 →
+  0.75 −21 MB, MSAA 4x → 2x −15 and off −30, the sun's shadow atlas 4096 → 2048 −24, the sky's
+  radiance 256 → 128 / 64 / 32 −13 / −16 / −18; the positional shadow atlas costs nothing. About
+  60 MB is not attributed. ⚠️ Scratch probe, not a tool in the repo.
+- **One line**: `clean_daylight.tscn` `phone_scale_3d = 0.75`, the dial `P2-6` built and shipped at
+  1. `golden_hour.tscn` is unmoved.
+- **The handset** (iPhone Air, release builds of `51b71f8a` with and without the line, from a clean
+  worktree; `--max-fps 120 --menu=off`, the car standing, default traffic and trams):
+
+  | | 1.0 | 0.75 |
+  |---|---|---|
+  | video memory, held daylight and the whole lap | 358.9 / 359.0 MB | 270.4 / 270.9 MB |
+  | the 1440 s lap, frames | 119,228 | 147,055 |
+  | p50 / p95 / p99 / max | 11.95 / 19.21 / 24.19 / 44.01 ms | 9.77 / 15.94 / 16.68 / 28.07 ms |
+  | over 16.7 ms / over 33.3 ms | 31,478 / 14 | 1,505 / 0 |
+
+  So −88 MB, and the lap's frames over a 60 Hz frame fall from 26% to 1%. The held-daylight minute
+  sat on the 120 fps cap on both sides and shows nothing. ⚠️ One run a side, one handset, the
+  fastest we have; the 1.0 lap ran first and the 0.75 lap about 25 minutes later on a warmer phone,
+  which is against 0.75 if anything.
+- **The look**, from one drive shot twice at 2736×1260 on the desk (`build/driver/scale3d/`): 0.2%
+  of pixels differ by more than 3%, all on edges. Small sign plates and the roof sign's lettering
+  blur, railings lose contrast, the ink line comes out about a third thicker; flat faces and the
+  HUD do not change. ⚠️ One viewpoint, by day; no night frame and no Hennessy Road canyon.
+- **The app only** (`Handset.is_app`: `mobile` and not `web`). On the itch.io build under a phone's
+  user agent in desktop Chrome the same dial came out stair-stepped — the web's Compatibility
+  renderer, where the app's is a mild softening — so the user kept a phone's browser at 1.0. The
+  shadow reach stays any phone's (`is_phone`). `LightingRig.fit_handset` asks both, and
+  `verify_day_cycle` holds each build's pair; sending the scale to `is_phone` fails it on both
+  browser rows.
+- **The recorder's header was stale**: `perf: … 3D scale 1.00` on a build drawing at 0.75. It read
+  the viewport in its own `_ready`, under an autoload and so before the rig. Read as the summary is
+  built now. ⚠️ Both laps above carry the old header.
+- ⚠️ **itch.io calls the page "not designed to run on your device"** on a phone: the upload's
+  mobile-friendly setting, the user's to tick. Real Safari on a phone is not tested.
+- Not done: the A13 floor and Android; MSAA 2x on a phone (about −60 MB by arithmetic, no
+  `.mobile` override set); the sky's radiance at 128; the day-cycle rule's daylight frames, since
+  nothing a desk draws moved.
+
+**See.** `P2-6` · `Q225` · `Q207` · `game/scenes/world/clean_daylight.md` ·
+`game/scripts/core/handset.gd`
