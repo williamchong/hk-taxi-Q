@@ -14594,3 +14594,50 @@ hue and keeps every band at the building's lightness; this ships the street band
 
 **See.** `Q197` · `Q37` · `Q193` · `Q102` · `Q232` · `etl/pipeline/buildings.py` (`band_lift`) ·
 `tools/facade_survey.py` (`band_noise_l`) · `docs/ART_DESIGN.md`
+
+## `Q241` — A placed car is pushed to the physics server at once, and a reset lands on a road it can leave
+
+**Asked** by the user, 2026-11-17: "i drived and crashed in a shift, i give up and end the shit in
+pause menu, i click start shift again from main menu, time changed by my car's position was not
+reset at all" — and, of two earlier answers, "i have heard the 'scripted' works twice but i hit
+into the same bug twice ... try the touch version". Then: "reset taxi should always place me into
+some center of a road that i can always drive and not stuck".
+
+**Status.** ✅ Built 2026-11-17. Reproduced and fixed through synthetic taps (`--touch=on`) and
+clicks; the user's own handset drive owed.
+
+- **The car never moved when a menu button was pressed by a person.** `VehicleController.place_at`
+  set `global_transform` and left the body to the tree's next transform flush. A tap or a click is
+  delivered from the OS event queue, after the frame's last flush and before the physics server's
+  sync, and the sync wrote the body's old place back over the node. So 收工 did not stand the car in
+  the showroom, the next shift restarted the clock and the fares and left the car where it had
+  stopped — and the FIRST 開始遊戲 of a session never left the showroom for the start line either.
+  RESET CAR and `Q227`'s drawn start went the same way. Mouse and touch alike: it is the event
+  queue, not the thumb.
+- **Why every scripted check passed, twice.** A call from a script's own frame (`drive.sh`, a
+  verify tool, `--menu-page=pause`, a signal emitted by hand) is flushed before the sync. Only an
+  event through `Input.parse_input_event` reproduces it. ⚠️ A menu flow is tested by tapping its
+  buttons, never by calling `_on_start` or emitting `started`.
+- **The fix is one call**: `force_update_transform()` after the assignment. `verify_vehicle`
+  reads the body back off `PhysicsServer3D` before any flush; with the call removed it fails by
+  name.
+- **A reset lands on a road the car can leave** (`DriveLevel._drives_away`, through
+  `RoadGraph.nearest_edge`'s new `accept`). `Q229` took the nearest drivable edge, and
+  `nearest_edge` answers on a blocked edge by design. Now the edge must be `is_routable` (a whole
+  lane clear along all of it) and joined to the run's start line in the player's network
+  (`RoadRouter.Profile.player()`). Wan Chai + Causeway Bay, 984 drivable edges: 37 refused at the
+  lane bar, 14 more as clear but cut off. Over 6,933 lane-centre samples 10 m apart, 310 are now
+  answered by another edge (median 8.5 m away, p95 40 m) and 99 have no such road within 60 m and
+  go to the start line. ⚠️ The legal network was tried first and is wrong for this: one-ways and
+  turn bans leave 8 edges that lead to the HKCEC line.
+- **And it faces the way that leads on.** The first tap test set the car down on EXPO DRIVE EAST
+  facing the region's barrier 9 m ahead, at 0 kph under full throttle. On a two-way edge whose far
+  end in the car's direction reaches no other road (`RoadRouter.moves_from`, a U-turn not counted)
+  while the other end does, the car is turned round; a one-way keeps its own direction. The same
+  run then reads 72 kph three seconds on.
+- The search radius stays 60 m (`RoadGraph.NEAREST_REACH_M`, the query's default, now named): 100 / 150 / 250 m leave 71 / 63 / 62 of those 99 unanswered.
+- Not built: a test for a parked car, a bus or a post standing on the landing spot — the bar is the
+  graph's, not a shape query.
+
+**See.** `Q229` · `Q227` · `Q165` · `Q19` · `game/scripts/vehicle/vehicle_controller.gd` ·
+`game/scripts/level/drive_level.gd` · `.claude/rules/hud.md` · `.claude/rules/router.md`

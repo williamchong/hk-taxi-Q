@@ -186,3 +186,9 @@ Moved verbatim from the root `CLAUDE.md`, which keeps the trigger and points her
   and, since `Q218`, the OFL of the 黑體 and the brush, whose subsets must NOT be named Bakudai;
   `LICENSING.md` carries them, and the credits screen too (`menu_text.json`, held by
   `verify_menu`; `Q79`).
+- 🔴 **A menu flow is tested by TAPPING its buttons** (`Q241`): `Input.parse_input_event` with a
+  touch or a click on the button's rect, never `_on_start()` or an emitted `started`. A handler
+  that runs from an input event runs after the frame's last transform flush and before the physics
+  sync; one called from a script's frame does not, and the 收工 → 特更 restart that left the car
+  where it stopped passed every check written the second way. `VehicleController.place_at` now
+  forces the flush, and `verify_vehicle` reads the body back off the server.

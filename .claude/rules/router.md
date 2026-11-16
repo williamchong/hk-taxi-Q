@@ -70,6 +70,10 @@ paths:
   must refuse INF by name, since INF clears any `>=`. `verify_road_graph`'s `source trees:` line
   ties it to `route()` pair by pair, found or not.
   🚫 Storing `false` under the key is NOT a mutation: `is_turn_banned` tests presence.
+- ⚠️ **`DriveLevel` holds a `Profile.player()` router for the reset alone** (`Q241`): one
+  `distances_to(start line)` a RESET CAR or a drowning, the set of edges joined to the run's start.
+  🔴 Not `legal()` — 8 edges lead legally to the HKCEC line, and the reset would send every other
+  car there.
 - ⚠️ **One consumer is wired: `FareSystem`** (`P3-1a`, `fares.md`). It pays `prepare` at the hail,
   one per candidate destination, and `route` at its own 5 Hz sample from the car's `Hit`; its par
   is `Profile.legal()` (`Q141`). The minimap draws that same `Route` (`P3-46`, `hud.md`) off the
