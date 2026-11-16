@@ -14068,6 +14068,40 @@ location".
 `game/scripts/city/road_spawn.gd`
 
 
+## `Q228` — The pedals show how far they are pushed: a green level up the accelerator, a red one down the brake
+
+**Asked** by the user, 2026-11-16, from a new player on a phone: they did not know the throttle and
+the brake are a push and a pull, and could not see how far the current push was — "consider a
+red/green bar at levels instead of fading in out opacity".
+
+**Status.** ✅ Built 2026-11-16, seen on a desktop at the handset's proportions
+(`build/driver/pedal_bar/`). A handset and a new player's hands owed.
+
+- **The fault was the fade.** `Q204`'s pedal brightened as a whole with the push (alpha 0.14 → 0.8
+  of the ink): at 55% throttle it was a slightly paler box, and nothing said which pedal a thumb at
+  rest would reach by sliding which way.
+- **A level, growing away from the thumb** (`TouchSticks.level_box`): the accelerator fills from
+  its bottom edge upward and the brake from its top edge downward, each by the share of
+  `drive_travel_px` the router reads, so the bar's edge moves with the finger. The ridges stay on
+  top and are a scale against it. The pedal's face stays faint whatever the push.
+- **Green and red, as data**: `hud_style.tres`'s `touch_go` and `touch_stop`, `accent` and
+  `accent_negative` at 0.9. ⚠️ `hud_style.md` said a stick is "not red": the user's instruction
+  reverses that for the two levels only; the wheel, the outlines and the ring keep the bracket's ink.
+- **▲ over the accelerator and ▼ under the brake**, as the wheel has ◀ ▶, and both pairs stay under
+  a thumb (the user's asks, 2026-11-17; `Q204` drew the wheel's at rest only). A pedal's arrow is
+  the sticks' ink while idle and its pedal's green or red only while the thumb is pushing that way
+  (the user's ask the same day, over both coloured always).
+- **Cost: none in draws** — the same one mesh; the same route reads 159 / 157 / 156 / 158 / 165
+  draws before and after, +2 prims at rest (the arrows).
+- `wheel_lever` and `tracks` are not touched: they already draw a travel. `verify_hud` holds the
+  level's two directions, its clamp and the two colours.
+
+Open: whether the hint should fade after a first drive (`Q204`'s, still open); whether the guide
+page should say "slide up to go, down to brake" in words.
+
+**See.** `Q204` · `Q83` · `Q139` · `game/scripts/ui/touch_sticks.gd` · `game/tuning/hud_style.md` ·
+`.claude/rules/hud.md`
+
 ## `Q229` — The pause has RESET CAR: back onto the nearest road, the run going on
 
 **Asked** by the user, 2026-11-16: "add a reset button in pause menu such that player has a way to
