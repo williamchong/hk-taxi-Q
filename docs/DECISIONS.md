@@ -4152,6 +4152,7 @@ thin geometry breaking into dashes at middle distance.
   neither fill rate nor framebuffer bandwidth, so passing it means nothing here.
 - Open: mobile is unmeasured (blocked on `P0-3b`); roughly +50 MB of framebuffer at 1080p by
   arithmetic. No `.mobile` override is set, deliberately. Desktop only shows 4x holds 120 Hz.
+  (Reversed for the phone's app on the user's instruction, 2026-11-17: 2x there, `Q236`.)
 - ⚠️ `Q27`'s two audit viewpoints and their render-derived figures were measured without AA; the
   conclusions stand, the pixels do not.
 
@@ -14386,9 +14387,16 @@ crops, then "keep 0.75 to the app, web stays at 1.0".
   built now. ⚠️ Both laps above carry the old header.
 - ⚠️ **itch.io calls the page "not designed to run on your device"** on a phone: the upload's
   mobile-friendly setting, the user's to tick. Real Safari on a phone is not tested.
-- Not done: the A13 floor and Android; MSAA 2x on a phone (about −60 MB by arithmetic, no
-  `.mobile` override set); the sky's radiance at 128; the day-cycle rule's daylight frames, since
-  nothing a desk draws moved.
+- **MSAA 2x in the app too** (user, 2026-11-17: "do 2x on mobile"), reversing `Q91`'s "no
+  `.mobile` override" there: `project.godot` `msaa_3d.mobile = 1`, pinned in `verify_settings`.
+  The Air's held-daylight minute at the 0.75 scale: 270.4 → **235.9 MB**, on the 120 fps cap as
+  before (p50 7.39 ms, none over 16.7). On the desk, 4x against 2x at 0.75 from the same drive
+  (`build/driver/msaa/`): 0.1% of pixels differ by more than 3% — pole edges and railing bars a
+  little rougher. ⚠️ A still cannot show the shimmer on thin railings in motion, which is what
+  `Q91` took 4x for; the user's drive on the handset is owed. A phone's browser carries no
+  `mobile` tag and keeps 4x; the desk keeps 4x.
+- Not done: the A13 floor and Android; a lap at 2x; the sky's radiance at 128; the day-cycle
+  rule's daylight frames, since nothing a desk draws moved.
 
 **See.** `P2-6` · `Q225` · `Q207` · `game/scenes/world/clean_daylight.md` ·
 `game/scripts/core/handset.gd`
