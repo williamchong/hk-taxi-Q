@@ -14510,3 +14510,32 @@ very obvious movement towards bottom of wheel".
 
 **See.** `Q83` · `Q204` · `Q210` · `Q220` · `Q223` · `Q230` · `game/tuning/touch.md` ·
 `game/scripts/input/input_router.gd` · `game/tools/verify_input.gd`
+
+## `Q239` — The wheel and the pedals may stand still: CONTROLS offers FOLLOW THUMB or FIXED
+
+**Asked** by the user, 2026-11-17: "build a option that wheels and throttle are static position or
+relative". `Q83` and `Q204` keep the relative thumbs ("keep control as relative position"); this
+adds the other reading as a pick and leaves relative the default.
+
+**Status.** ✅ Built 2026-11-17. `tools/check.sh` passes. 🔴 The handset drive is owed.
+
+- **One switch, both thumbs** (`ControlOptions.anchor`, `--touch-anchor=relative|fixed`, saved as
+  `anchor`): 操控位置 — 跟隨手指 / 固定 on the CONTROLS page, on the pause's too, since the sticks draw
+  where the router says a control is and no HUD is renewed.
+- **Fixed is the thumb's origin and nothing else** (`InputRouter.Thumb.fixed`): a thumb is still
+  claimed by its zone, and is read from the middle of its REST — where its control is drawn while
+  it is up — instead of from where it landed. So the wheel and the pedals do not move, a thumb put
+  down right of the wheel is already steering right, and one put down on the accelerator is already
+  on it, by how far up it is. The travels, the dead band, the curve, the slew at speed, the spin
+  off the path and the wheel's return (`Q238`) are the same code on both.
+- **A fixed wheel is not added to**: `Q238`'s "a thumb landing takes the wheel up from where it is"
+  is the relative thumb's; fixed, the wheel is where the thumb is on it.
+- ⚠️ Costs. A thumb landing off-centre at speed asks for lock at once (the slew at speed limits
+  it, `Q230`). The rests are `hud_layout_touch.tres`'s, picked for where a relative hint looks
+  right, not for where a fixed pedal is easiest to reach; `steer_travel_px` 140 is 11 mm on the
+  iPhone Air, so a fixed wheel is fully locked a thumb's width from its middle.
+- The 黑體 and the brush were re-cut for 固定隨 (`tools/make_fonts.py`).
+
+**See.** `Q83` · `Q204` · `Q223` · `Q238` · `game/scripts/input/input_router.gd` ·
+`game/scripts/input/control_options.gd` · `game/tools/verify_input.gd`
+
