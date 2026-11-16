@@ -14316,3 +14316,29 @@ trams", then "also some normal map on the tram indicator lights maybe".
   at ten metres; the route box beside the entrance in the photograph.
 
 **See.** `Q232` · `Q200` · `Q166` · `P3-85` · `.claude/rules/parked.md`
+
+## `Q235` — Dawn is blue and dusk is yellow, so the hour reads off the colour
+
+**Asked.** The user, 2026-11-17: "can we make dawn more blue shaded and dusk yellow shaded so that
+we can tell the time diff". Dawn was rose and dusk orange (`Q225`), and a frame of one beside the
+other was two warm pinks.
+
+**Status.** ✅ Built 2026-11-17. `tools/check.sh` passes. ⚠️ The strength is the model's pick, the
+middle of three rendered beside the before (`build/driver/dawn_dusk/options.png`, gitignored); the
+user has not chosen.
+
+- **Values only, in the two looks and their two keyframes**: `dawn.tres` and `dusk.tres`' sky
+  top and horizon, ambient and fog colours, and in `day_to_night.tres` the 06:15 and 18:00
+  `sun_colour` and `sky_light`. No angle, `at`, energy or `night_lights` moved, so the solved
+  daylight legs and the key light's handover are as they were.
+- Dawn: horizon `(0.98, 0.76, 0.7)` → `(0.66, 0.78, 0.95)`, key light `(1, 0.72, 0.6)` →
+  `(0.8, 0.86, 1)`, `sky_light` → `(0.7, 0.82, 1)`. Dusk: horizon `(0.98, 0.62, 0.38)` →
+  `(1, 0.82, 0.32)`, key light `(1, 0.62, 0.36)` → `(1, 0.82, 0.34)`, `sky_light` → `(1, 0.9, 0.54)`.
+- Not done: first light (05:30) and 19:00 still share `twilight.tres`, so the two darkest
+  minutes either side are the same violet; the 07:00 `morning.tres` a shift opens on is still
+  warm, and a shift never sees the 06:15 dawn (`Q225`) — only a free drive's lap does. The
+  rule's daylight frames and the `street` camera pair were not shot: no daylight keyframe moved.
+  Not driven through the blend.
+
+**See.** `Q225` · `Q222` · `Q160` · `game/tuning/day_to_night.md` · `game/tuning/dawn.md` ·
+`game/tuning/dusk.md`
