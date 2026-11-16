@@ -17,7 +17,8 @@
 #   --hold=accelerate@0.5+5.0        press an action at 0.5 s, hold for 5 s
 #                                    (repeatable; actions are the [input] names
 #                                    in project.godot — steer_left, steer_right,
-#                                    accelerate, brake_reverse, drift, look_back)
+#                                    accelerate, brake_reverse, handbrake, horn,
+#                                    look_back)
 #   --trace=file                     per-tick car state, the collider under it,
 #                                    and bodies entering/leaving, each with its
 #                                    physics tick — diff two runs for the first

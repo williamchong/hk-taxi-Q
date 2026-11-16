@@ -1804,8 +1804,7 @@ No rewrite and no new source: the code records defects that render as a plausibl
   cell with `visibility_range_end` 400 m; game side only. The range is to the cell box's centre,
   so a prop up to ~210 m nearer can be hidden. Refused: a 150 m cell (+20 to +35 draws), merging
   lamps into road chunks, the signs in the list.
-- `box_extent.py` read 0.23% of Wan Chai's box paint over nothing drawn here;
-  `.claude/rules/boxjunctions.md` still quotes 6.71%. Unreconciled.
+- `box_extent.py` reads 0.23% of Wan Chai's box paint over nothing drawn (1.32 of 577.90 m²).
 
 ## `Q136` — The minimap is drawn from `RoadGraph`, once, and switches off on its own
 
