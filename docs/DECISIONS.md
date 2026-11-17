@@ -3316,7 +3316,9 @@ share `twilight.tres`, a rose horizon; a shift never sees the 06:15 dawn.
   98,849,920 B). Desktop frame time over 17 s from the start line, three runs a side: p95 11.7 to
   12.0 ms with the layers and 11.6 to 11.9 without — inside the noise. iPhone Air, release build, parked on the start line under
   `--max-fps 120`, 25 s a side: 120.0 fps with both layers (143 draws) and 120.0 without (133),
-  p95 14.8 ms each — at the screen's cap, so the layers cost nothing it can show.
+  p95 14.8 ms each — at the screen's cap, so the layers cost nothing it can show. With the camera moving (the
+  menu's orbit, traffic running, 138 to 197 draws, 30 s, the final build): 120.0 fps, worst frame
+  14.6 ms.
   Look sheet: `asset_viewer.tscn --asset=…/wan_chai/stops.glb --lineup=2.5`.
 - Off switch: delete the `stop_marks:` block.
 
