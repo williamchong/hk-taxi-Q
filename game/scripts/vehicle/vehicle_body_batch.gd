@@ -13,7 +13,8 @@ extends RefCounted
 ## car — so the constants are what it drew all along.
 ##
 ## One material, built once from `vehicle_body.tres` so the two cannot drift: a
-## `duplicate` carries every parameter, and only the shader differs.
+## `duplicate` carries every parameter, and only the shader differs — its own
+## and its outline pass's (`Q248`), which fades with the car.
 
 const MATERIAL_PATH: String = "res://tuning/vehicle_body.tres"
 ## The indicators' bits in `INSTANCE_CUSTOM.a` (`vehicle_body.gdshader`'s
@@ -26,7 +27,7 @@ const LAMP_RIGHT: int = 16
 const ROOF_SIGN: int = 32
 ## The fade's bits above the lamps' (`Q214`): `FADE_BIT` times how far out the
 ## car is faded, in `FADE_STEPS`ths. 0 is drawn whole, so a parked vehicle and a
-## tram, which write none, are whole. Must match `vehicle_body.gdshader`'s
+## tram, which write none, are whole. Must match `vehicle_fade.gdshaderinc`'s
 ## `FADE_BIT` and `FADE_STEPS`.
 const FADE_BIT: int = 64
 const FADE_STEPS: int = 7
@@ -70,13 +71,15 @@ static func material() -> ShaderMaterial:
 		return _material
 	var source := load(MATERIAL_PATH) as ShaderMaterial
 	assert(source != null and source.shader != null, "%s has no shader" % MATERIAL_PATH)
-	var code: String = source.shader.code
-	# After the `shader_type` line, which must come first.
-	assert(code.count(SHADER_TYPE) == 1, "vehicle_body.gdshader's shader_type moved")
-	var shader := Shader.new()
-	shader.code = code.replace(SHADER_TYPE, SHADER_TYPE + "\n" + DEFINE)
 	_material = source.duplicate() as ShaderMaterial
-	_material.shader = shader
+	_material.shader = _batched(source.shader)
+	# The outline pass fades with its car (`Q248`): a line left whole round a
+	# car dithered out is a black ghost of it.
+	var outline := source.next_pass as ShaderMaterial
+	if outline != null and outline.shader != null:
+		var batched_outline := outline.duplicate() as ShaderMaterial
+		batched_outline.shader = _batched(outline.shader)
+		_material.next_pass = batched_outline
 	var lamps := load(VehicleLampsProfile.PATH) as VehicleLampsProfile
 	if lamps == null:
 		push_warning(
@@ -85,3 +88,12 @@ static func material() -> ShaderMaterial:
 	else:
 		lamps.wire_material(_material)
 	return _material
+
+
+## `shader` with `VEHICLE_BATCHED` defined.
+static func _batched(shader: Shader) -> Shader:
+	# After the `shader_type` line, which must come first.
+	assert(shader.code.count(SHADER_TYPE) == 1, "%s's shader_type moved" % shader.resource_path)
+	var batched_shader := Shader.new()
+	batched_shader.code = shader.code.replace(SHADER_TYPE, SHADER_TYPE + "\n" + DEFINE)
+	return batched_shader

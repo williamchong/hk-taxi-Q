@@ -3401,3 +3401,19 @@ share `twilight.tres`, a rose horizon; a shift never sees the 06:15 dawn.
 - A planter is a crash: the walls ship as `planters_collision-colonly` in the same `.glb` (3,481 / 213 triangles), the first generated layer after the road to carry its own body. The planting collides with nothing.
 - `city.json` schema 49 names `planters`.
 - Not done: a level for a wall on a deck (the layer has none); registering the railings beside a wall; lighting at night.
+
+## `Q248` — Vehicles are glossy and inked: crowned panels, the painted sky back on paint, black lines and a black outline
+
+**Status.** 🟡 Built 2026-11-18 (`P3-99`) on the user's picks from sheets, set against a photo of a real Crown Comfort. Reverses `Q215`'s "paint takes none of the painted sky" and amends `Q196`'s line weight. Owed: the handset's frame time, the web build (varyings), a night look, the PCK.
+
+- All in `vehicle_body.gdshader` and `vehicle_body.tres`, so the taxi, the traffic and the parked roster take it together. No texture, no vertex channel, no mesh rebuilt.
+- **Crown**: each panel's normal leans away from the body's middle by the fragment's own place on the body (`crown` 1.0 over 3 m). A flat bonnet shades and reflects as a gradient; before it, the sky on a flat panel was a wash.
+- **Sky on paint**: `paint_reflect` 0.6, `paint_face_on` 0.12, power 2.5, base `paint_roughness` 0.55 → 0.35 — the stronger of two, the user's pick over 0.35 / 0.0 / 4.0. Price, chase camera, red paint: `C*` 68.7 → 64.7 in sun, 61.4 → 57.9 in shade, hue 22° → 15° there (toward pink).
+- **Trim** takes the sun's glint (`trim_glint` 1.5); it could not be picked out on a grille at roster size.
+- **Ink** is black (`ink_darkness` 0.35 → 0.0) at the old 2 cm. 4 cm was built and refused by the user: a line exists only inside the triangle that owns its edge, so a pane's diagonal cut the wider line into a wedge. A bold even line needs `tools/vehicle_ink.py` to carry an edge across triangles, about two triangles a pane (the taxi has 22 under its ceiling).
+- **Outline**: `vehicle_outline.gdshader` as the material's `next_pass`, the body grown and inside out, 1 cm (3 cm read too thick from the chase camera, the user's call). Grown by the vertex's place on the body, not its normal — flat-shaded faces opened at every fold and the line came out dashed. Folded away in the shadow pass; fades with a traffic car (`vehicle_fade.gdshaderinc`).
+- Cost, Fleming Road with traffic, desktop: frame p95 12.5–12.6 → 12.6–12.8 ms (inside run noise); `prims` 0.96–0.97 M → 1.49 M, every vehicle submitted twice.
+- Refused from the same sheets: a sampled normal map for the crown (per-kind maps, and its spike moved nothing from the chase camera), two-tone cel light, white strokes on glass, a line or seat removed from glass alone.
+- Way back: `paint_reflect` 0 and `crown` 0 are `Q215`'s car; removing `next_pass` removes the outline.
+- Next, planned not built: the city and the other assets in the same line (`P3-99`'s follow-on).
+

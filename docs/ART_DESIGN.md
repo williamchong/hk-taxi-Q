@@ -218,8 +218,12 @@ the road drives on the pavement.
 - **Body shader** (`vehicle_body.gdshader`, `tuning/vehicle_body.tres`): a surface marker in
   `UV.y` gives glazing, lenses and paint a three-band painted sky chosen by the reflected ray's
   elevation; a single flat reflection colour reads as a swatch. Paint gloss is the engine's
-  clearcoat lobe added over the paint (`Q215`), never mixed into the albedo — the mix cost the red
-  `C*` 7.4, and red identifies 紅的.
+  clearcoat lobe added over the paint (`Q215`), and since `Q248` a share of the painted sky mixed
+  into the albedo again over crowned panels, on the user's pick: it costs the red `C*` 4.0 in sun,
+  and red identifies 紅的.
+- **Comic line** (`Q248`): every vehicle's detail lines are black, and a 1 cm black outline is
+  drawn round it by a second pass (`vehicle_outline.gdshader`). The city keeps `Q158`'s outline
+  in its own hue.
 - **Lamps** (`vehicle_lamps.gd`, `tuning/vehicle_lamps.tres`): `UV.x` carries a circuit id per
   lens, written per instance. Rear lamps read the car, front lamps read the light, and the roof
   sign reads the fare — lit for hire, dark with a passenger. Emission is the lens's hue at a fixed

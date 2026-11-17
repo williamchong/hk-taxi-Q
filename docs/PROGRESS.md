@@ -101,6 +101,8 @@ Phase 3 — `B2` and the road
 - `P3-84` 🟡 Detail lines on vehicles — owed: the weight pick (1.2 / 2 / 3 cm), a night frame.
 - `P3-85` 🟡 Roster at die-cast detail — owed: the box lorry's share of moving traffic (parked only).
 - `P3-87` 🟡 Pressed panels. `P3-88` 🟡 Tram doors and lamps.
+- `P3-99` 🟡 Glossy, inked vehicles (`Q248`): red `C*` 68.7 → 64.7 in sun, `prims` 0.97 M → 1.49 M on
+  Fleming Road, desktop frame time unmoved — owed: the handset, the web build, the city's line.
 - `P3-98` 🟡 Roadside planters (`Q247`): 19 beds and 30 walls in Wan Chai, 1 and 5 in Causeway Bay —
   owed: the user's drive into one, the PCK, a wall HyD draws on a deck.
 - `P3-93` 🟡 Stop furniture: flags at bus and minibus stops, tram shelters on solid posts

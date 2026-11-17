@@ -1,10 +1,20 @@
 [gd_resource type="ShaderMaterial" format=3 uid="uid://8021hi0isst6"]
 
 [ext_resource type="Shader" uid="uid://b8mivjq4jkq6j" path="res://assets/shaders/vehicle_body.gdshader" id="1_vehicle"]
+[ext_resource type="Shader" uid="uid://t6b1liy66pav" path="res://assets/shaders/vehicle_outline.gdshader" id="2_outline"]
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_outline"]
+render_priority = 0
+shader = ExtResource("2_outline")
+shader_parameter/outline_colour = Color(0.02, 0.02, 0.02, 1)
+shader_parameter/outline_m = 0.01
+shader_parameter/outline_height_m = 0.7
+shader_parameter/outline_soft_m = 0.1
 
 [resource]
 resource_name = "vehicle_body"
 render_priority = 0
+next_pass = SubResource("ShaderMaterial_outline")
 shader = ExtResource("1_vehicle")
 shader_parameter/sky_zenith = Color(0.24, 0.47, 0.78, 1)
 shader_parameter/sky_horizon = Color(0.85, 0.91, 0.96, 1)
@@ -19,15 +29,19 @@ shader_parameter/lamp_emission = 1.6
 shader_parameter/cabin_light = Color(1, 0.84, 0.56, 1)
 shader_parameter/cabin_glow = 0.25
 shader_parameter/cabin_glow_dim = 0.12
-shader_parameter/paint_roughness = 0.55
+shader_parameter/paint_roughness = 0.35
 shader_parameter/clearcoat = 1.0
 shader_parameter/clearcoat_roughness = 0.12
+shader_parameter/paint_reflect = 0.6
+shader_parameter/paint_face_on = 0.12
+shader_parameter/paint_fresnel_power = 2.5
 shader_parameter/sun_toward = Vector3(0, 1, 0)
 shader_parameter/glint_strength = 0.4
 shader_parameter/glint_sharpness = 24.0
+shader_parameter/trim_glint = 1.5
 shader_parameter/ink_width_m = 0.02
 shader_parameter/ink_max_px = 4.0
-shader_parameter/ink_darkness = 0.35
+shader_parameter/ink_darkness = 0.0
 shader_parameter/ink_speed_thin = 0.33
 shader_parameter/ink_speed_fade = 0.2
 shader_parameter/relief_groove_m = 0.02
@@ -35,3 +49,7 @@ shader_parameter/relief_groove_slope = 1.2
 shader_parameter/relief_pillow = 0.04
 shader_parameter/relief_edge_m = 0.03
 shader_parameter/relief_edge_slope = 0.6
+shader_parameter/crown = 1.0
+shader_parameter/crown_radius_m = 3.0
+shader_parameter/crown_height_m = 0.7
+shader_parameter/crown_along = 0.3

@@ -13,11 +13,13 @@
 // mirror". With the three bands below in, the glazing's `L*` spread went
 // `sd 0.05 -> 6.35`, and that structure is what reads as glass.
 //
-// ⚠️ **Paint no longer takes the painted gradient (`Q215`).** `P3-11c` mixed it
-// into the paint's albedo and paid for it in chroma (`C*` 79.06 matte -> 71.63
-// shipped, at the `taxi` t04.50 camera); the engine's `CLEARCOAT` lobe adds the
-// reflection on top instead, so the red keeps its chroma. Glazing and lenses
-// still take the gradient below — they are meant to read as dark mirrors.
+// ⚠️ **Paint takes the painted gradient again (`Q248`), over `Q215`'s
+// `CLEARCOAT`.** `P3-11c` mixed it into the paint's albedo and paid for it in
+// chroma (`C*` 79.06 matte -> 71.63 shipped, at the `taxi` t04.50 camera);
+// `Q215` took it out and left the engine's lobe. `Q248` puts it back on the
+// user's pick from a sheet, knowing the price: a flat panel under a flat mix
+// was a wash, and what changed is the crown below, which turns it into a
+// gradient across the panel. `paint_reflect` 0 is `Q215`'s car.
 // ⚠️ The residual risk is still **recognition** — red identifies the car, and
 // `P3-9a` grades exactly that; `clearcoat` 0 is the matte car.
 //
@@ -41,6 +43,7 @@ render_mode cull_back;
 const float MARKER_PAINT = 0.0;
 const float MARKER_GLASS = 1.0;
 const float MARKER_LAMP = 2.0;
+const float MARKER_TRIM = 3.0;
 // Paint a `MultiMesh` instance may repaint (`Q167`): a parked kind's livery
 // panels, shaded as paint and coloured from `INSTANCE_CUSTOM` (sRGB, `a` 1 to
 // apply; `ParkedLayer` writes it) when its alpha is set. The player's taxi
@@ -64,11 +67,8 @@ const float CIRCUIT_NONE = 0.0;
 // rather than both being written down and left to disagree.
 const int CIRCUIT_SEAM = 4;
 const int CIRCUIT_COUNT = 2 * CIRCUIT_SEAM;
-// ⚠️ `MARKER_TRIM` (3.0) is shipped by the ETL and takes no branch of its own —
-// it shares paint's `CLEARCOAT`, for the reason given at that branch. Carried
-// separately anyway, on the tiles' ground-marker reasoning: it costs nothing to
-// keep separable now, and a later brightwork treatment would otherwise need a
-// second pass over the vertex format and a rebuild of every vehicle.
+// `MARKER_TRIM` shares paint's branch and its `CLEARCOAT`, and adds the sun's
+// glint (`Q248`) — the brightwork treatment it was carried separately for.
 
 // What the glazing reflects. There is no probe and no SSR behind this — it is
 // three colours and the reflected ray's own elevation choosing between them.
@@ -279,9 +279,17 @@ group_uniforms paint;
 // sun a tight highlight of its own: measured on the menu orbit's frame, red
 // `C*` 52.12 -> 52.32 and `L*` 30.03 -> 27.77 in shade.
 // `paint_roughness` is now the BASE coat under it, not the gloss.
+// ⚠️ `Q248` mixes the painted sky back into the albedo on top of this, and pays
+// that chroma again: `paint_reflect` below.
 uniform float paint_roughness : hint_range(0.0, 1.0) = 0.55;
 uniform float clearcoat : hint_range(0.0, 1.0) = 1.0;
 uniform float clearcoat_roughness : hint_range(0.0, 1.0) = 0.12;
+// The painted sky on paint and trim (`Q248`): how much of it at a glance, the
+// share of that seen face-on, and the glance's own fresnel power — wider than
+// the glazing's `fresnel_power`, which would leave a rim and nothing else.
+uniform float paint_reflect : hint_range(0.0, 1.0) = 0.6;
+uniform float paint_face_on : hint_range(0.0, 1.0) = 0.12;
+uniform float paint_fresnel_power : hint_range(1.0, 8.0) = 2.5;
 
 group_uniforms glint;
 
@@ -306,6 +314,9 @@ group_uniforms glint;
 uniform vec3 sun_toward = vec3(0.0, 1.0, 0.0);
 uniform float glint_strength : hint_range(0.0, 4.0) = 1.1;
 uniform float glint_sharpness : hint_range(1.0, 256.0) = 48.0;
+// The glint's weight on trim — chrome and silver (`Q248`). Paint has none: its
+// sun highlight is `CLEARCOAT`'s.
+uniform float trim_glint : hint_range(0.0, 4.0) = 1.5;
 
 group_uniforms ink;
 
@@ -356,13 +367,28 @@ uniform float relief_pillow : hint_range(0.0, 0.5) = 0.04;
 // pixel and a half and cut to match, as the groove is.
 uniform float relief_edge_m : hint_range(0.0, 0.1) = 0.03;
 uniform float relief_edge_slope : hint_range(0.0, 2.0) = 0.6;
+// The crown (`Q248`): every panel leans away from the middle of the body, so a
+// flat bonnet shades and reflects as a gradient rather than as one tone. No
+// texture and no vertex channel — the lean is the fragment's own place on the
+// body over `crown_radius_m`, from `crown_height_m` up the body's axis.
+// `crown_height_m` is `vehicle_outline.gdshader`'s `outline_height_m`: the
+// one middle of the body. `crown_along` is the share of it taken along the body: at 1.0 a wing's far
+// end turned to the ground and went grey. 0 is the flat sheet.
+uniform float crown : hint_range(0.0, 2.0) = 1.0;
+uniform float crown_radius_m : hint_range(0.5, 20.0) = 3.0;
+uniform float crown_height_m : hint_range(0.0, 3.0) = 0.7;
+uniform float crown_along : hint_range(0.0, 1.0) = 0.3;
+// Where the fragment is on the body, and the body's axes in view space.
+varying vec3 body_at;
+varying flat vec3 body_x;
+varying flat vec3 body_y;
+varying flat vec3 body_z;
 
 varying flat float marker;
 // The relief on this face: its pitch in metres (0 for none), the body's axis it
 // repeats along in view space, and where along that axis the fragment is.
 varying flat float relief_pitch;
 varying flat float relief_bows;
-varying flat vec3 relief_axis;
 varying float relief_at;
 // `flat` for the same reason `marker` is: every vertex of a lens carries the
 // same circuit, and an interpolated one would land between two channels at the
@@ -377,20 +403,7 @@ varying flat vec2 winking;
 varying flat float for_hire;
 
 #ifdef VEHICLE_BATCHED
-// A traffic car fading in where it was placed in view, or out where it leaves
-// in view (`Q214`): `INSTANCE_CUSTOM.a`'s bits from 64 up, how far out it is in
-// sevenths — 0 drawn whole, so a parked vehicle and a tram, which write none,
-// are whole. Must match `FADE_BIT` and `FADE_STEPS` in `traffic_system.gd`.
-// ⚠️ **Dithered, never blended**: the car stays an opaque draw — no sort, no
-// second pass on the Mobile renderer — and a pixel is dropped against a 4×4
-// ordered pattern. Only the batch has the `discard`; the player's car never
-// fades and keeps early depth.
-const float FADE_BIT = 64.0;
-const float FADE_STEPS = 7.0;
-const float FADE_PATTERN[16] = float[](
-	0.0, 8.0, 2.0, 10.0, 12.0, 4.0, 14.0, 6.0, 3.0, 11.0, 1.0, 9.0, 15.0, 7.0, 13.0, 5.0
-);
-varying flat float faded;
+#include "res://assets/shaders/vehicle_fade.gdshaderinc"
 #endif
 
 // A wall's slope `off_m` from its line: `slope` inside `reach_m`, none past
@@ -420,23 +433,24 @@ void vertex() {
 	winking = vec2(mod(floor(bits / 8.0), 2.0), mod(floor(bits / 16.0), 2.0)) * lit;
 	for_hire = mod(floor(bits / 32.0), 2.0);
 #ifdef VEHICLE_BATCHED
-	faded = mod(floor(bits / FADE_BIT), FADE_STEPS + 1.0) / FADE_STEPS;
+	faded = fade_of(bits);
 #endif
 	float stamp = floor(fract(UV.y) * RELIEF_SPAN + 0.5);
 	bool courses = stamp > RELIEF_COURSES;
 	relief_pitch = (courses ? stamp - RELIEF_COURSES : stamp) * RELIEF_UNIT_M;
 	relief_bows = courses ? 0.0 : 1.0;
 	relief_at = courses ? VERTEX.y : VERTEX.z;
-	relief_axis = normalize(mat3(VIEW_MATRIX) * (courses ? MODEL_MATRIX[1].xyz : MODEL_MATRIX[2].xyz));
+	body_at = VERTEX;
+	mat3 to_view = mat3(MODELVIEW_MATRIX);
+	body_x = normalize(to_view[0]);
+	body_y = normalize(to_view[1]);
+	body_z = normalize(to_view[2]);
 }
 
 void fragment() {
 #ifdef VEHICLE_BATCHED
-	if (faded > 0.0) {
-		ivec2 cell = ivec2(FRAGCOORD.xy) % 4;
-		if ((FADE_PATTERN[cell.y * 4 + cell.x] + 0.5) / 16.0 < faded) {
-			discard;
-		}
+	if (fade_drops(faded, FRAGCOORD.xy)) {
+		discard;
 	}
 #endif
 	vec3 albedo = vertex_srgb_to_linear(COLOR.rgb);
@@ -474,6 +488,7 @@ void fragment() {
 				+ relief_bows * relief_pillow * (1.0 - 2.0 * cell);
 		// Along the face only: an end face has no run along the body, so
 		// the tangent is nothing there and the face stays flat.
+		vec3 relief_axis = relief_bows > 0.5 ? body_z : body_y;
 		tilt += (relief_axis - flat_n * dot(flat_n, relief_axis)) * slope;
 	}
 	// A seated edge: every edge the ink is drawn on — a pane in its frame, a
@@ -495,21 +510,32 @@ void fragment() {
 			tilt += (r_across * dot(edge_dx, wall) + r_down * dot(edge_dy, wall)) / area;
 		}
 	}
+	if (crown > 0.0) {
+		// Soft-limited, so a bus's far end leans no further than a car's.
+		vec3 off = (body_at - vec3(0.0, crown_height_m, 0.0)) / crown_radius_m;
+		off.z *= crown_along;
+		off /= 1.0 + abs(off);
+		vec3 lean = body_x * off.x + body_y * off.y + body_z * off.z;
+		tilt -= crown * (lean - flat_n * dot(flat_n, lean));
+	}
 	NORMAL = normalize(flat_n - tilt);
 
-	// The painted sky, read by glass and lenses only. Paint takes none of it since
-	// `Q215` — its rim and sun lobe are `CLEARCOAT`'s own — and paint is most of a
-	// car body, so all four terms sit behind the same guard: unguarded, the `pow`s,
-	// the `normalize` and the `reflect` run on the majority of fragments that
-	// discard them. A driver that flattens the branch pays what the old
-	// unconditional code paid, never more.
+	// The painted sky. Glass and lenses always read it; paint and trim read it
+	// while `paint_reflect` or `trim_glint` is up (`Q248`), and with both at 0
+	// the guard spares paint — most of a car body — the `pow`, the `normalize`
+	// and the `reflect`, as it did under `Q215`.
 	float fresnel = 0.0;
 	vec3 mirrored = vec3(0.0);
 	float glint = 0.0;
-	if (is_glass || is_lamp) {
-		// One fresnel serves both reflective markers; the marker chooses how much
-		// of it lands.
-		fresnel = pow(1.0 - clamp(dot(NORMAL, VIEW), 0.0, 1.0), fresnel_power);
+	bool is_trim = abs(marker - MARKER_TRIM) < 0.5;
+	bool is_mirror = is_glass || is_lamp;
+	if (is_mirror || paint_reflect > 0.0 || (is_trim && trim_glint > 0.0)) {
+		// One fresnel a fragment, on its surface's own power; the marker chooses
+		// how much of it lands.
+		fresnel = pow(
+			1.0 - clamp(dot(NORMAL, VIEW), 0.0, 1.0),
+			is_mirror ? fresnel_power : paint_fresnel_power
+		);
 
 		// The mirror. Where the reflected ray points decides what it sees, so a
 		// screen darkens toward the city as the car turns and brightens toward the
@@ -523,9 +549,11 @@ void fragment() {
 
 		// Isolated from the sun alone, so it moves with heading where the sky
 		// gradient cannot: `bounced.y` is invariant under yaw, `bounced · sun` is
-		// not. Not on paint — `CLEARCOAT` has its own sun lobe, and an albedo
-		// glint there would spend its chroma a second time.
-		glint = pow(max(dot(bounced, sun_toward), 0.0), glint_sharpness);
+		// not. On trim too (`Q248`), not on paint — `CLEARCOAT` has its own sun
+		// lobe, and an albedo glint there would spend its chroma a second time.
+		if (is_mirror || is_trim) {
+			glint = pow(max(dot(bounced, sun_toward), 0.0), glint_sharpness);
+		}
 	}
 
 	float roughness = paint_roughness;
@@ -600,11 +628,14 @@ void fragment() {
 		albedo += sky_horizon * sky_light * glint * glint_strength * 0.5;
 		albedo = mix(albedo, mirrored, lamp_reflect * fresnel);
 	} else {
-		// Paint and trim. `MARKER_TRIM` shares this branch rather than taking one
-		// of its own: `CLEARCOAT` adds its reflection over the albedo without
-		// moving its hue (`Q215`), so silver needs nothing paint does not get —
-		// the ice-blue roof the old albedo-mixed sky gave it cannot recur here.
+		// Paint and trim, under one `CLEARCOAT` (`Q215`). Trim adds the sun's
+		// glint, and both take `paint_reflect` of the painted sky by their own
+		// glance (`Q248`) — which costs chroma, on the user's pick.
 		coat = clearcoat;
+		if (is_trim) {
+			albedo += sky_horizon * sky_light * glint * trim_glint;
+		}
+		albedo = mix(albedo, mirrored, paint_reflect * mix(paint_face_on, 1.0, fresnel));
 	}
 
 	// Metres from each inked edge, and how many metres a pixel spans there. A
