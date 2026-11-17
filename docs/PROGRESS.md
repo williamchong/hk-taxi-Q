@@ -102,7 +102,8 @@ Phase 3 — `B2` and the road
 - `P3-87` 🟡 Pressed panels. `P3-88` 🟡 Tram doors and lamps.
 - `P3-93` 🟡 Stop furniture: flags and tram shelters (`Q242`) — owed: the user's look, no look
   sheet was shown. `P3-96` 🟡 cost: 9 draws, 2.30 MB of PCK, desktop frame time unmoved, the iPhone Air at its 120 fps cap with and without.
-- `P3-92` 🟡 `TS324` taxi stand signs; minibus and pick-up plates not drawn (`Q242`).
+- `P3-92` 🟡 Stand signs: `TS324` taxi stand, `TS322` / `TS323` minibus stand, `TS3643` pick-up
+  (`Q242`) — owed: the user's look.
 - `P3-89` 🟡 Stop and stand paint, `P3-91` 🟡 its legends (`Q242`) — owed: the user's look, the
   handset.
 - 🚫 `P3-7a` (withdrawn, `Q102`), `P3-17` (returned as `P3-3e`, `Q173`). ❌ `P3-21` (`Q65`).
@@ -265,7 +266,7 @@ Budget
 | Video memory, iPhone Air | — | 235.9 MB at 0.75 scale, MSAA 2x (`Q236`) |
 | Draw calls | < 150 | throttle route 116–122 with traffic, HUD off (`Q214`); `P2-6` measures properly |
 | Resident triangles, worst camera | < 300k | 128% / 82%; with paint 161% / 91%; buildings alone 110% / 73% (`tools/resident_budget.py`, 2026-11-17). `mong_kok` 184%, `sha_tin` 47% (2026-09) |
-| Texture memory | < 128 MB | one 768 x 256 atlas, 70,193 B (`signs_text.png`) |
+| Texture memory | < 128 MB | one 1536 x 256 atlas, 119,611 B (`signs_text.png`) |
 | Bundle size (PCK) | < 200 MB | web 98,750,864 B (`build/web/index.pck`, 2026-11-17); iOS app 116,032,712 B (`build/ios/app`, 2026-11-17). Re-export before quoting |
 | First load, web, cold shader cache | — | 14.0–14.8 s boot, then the cover ~6 s (`Q184`) |
 | First frame, iOS fresh install | — | ~12 s with baked shaders; relaunch ~4 s (`Q207`) |

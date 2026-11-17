@@ -19,6 +19,7 @@ systematic sign error agrees with itself everywhere and renders as a city.
 
 from __future__ import annotations
 
+import dataclasses
 import math
 from collections.abc import Sequence
 from dataclasses import replace
@@ -44,7 +45,7 @@ from pipeline.meshbuild import ColouredBuilder
 from pipeline.placements import PLACEMENT_DP, placement, stood_positions
 from pipeline.polyline import Segments
 from pipeline.railings import facing_away
-from pipeline.sign_text import _bake, _bounds, _coverage, _livery, _plate_mask
+from pipeline.sign_text import _accent, _bake, _bounds, _coverage, _livery, _plate_mask
 from pipeline.signs import (
     _TURN_LEFT,
     _TURN_PROHIBITIONS,
@@ -172,6 +173,10 @@ BLOCK: dict[str, Any] = {
     "rect_info_width_m": 0.60,
     "rect_stand_width_m": 0.60,
     "rect_stand_height_m": 0.30,
+    "rect_minibus_width_m": 0.52,
+    "rect_minibus_height_m": 0.30,
+    "rect_pickup_width_m": 0.70,
+    "rect_pickup_height_m": 0.30,
     "rect_info_height_m": 0.55,
     "board_wide_width_m": 1.20,
     "board_wide_height_m": 0.40,
@@ -1816,6 +1821,57 @@ class TestWhichWayTheLetteringIsCutOut:
         bare = _bake(np.zeros((4, 4)), livery, 2)
         assert tuple(int(v) for v in covered[0, 0]) == spec.colours["white"]
         assert tuple(int(v) for v in bare[0, 0]) == spec.colours["red"]
+
+    def test_a_coloured_ink_on_paper_is_read_as_ink(self, spec):
+        """`TS323`'s red minibus on white (`P3-92`): the black-ink reading
+        forces a red cast to zero, so a coloured glyph baked a blank cell."""
+        livery = _livery(spec, _face("red", field="white"))
+        assert livery.chromatic and not livery.knockout
+        assert not _livery(spec, _face("black", field="white")).chromatic
+        assert not _livery(spec, _face("white", field="red")).chromatic
+        cell = np.full((4, 4, 3), 255, dtype=np.uint8)
+        cell[1, 1] = (255, 0, 0)
+        plate = np.ones((4, 4), dtype=bool)
+        assert _coverage(cell, plate, knockout=False)[1, 1] == 0.0
+        inked = _coverage(cell, plate, knockout=False, chromatic=True)
+        assert inked[1, 1] == 1.0 and inked[0, 0] == 0.0
+
+    def test_an_accent_is_the_cells_red_and_bakes_in_its_own_colour(self, spec):
+        """`TS3643`: black figures, a red taxi, white words on the taxi."""
+        cell = np.full((2, 2, 3), 255, dtype=np.uint8)
+        cell[0, 0] = (255, 0, 0)
+        cell[0, 1] = (0, 0, 0)
+        plate = np.ones((2, 2), dtype=bool)
+        accent = _accent(cell, plate)
+        assert accent.tolist() == [[1.0, 0.0], [0.0, 0.0]]
+        face = _face("black", field="white")
+        layers = (face.layers[0], SignLayer(SIGN_TEXT, "black", 1.0, accent="red"))
+        livery = _livery(spec, dataclasses.replace(face, layers=layers))
+        baked = _bake(_coverage(cell, plate, knockout=False), livery, 2, accent)
+        assert tuple(int(v) for v in baked[0, 0]) == spec.colours["red"]
+        assert tuple(int(v) for v in baked[0, 1]) == spec.colours["black"]
+        assert tuple(int(v) for v in baked[1, 1]) == spec.colours["white"]
+        # Between the red and the black a texel is half each, with no paper.
+        edge = np.full((2, 2, 3), (128, 0, 0), dtype=np.uint8)
+        black = _coverage(edge, plate, knockout=False, keep_red=True)
+        mixed = _bake(black, livery, 2, _accent(edge, plate))[0, 0]
+        halves = 0.5 * (np.asarray(spec.colours["red"]) + np.asarray(spec.colours["black"]))
+        assert mixed == pytest.approx(halves, abs=2.0)
+
+    def test_an_accent_beside_anything_but_black_ink_is_refused(self, spec):
+        face = _face("white", field="red")
+        layers = (face.layers[0], SignLayer(SIGN_TEXT, "white", 1.0, accent="red"))
+        with pytest.raises(ValueError, match="accent"):
+            _livery(spec, dataclasses.replace(face, layers=layers))
+
+    def test_an_accent_off_a_text_layer_fails_the_load(self, tmp_path):
+        block = {**BLOCK, "faces": {**BLOCK["faces"]}}
+        block["faces"]["TS999"] = {
+            "plate": "triangle_down",
+            "layers": [{"draw": "triangle_down", "colour": "white", "accent": "red", "size": 1.0}],
+        }
+        with pytest.raises(ValueError, match="accent"):
+            city_with(tmp_path, block)
 
     def test_a_face_whose_words_have_no_field_fails_the_load(self, tmp_path):
         """🔴 **The field is the layer beneath the words**, so a leading `text`

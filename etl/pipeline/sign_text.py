@@ -65,6 +65,9 @@ log = logging.getLogger(__name__)
 # read as "how far from paper is this pixel", and anything with a red cast is
 # forced to zero so the plate's own border cannot leak in as ink.
 _RED_CAST = 40
+# A glyph colour whose channels spread wider than this (0-255 units) is a
+# coloured ink, not a grey: the shipped black and white spread 10 at most, the green and red 107+.
+_CHROMATIC_SPREAD = 60.0
 
 
 @dataclass(frozen=True)
@@ -113,6 +116,16 @@ class Livery:
 
     glyph_rgb: np.ndarray
     field_rgb: np.ndarray
+    # A second ink laid where the cell is red (`TS3643`'s taxi), or none.
+    accent_rgb: np.ndarray | None = None
+
+    @property
+    def chromatic(self) -> bool:
+        """Whether the glyph is a coloured ink on paper (`TS322`'s green
+        minibus), which the black-ink reading sees as paper: a saturated
+        colour is bright in one channel. Derived from the livery, like `knockout`."""
+        spread = float(self.glyph_rgb.max() - self.glyph_rgb.min())
+        return not self.knockout and spread > _CHROMATIC_SPREAD
 
     @property
     def knockout(self) -> bool:
@@ -145,10 +158,17 @@ def _livery(spec: Signs, face: SignFace) -> Livery:
     # under `python -O` and this decides what colour the words are baked in.
     if index is None or index == 0:
         raise ValueError(f"{face.plate} face has no text layer with a field beneath it")
-    return Livery(
+    accent = face.layers[index].accent
+    livery = Livery(
         glyph_rgb=np.asarray(spec.colours[face.layers[index].colour], dtype=np.float64),
         field_rgb=np.asarray(spec.colours[face.layers[index - 1].colour], dtype=np.float64),
+        accent_rgb=None if accent is None else np.asarray(spec.colours[accent], dtype=np.float64),
     )
+    if accent is not None and (livery.knockout or livery.chromatic):
+        # The accent is the cell's red beside a BLACK ink: a knockout has no
+        # ink to sit beside, and a coloured glyph already reads the red.
+        raise ValueError(f"{face.plate} face has an accent on lettering that is not black on paper")
+    return livery
 
 
 def build_atlas(
@@ -187,9 +207,18 @@ def build_atlas(
         if plate is None or box is None:
             raise ValueError(f"{code}: no plate found in its index-plan cell")
         x0, y0, x1, y1 = box
-        coverage = _coverage(_crop(cell, box), _crop(plate, box), knockout=livery.knockout)
+        coverage = _coverage(
+            _crop(cell, box),
+            _crop(plate, box),
+            knockout=livery.knockout,
+            chromatic=livery.chromatic,
+            keep_red=livery.accent_rgb is not None,
+        )
+        accent = None
+        if livery.accent_rgb is not None:
+            accent = _accent(_crop(cell, box), _crop(plate, box))
 
-        ink = _ink_box(coverage)
+        ink = _ink_box(coverage if accent is None else np.maximum(coverage, accent))
         if ink is None:
             raise ValueError(f"{code}: its index-plan cell carries no lettering to bake")
         ix0, iy0, ix1, iy1 = ink
@@ -207,7 +236,8 @@ def build_atlas(
         )
 
         lettering = coverage[iy0 : iy1 + 1, ix0 : ix1 + 1]
-        tiles.append(_bake(lettering, livery, cell_px))
+        second = None if accent is None else accent[iy0 : iy1 + 1, ix0 : ix1 + 1]
+        tiles.append(_bake(lettering, livery, cell_px, second))
         cells[code] = TextCell(
             plate_rect=plate_rect,
             uv_rect=(index / len(codes), 0.0, (index + 1) / len(codes), 1.0),
@@ -232,7 +262,25 @@ def build_atlas(
     )
 
 
-def _coverage(cell: np.ndarray, plate: np.ndarray, *, knockout: bool) -> np.ndarray:
+def _accent(cell: np.ndarray, plate: np.ndarray) -> np.ndarray:
+    """How much of each pixel the cell's red covers, `0..1` — exactly what
+    `_coverage` forces out of a black-ink reading, kept for a face that says
+    it has a second ink. White lettering on the red reads 0 and shows the field."""
+    channels = cell.astype(np.float64)
+    cast = channels[..., 0] - np.maximum(channels[..., 1], channels[..., 2])
+    ink = np.clip(cast / 255.0, 0.0, 1.0)
+    ink[~plate] = 0.0
+    return ink
+
+
+def _coverage(
+    cell: np.ndarray,
+    plate: np.ndarray,
+    *,
+    knockout: bool,
+    chromatic: bool = False,
+    keep_red: bool = False,
+) -> np.ndarray:
     """How much of each pixel the lettering covers, `0..1`.
 
     ⚠️ **Antialiasing is kept on purpose.** The sheets are vector, so the glyph
@@ -259,10 +307,17 @@ def _coverage(cell: np.ndarray, plate: np.ndarray, *, knockout: bool) -> np.ndar
     red, green, blue = channels[..., 0], channels[..., 1], channels[..., 2]
     if knockout:
         ink = np.clip(np.minimum(np.minimum(red, green), blue) / 255.0, 0.0, 1.0)
+    elif chromatic:
+        # A coloured ink is far from paper in its darkest channel, and its
+        # border is the same ink: the whole plate is the cell (`TS322`).
+        ink = np.clip(1.0 - np.minimum(np.minimum(red, green), blue) / 255.0, 0.0, 1.0)
     else:
         lightness = np.maximum(np.maximum(red, green), blue) / 255.0
         ink = np.clip(1.0 - lightness, 0.0, 1.0)
-        ink[(red - np.minimum(green, blue)) > _RED_CAST] = 0.0
+        # With an accent the red is an ink of its own and `_accent` takes its
+        # share; a pixel between the red and the black keeps its black share.
+        if not keep_red:
+            ink[(red - np.minimum(green, blue)) > _RED_CAST] = 0.0
     ink[~plate] = 0.0
     return ink
 
@@ -347,7 +402,9 @@ def _ink_box(coverage: np.ndarray) -> tuple[int, int, int, int] | None:
     return _bounds(coverage > 0.5)
 
 
-def _bake(coverage: np.ndarray, livery: Livery, cell_px: int) -> np.ndarray:
+def _bake(
+    coverage: np.ndarray, livery: Livery, cell_px: int, accent: np.ndarray | None = None
+) -> np.ndarray:
     """One square RGB tile: the glyph's own colour laid over the plate's field.
 
     ⚠️ **Resampled on the coverage and composited afterwards**, never the other
@@ -359,13 +416,25 @@ def _bake(coverage: np.ndarray, livery: Livery, cell_px: int) -> np.ndarray:
     """
     from PIL import Image
 
-    source = Image.fromarray((np.clip(coverage, 0.0, 1.0) * 255.0).astype(np.uint8), "L")
-    resampled = np.asarray(source.resize((cell_px, cell_px), Image.LANCZOS), dtype=np.float64)
-    mask = np.clip(resampled / 255.0, 0.0, 1.0)[..., None]
+    def resampled(field: np.ndarray) -> np.ndarray:
+        source = Image.fromarray((np.clip(field, 0.0, 1.0) * 255.0).astype(np.uint8), "L")
+        small = np.asarray(source.resize((cell_px, cell_px), Image.LANCZOS), dtype=np.float64)
+        return np.clip(small / 255.0, 0.0, 1.0)[..., None]
+
+    mask = resampled(coverage)
     # 🔴 **The glyph's colour is the face's, and there are two of them now.**
     # This read `spec.colours["black"]` and said a face whose lettering is not
     # black "would need this to be a parameter". `TS101` is white on red and is
     # that face, so both colours come in from `_livery` — off the config the
     # face already carries, not off a new schema.
     blended = livery.field_rgb * (1.0 - mask) + livery.glyph_rgb * mask
+    if accent is not None and livery.accent_rgb is not None:
+        # Three shares of one texel, never one composite over another: an edge
+        # between the red and the black is half each, with no paper in it.
+        second = np.minimum(resampled(accent), 1.0 - mask)
+        blended = (
+            livery.field_rgb * (1.0 - mask - second)
+            + livery.glyph_rgb * mask
+            + livery.accent_rgb * second
+        )
     return np.round(blended).astype(np.uint8)

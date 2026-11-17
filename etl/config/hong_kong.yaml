@@ -2026,9 +2026,10 @@ signs:
 
     # -- stands (`P3-92`, `Q242`) --
     # TAXI STAND 的士站, white on green; the lettering is the sheet's own cell.
-    # ⚠️ `TS322` / `TS323` (the minibus stand's pictogram, green and red) and
-    # `TS3643` (the taxi pick-up plate's figures and red taxi) are not here: a
-    # cell is baked in two colours and theirs have three.
+    # The minibus stands' pictogram (`TS322` green, `TS323` red) is a coloured
+    # ink on white, border included, so the whole plate is the baked cell.
+    # `TS3643`, the taxi pick-up / drop-off plate, is black on white with the
+    # taxi's red as its `accent`.
     # `back_to_back`: TD files the plate twice at one pole and one angle, the
     # two faces of a double-sided sign (18 of Wan Chai's 24 poles).
     TS324:
@@ -2038,6 +2039,27 @@ signs:
       layers:
         - {draw: rect_stand, colour: green, size: 1.00}
         - {draw: text, colour: white, size: 1.00}
+    TS322:
+      plate: rect_minibus
+      rank: informatory
+      back_to_back: true
+      layers:
+        - {draw: rect_minibus, colour: white, size: 1.00}
+        - {draw: text, colour: green, size: 1.00}
+    TS323:
+      plate: rect_minibus
+      rank: informatory
+      back_to_back: true
+      layers:
+        - {draw: rect_minibus, colour: white, size: 1.00}
+        - {draw: text, colour: red, size: 1.00}
+    TS3643:
+      plate: rect_pickup
+      rank: informatory
+      back_to_back: true
+      layers:
+        - {draw: rect_pickup, colour: white, size: 1.00}
+        - {draw: text, colour: black, accent: red, size: 1.00}
 
     TS733:
       plate: rect_wide
@@ -2115,6 +2137,12 @@ signs:
   # as every plate's is (`Q60`: no TS sheet carries a dimension).
   rect_stand_width_m: 0.60
   rect_stand_height_m: 0.30
+  # The minibus stand plates (`TS322`, `TS323`): cell aspect 1.73. The taxi
+  # pick-up / drop-off plate (`TS3643`): 2.34.
+  rect_minibus_width_m: 0.52
+  rect_minibus_height_m: 0.30
+  rect_pickup_width_m: 0.70
+  rect_pickup_height_m: 0.30
   # The deviation board (TS414). Cell aspect 3.95 — but the sheet draws three
   # solid chevrons and two outlined, the outline being "repeat as required", so
   # the drawn width is a minimum rather than the sign. Three chevrons at this

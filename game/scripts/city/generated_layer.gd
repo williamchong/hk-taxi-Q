@@ -59,9 +59,10 @@ const SIGNS_TEXT_MESH: String = "signs_text"
 ## ceiling with it — the shipped atlas is measured against this number and fails
 ## above it, and a declared texture that never arrived fails too.
 ##
-## ⚠️ **This is 768 x 256: one square cell for each of the THREE faces with words
-## on them**, laid in a row — `TS102`'s GIVE WAY / 讓, `TS101`'s STOP / 停 and
-## `TS324`'s TAXI STAND / 的士站 (`P3-92`).
+## ⚠️ **This is 1536 x 256: one square cell for each of the SIX baked faces**,
+## laid in a row — `TS102`'s GIVE WAY / 讓, `TS101`'s STOP / 停, `TS324`'s TAXI
+## STAND / 的士站, the minibus stands' `TS322` / `TS323` and the pick-up plate
+## `TS3643` (`P3-92`).
 ## `text_cell_px` in `hong_kong.yaml` is the other half, `signs.json` publishes
 ## what actually shipped as `text_atlas_px`, and `PROGRESS.md` quotes it as
 ## `Texture memory`. Three numbers that must move together, which is the cost
@@ -72,9 +73,13 @@ const SIGNS_TEXT_MESH: String = "signs_text"
 ## to simply delete the rule. It went 256 x 256 -> 512 x 256 in the commit that
 ## added the second cell, and neither half of that is optional: a budget raised
 ## ahead of the lettering is slack, and lettering added ahead of the budget
-## fails the build. That is the check working. 768 x 256 with the third cell
-## (`P3-92`).
-const SIGNS_TEXT_ATLAS_BUDGET_PX: int = 768 * 256
+## fails the build. That is the check working. It went to 1536 x 256 with the
+## stand plates' four cells (`P3-92`).
+##
+## ⚠️ **The row holds eight cells.** `sign_text.py` lays cells in one row and
+## WebGL2 guarantees a texture 2048 px wide; six are in. The ninth face needs a
+## grid.
+const SIGNS_TEXT_ATLAS_BUDGET_PX: int = 1536 * 256
 
 const GeneratedRegions = preload("res://scripts/city/generated_regions.gd")
 

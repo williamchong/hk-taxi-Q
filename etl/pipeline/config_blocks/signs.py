@@ -47,6 +47,10 @@ SIGN_RECT_WIDE = "rect_wide"
 SIGN_RECT_INFO = "rect_info"
 # A stand plate (`P3-92`): TD's TAXI STAND cell is drawn 2 to 1.
 SIGN_RECT_STAND = "rect_stand"
+# The minibus stands' plate (`TS322`, `TS323`), 1.73 to 1, and the taxi
+# pick-up / drop-off plate (`TS3643`), 2.34 to 1.
+SIGN_RECT_MINIBUS = "rect_minibus"
+SIGN_RECT_PICKUP = "rect_pickup"
 
 
 SIGN_BOARD_WIDE = "board_wide"
@@ -122,6 +126,8 @@ SIGN_DRAWINGS = (
     SIGN_RECT_WIDE,
     SIGN_RECT_INFO,
     SIGN_RECT_STAND,
+    SIGN_RECT_MINIBUS,
+    SIGN_RECT_PICKUP,
     SIGN_BOARD_WIDE,
     SIGN_BOARD_TALL,
     SIGN_TRIANGLE_DOWN,
@@ -152,6 +158,8 @@ SIGN_PLATES = (
     SIGN_RECT_WIDE,
     SIGN_RECT_INFO,
     SIGN_RECT_STAND,
+    SIGN_RECT_MINIBUS,
+    SIGN_RECT_PICKUP,
     SIGN_BOARD_WIDE,
     SIGN_BOARD_TALL,
     SIGN_TRIANGLE_DOWN,
@@ -191,6 +199,9 @@ class SignLayer:
     draw: str
     colour: str
     size: float
+    # A `text` layer's second ink (`TS3643`'s red taxi beside its black
+    # figures), a name in `colours`; `sign_text.py` bakes the cell's red in it.
+    accent: str | None = None
 
 
 @dataclass(frozen=True)
@@ -313,6 +324,10 @@ class Signs(LayerSpec):
     rect_info_height_m: float
     rect_stand_width_m: float
     rect_stand_height_m: float
+    rect_minibus_width_m: float
+    rect_minibus_height_m: float
+    rect_pickup_width_m: float
+    rect_pickup_height_m: float
     board_wide_width_m: float
     board_wide_height_m: float
     board_tall_width_m: float
@@ -478,7 +493,20 @@ def _signs(body: Any, where: str) -> Signs | None:
                     f"{here}:size is {size}; it is a fraction of the plate's own dimension "
                     f"and must be greater than 0 and no more than 1"
                 )
-            layers.append(SignLayer(draw=draw, colour=colour, size=size))
+            accent = raw_layer.get("accent")
+            if accent is not None and (draw != SIGN_TEXT or str(accent) not in colours):
+                raise ValueError(
+                    f"{here}:accent is {accent!r}; it is a text layer's second ink and "
+                    f"must be one of {', '.join(sorted(colours))}"
+                )
+            layers.append(
+                SignLayer(
+                    draw=draw,
+                    colour=colour,
+                    size=size,
+                    accent=None if accent is None else str(accent),
+                )
+            )
         if sum(layer.draw == SIGN_TEXT for layer in layers) > 1:
             # `sign_text.py` bakes ONE cell per face and `_draw_plate` hands it
             # to every `text` layer, so a second one silently repeats the first's
@@ -566,6 +594,10 @@ def _signs(body: Any, where: str) -> Signs | None:
             "rect_info_height_m",
             "rect_stand_width_m",
             "rect_stand_height_m",
+            "rect_minibus_width_m",
+            "rect_minibus_height_m",
+            "rect_pickup_width_m",
+            "rect_pickup_height_m",
             "board_wide_width_m",
             "board_wide_height_m",
             "board_tall_width_m",
@@ -638,6 +670,10 @@ def _signs(body: Any, where: str) -> Signs | None:
         rect_info_height_m=lengths["rect_info_height_m"],
         rect_stand_width_m=lengths["rect_stand_width_m"],
         rect_stand_height_m=lengths["rect_stand_height_m"],
+        rect_minibus_width_m=lengths["rect_minibus_width_m"],
+        rect_minibus_height_m=lengths["rect_minibus_height_m"],
+        rect_pickup_width_m=lengths["rect_pickup_width_m"],
+        rect_pickup_height_m=lengths["rect_pickup_height_m"],
         board_wide_width_m=lengths["board_wide_width_m"],
         board_wide_height_m=lengths["board_wide_height_m"],
         board_tall_width_m=lengths["board_tall_width_m"],

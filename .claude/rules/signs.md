@@ -50,9 +50,11 @@ paths:
 - **`back_to_back`, `stack_of`** (`P3-92`): TD files a double-sided sign as two features at one
   point and one angle (18 of Wan Chai's 24 `TS324` poles). The second hangs on the first's back;
   compare `plates_back_to_back`. Only a flagged face pairs: `TS115` twice on a pole still stacks.
-- **A cell is baked in two colours.** `TS322` / `TS323` (the minibus stand's pictogram) and
-  `TS3643` (the taxi pick-up plate) carry three and are not drawn; a plate without its pictogram
-  is the blank plate the lettering was added to end (`Q68`). Green is in `sign_sheets.INK` and `_plate_mask` for `TS324`.
+- **Three ways a cell is read** (`Livery`): a knockout (`TS101`, `TS324`), black ink on paper
+  (`TS102`), and a coloured ink on paper (`chromatic`: `TS322` / `TS323`, whose border is the same
+  ink, so the cell is the whole plate). A `text` layer's `accent` adds the cell's red as a second
+  ink (`TS3643`'s taxi); red is the only cast `_accent` reads. Green is in `sign_sheets.INK` and
+  `_plate_mask` for the stand plates. A new baked face owes a look at `signs_text.png`.
 - The atlas ships as `signs_text.png`, named by `city.json`'s `signs_text_atlas`, never embedded in
   `signs.glb` (`Q70`): Godot extracts an embedded image to a file the manifest does not name, and
   `sync_generated.sh` deletes it. Any second image owes the same. `signs.json`'s `bytes` is the

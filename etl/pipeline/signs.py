@@ -151,6 +151,8 @@ from pipeline.config import (
     SIGN_RANK_SUPPLEMENTARY,
     SIGN_RECT,
     SIGN_RECT_INFO,
+    SIGN_RECT_MINIBUS,
+    SIGN_RECT_PICKUP,
     SIGN_RECT_STAND,
     SIGN_RECT_WIDE,
     SIGN_SLASH,
@@ -780,6 +782,8 @@ _PLATE_RECTS: dict[str, Callable[[Signs], tuple[float, float]]] = {
     SIGN_RECT_WIDE: lambda spec: (spec.rect_wide_width_m, spec.rect_wide_height_m),
     SIGN_RECT_INFO: lambda spec: (spec.rect_info_width_m, spec.rect_info_height_m),
     SIGN_RECT_STAND: lambda spec: (spec.rect_stand_width_m, spec.rect_stand_height_m),
+    SIGN_RECT_MINIBUS: lambda spec: (spec.rect_minibus_width_m, spec.rect_minibus_height_m),
+    SIGN_RECT_PICKUP: lambda spec: (spec.rect_pickup_width_m, spec.rect_pickup_height_m),
     SIGN_BOARD_WIDE: lambda spec: (spec.board_wide_width_m, spec.board_wide_height_m),
     SIGN_BOARD_TALL: lambda spec: (spec.board_tall_width_m, spec.board_tall_height_m),
 }

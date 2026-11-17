@@ -3295,9 +3295,12 @@ share `twilight.tres`, a rose horizon; a shift never sees the 06:15 dawn.
   (n*` / `(w*`, `1048`, `1149`.
 - Stand signs (`P3-92`): `TS324` TAXI STAND 的士站 is drawn, white on green from the sheet's own
   cell — 42 plates in Wan Chai, 3 in Causeway Bay, 18 poles double-sided (`back_to_back`). The
-  atlas is 768 x 256. Not drawn: `TS322` / `TS323` minibus stand and `TS3643` / `TS3649` taxi
-  pick-up plates — a cell bakes two colours and theirs carry three; `TS659` and `TS3649` are
-  blank on the sheet.
+  minibus stands' `TS322` (green, 35 and 5) and `TS323` (red, 4) are a coloured ink on white, so
+  the whole plate is the baked cell; the taxi pick-up / drop-off plate `TS3643` (9) is black on
+  white with the taxi's red as a second ink (a `text` layer's `accent`). 29 plates hang back to
+  back in Wan Chai. The atlas is 1536 x 256, 119,611 B. An earlier note here said those three
+  carry three colours and could not be baked: wrong for the minibus pair, which carry two.
+  Not drawn: `TS659` and `TS3649`, blank on the sheet.
 - Furniture (`P3-93` to `P3-95`, `pipeline/stops.py`, `CITY_SCHEMA` 48): a flag on a pole at each
   operator stop in `bus_routes.json` (Wan Chai 70 bus, 50 minibus; Causeway Bay 32, 15) and at
   TD's taxi pick-up / drop-off points (14), a shelter on the track's left at each tram stop
