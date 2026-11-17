@@ -141,7 +141,7 @@ The same directory holds subsets of **Noto Sans HK** (© 2014–2021 Adobe) and 
 
 `game/assets/generated/` and `etl/out/` are derived from the Lands Department's 3D Visualisation Map
 and iB1000 topographic map, the Transport Department's Road Network v2 and Traffic Aids Drawings,
-the Highways Department's Pavement Polygon and Tree (CSDI-only), and the Leisure and Cultural
+the Highways Department's Pavement Polygon, Tree and Roadside Planter Wall (CSDI-only), and the Leisure and Cultural
 Services Department's Trees (LCSD Venues other than Major Parks) and Trees (Major Parks), obtained via DATA.GOV.HK and the CSDI
 Portal. That
 includes the repainted hero meshes under `landmarks/` — a re-coloured government mesh is still the

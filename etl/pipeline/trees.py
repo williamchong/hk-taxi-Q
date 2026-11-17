@@ -133,7 +133,7 @@ class TreeReport:
     library_vertices: int = 0
 
 
-class _Faces:
+class Faces:
     """Triangles binned by plan cell, asked for every height over a point."""
 
     def __init__(self, corners: np.ndarray) -> None:
@@ -286,7 +286,7 @@ _FROND_HALF_WIDTH_M = 0.3
 _CONES = ((0.0, 0.75, 1.0), (0.45, 1.0, 0.7))
 
 
-def _face(
+def face(
     builder: ColouredBuilder, points: np.ndarray, colour: tuple[int, int, int], outward: np.ndarray
 ) -> None:
     """A convex polygon, wound so its front faces `outward`."""
@@ -318,7 +318,7 @@ def _band(
     for i in range(sides):
         j = (i + 1) % sides
         quad = np.array([lower[i], lower[j], upper[j], upper[i]])
-        _face(builder, quad, colour, _radial(quad))
+        face(builder, quad, colour, _radial(quad))
 
 
 def _cone(
@@ -327,8 +327,8 @@ def _cone(
     sides = len(base)
     for i in range(sides):
         triangle = np.array([base[i], base[(i + 1) % sides], apex])
-        _face(builder, triangle, colour, _radial(triangle[:2]))
-    _face(builder, base, colour, np.array([0.0, -1.0, 0.0]))
+        face(builder, triangle, colour, _radial(triangle[:2]))
+    face(builder, base, colour, np.array([0.0, -1.0, 0.0]))
 
 
 def _profiled(
@@ -343,8 +343,8 @@ def _profiled(
     rings = [_ring(share * radius_m, low_m + t * (high_m - low_m), sides) for t, share in profile]
     for lower, upper in itertools.pairwise(rings):
         _band(builder, lower, upper, colour)
-    _face(builder, rings[0], colour, np.array([0.0, -1.0, 0.0]))
-    _face(builder, rings[-1], colour, np.array([0.0, 1.0, 0.0]))
+    face(builder, rings[0], colour, np.array([0.0, -1.0, 0.0]))
+    face(builder, rings[-1], colour, np.array([0.0, 1.0, 0.0]))
 
 
 def _fronds(
@@ -362,10 +362,10 @@ def _fronds(
         ridge = mid + np.array([0.0, 0.08, 0.0])
         up, down = np.array([0.0, 1.0, 0.0]), np.array([0.0, -1.0, 0.0])
         for triangle in ((head, left, ridge), (head, ridge, right), (left, tip, ridge)):
-            _face(builder, np.array(triangle), colour, up)
-        _face(builder, np.array((ridge, tip, right)), colour, up)
-        _face(builder, np.array((head, right, left)), colour, down)
-        _face(builder, np.array((left, right, tip)), colour, down)
+            face(builder, np.array(triangle), colour, up)
+        face(builder, np.array((ridge, tip, right)), colour, up)
+        face(builder, np.array((head, right, left)), colour, down)
+        face(builder, np.array((left, right, tip)), colour, down)
 
 
 def draw_kind(spec: Trees, name: str, kind: TreeKind) -> MeshData | None:
@@ -379,7 +379,7 @@ def draw_kind(spec: Trees, name: str, kind: TreeKind) -> MeshData | None:
         # A palm's trunk runs to its head; the fronds spring from the top.
         top = _ring(0.8 * kind.trunk_radius_m, height, sides)
         _band(builder, _ring(kind.trunk_radius_m, 0.0, sides), top, bark)
-        _face(builder, top, bark, np.array([0.0, 1.0, 0.0]))
+        face(builder, top, bark, np.array([0.0, 1.0, 0.0]))
         _fronds(builder, np.array([0.0, height, 0.0]), kind.crown_radius_m, sides, leaves)
     else:
         # The trunk runs into the crown so no gap shows under it.
@@ -422,16 +422,14 @@ def trunks(spec: Trees) -> dict[str, dict[str, float]]:
 # --------------------------------------------------------------------------
 
 
-def shipped_faces(city: Config, region_id: str, out_dir: Path) -> tuple[_Faces, _Faces]:
-    """The ground the tiles draw, and everything else the bundle draws over it."""
+def tile_corners(city: Config, region_id: str, out_dir: Path) -> tuple[np.ndarray, np.ndarray]:
+    """The tiles' triangles as corners: the ground they draw, and everything else."""
     rebuild = f"python -m pipeline --region {region_id}"
     buildings = read_document(out_dir / BUILDINGS_MANIFEST_NAME, BUILDINGS_MANIFEST_SCHEMA, rebuild)
-    surface = read_document(out_dir / SURFACE_MANIFEST_NAME, SURFACE_MANIFEST_SCHEMA, rebuild)
     paving, jitter = ground_colour(city)
     park = None if city.basemap is None else city.basemap.park_material.colour
     ground: list[np.ndarray] = []
-    road = read_surface(out_dir, surface["chunks"])
-    structure: list[np.ndarray] = [road.positions[road.triangles].astype(np.float64)]
+    structure: list[np.ndarray] = []
     for path in tile_meshes(out_dir, buildings):
         for mesh in read_render(path):
             if mesh.colours is None or not len(mesh.triangles):
@@ -443,7 +441,17 @@ def shipped_faces(city: Config, region_id: str, out_dir: Path) -> tuple[_Faces, 
             corners = mesh.positions[mesh.triangles].astype(np.float64)
             ground.append(corners[is_ground])
             structure.append(corners[~is_ground])
-    return _Faces(np.concatenate(ground)), _Faces(_upward(np.concatenate(structure)))
+    return np.concatenate(ground), np.concatenate(structure)
+
+
+def shipped_faces(city: Config, region_id: str, out_dir: Path) -> tuple[Faces, Faces]:
+    """The ground the tiles draw, and everything else the bundle draws over it."""
+    rebuild = f"python -m pipeline --region {region_id}"
+    surface = read_document(out_dir / SURFACE_MANIFEST_NAME, SURFACE_MANIFEST_SCHEMA, rebuild)
+    road = read_surface(out_dir, surface["chunks"])
+    ground, built = tile_corners(city, region_id, out_dir)
+    structure = np.concatenate([road.positions[road.triangles].astype(np.float64), built])
+    return Faces(ground), Faces(_upward(structure))
 
 
 def _upward(corners: np.ndarray) -> np.ndarray:

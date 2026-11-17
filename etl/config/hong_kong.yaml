@@ -390,6 +390,20 @@ materials:
     source: "tree bark, luminous; 5-20% in the visible across species"
     bounds: [5, 20]
 
+  # The roadside planters (`P3-98`, `Q247`). The shrub mass a shade under the
+  # broadleaf canopy so a hedge reads beneath a crown, not as one; the wall
+  # the paler, cleaner concrete of a cast kerb unit.
+  shrub_foliage:
+    colour: "#2f6417"
+    reflectance: 9.7
+    source: "clipped evergreen shrub, luminous; green leaves 5-15% in the visible"
+    bounds: [5, 15]
+  planter_wall:
+    colour: "#959087"
+    reflectance: 28.0
+    source: "cast concrete planter wall, clean end of 20-30%"
+    bounds: [20, 30]
+
 # Road Network v2 carries no Z ordinate. Its ELEVATION attribute is an ordinal
 # grade-separation level — the GIS equivalent of OSM's `layer` tag — so deck
 # heights are ours to author.
@@ -646,6 +660,16 @@ paged_sources:
     page_size: 3000
     max_pages: 30
     filename: Trees_Major_Parks.geojson
+
+  # HyD's Roadside Planter Wall (`INV_RPW`): 5,325 polylines territory-wide
+  # (2 pages), read 2026-11-18 — the walls of the planters HyD keeps beside
+  # and between carriageways (`P3-98`, `Q247`). ⚠️ A line and an id, nothing
+  # else: no height, no level, no say on what grows inside.
+  planter_walls:
+    url: "https://portal.csdi.gov.hk/server/rest/services/common/hyd_rcd_1632211024666_47455/MapServer/0/query?where=1%3D1&outFields=OBJECTID&returnGeometry=true&outSR=2326&geometryPrecision=2&orderByFields=OBJECTID&resultOffset={offset}&resultRecordCount={count}&f=geojson"
+    page_size: 3000
+    max_pages: 10
+    filename: INV_RPW.geojson
 
 tiled_sources:
   buildings:
@@ -3634,6 +3658,43 @@ trees:
   # a deck — stands over its foot between this height and its own top: a tree
   # inside a block, or in a podium garden the street below cannot hold.
   overhead_clear_m: 2.5
+
+# HyD's roadside planters (`P3-98`, `Q247`), built by `pipeline/planters.py`.
+#
+# **Where is read, what is authored.** A wall stands where `INV_RPW` draws
+# one, and a ring of walls that closes is a bed. ⚠️ Every height here is ours,
+# and so is the planting: the layer says nothing about either. The user's pick
+# of three renders (2026-11-18): a kerb-height wall with a low shrub mass.
+planters:
+  source: planter_walls
+  layer: INV_RPW
+  wall_material: planter_wall
+  shrub_material: shrub_foliage
+  # The wall's height above the highest ground under its bed, and the width a
+  # wall that closes no bed is drawn at.
+  wall_height_m: 0.45
+  wall_width_m: 0.24
+  # The planting stands this far inside the wall, in clumps `clump_m` across,
+  # each a height drawn between the two bounds above the wall's top.
+  shrub_inset_m: 0.2
+  clump_m: 1.6
+  shrub_min_m: 0.45
+  shrub_max_m: 0.85
+  # How much darker a clump's sides are than its top, and how far one clump's
+  # green may fall under the next's.
+  side_darken: 0.18
+  tint_darken: 0.12
+  # 🔴 A planter never stands on the drawn road: a bed is cut back to this far
+  # outside the level-0 carriageway, and refused whole when more than
+  # `max_on_road` of it lay inside — a ring that is mostly road is a survey
+  # and a ribbon disagreeing, not a planter.
+  kerb_clear_m: 0.05
+  max_on_road: 0.5
+  # A cut bed smaller than this, or a cut wall piece, is dropped.
+  min_bed_m2: 2.0
+  min_wall_m2: 0.3
+  # The wall goes this far under the lowest ground beneath it.
+  sink_m: 0.1
 
 # Hero buildings shipped as authored models (P3-6) — the landmarks.json
 # contract in docs/ARCHITECTURE.md. The building stage excludes every stem

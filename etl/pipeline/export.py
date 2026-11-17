@@ -65,6 +65,7 @@ from pipeline.gltf import Bounds
 from pipeline.lamps import LAMPS_MANIFEST_NAME, LAMPS_MANIFEST_SCHEMA
 from pipeline.landmarks import ASSETS_NAME, ASSETS_SCHEMA, landmark_in_region
 from pipeline.parked import PARKED_MANIFEST_NAME, PARKED_MANIFEST_SCHEMA
+from pipeline.planters import PLANTERS_MANIFEST_NAME, PLANTERS_MANIFEST_SCHEMA
 from pipeline.railings import RAILINGS_MANIFEST_NAME, RAILINGS_MANIFEST_SCHEMA
 from pipeline.roadmarks import ROADMARKS_MANIFEST_NAME, ROADMARKS_MANIFEST_SCHEMA
 from pipeline.roads import ROADGRAPH_NAME, ROADGRAPH_SCHEMA
@@ -306,7 +307,11 @@ CITY_NAME = "city.json"
 # 48 since `P3-94` (`Q242`): the manifest names `stops.glb` and
 # `stops_placements.json`, the authored flags and shelters at published stops,
 # on `lamps`' terms. A v47 reader ships a region without them.
-CITY_SCHEMA = 48
+# 49 since `P3-98` (`Q247`): the manifest names `planters.glb`, HyD's roadside
+# planter walls and the beds they close — a new shipped asset, and the first
+# generated layer after the road to carry a collider. A v48 reader ships a
+# region without it.
+CITY_SCHEMA = 49
 
 # The hero-building placement document (`P3-6`), written by this stage from the
 # city config — ~2 entries derived from `landmarks:` plus one CRS conversion,
@@ -351,6 +356,7 @@ OPTIONAL_ASSET_KEYS = (
     "stopmarks",
     "stops",
     "stops_placements",
+    "planters",
     "lamps",
     "lamps_placements",
     "railings",
@@ -405,6 +411,7 @@ INPUTS: tuple[Input, ...] = (
     Input(CROSSINGS_MANIFEST_NAME, CROSSINGS_MANIFEST_SCHEMA, "crossings"),
     Input(STOPMARKS_MANIFEST_NAME, STOPMARKS_MANIFEST_SCHEMA, "stopmarks"),
     Input(STOPS_MANIFEST_NAME, STOPS_MANIFEST_SCHEMA, "stops"),
+    Input(PLANTERS_MANIFEST_NAME, PLANTERS_MANIFEST_SCHEMA, "planters"),
     Input(LAMPS_MANIFEST_NAME, LAMPS_MANIFEST_SCHEMA, "lamps"),
     Input(RAILINGS_MANIFEST_NAME, RAILINGS_MANIFEST_SCHEMA, "railings"),
     Input(SIGNS_MANIFEST_NAME, SIGNS_MANIFEST_SCHEMA, "signs"),
@@ -493,6 +500,7 @@ def build_region(
     crossings = documents[CROSSINGS_MANIFEST_NAME]
     stopmarks = documents[STOPMARKS_MANIFEST_NAME]
     stops = documents[STOPS_MANIFEST_NAME]
+    planters = documents[PLANTERS_MANIFEST_NAME]
     lamps = documents[LAMPS_MANIFEST_NAME]
     railings = documents[RAILINGS_MANIFEST_NAME]
     signs = documents[SIGNS_MANIFEST_NAME]
@@ -619,6 +627,9 @@ def build_region(
         # the city declares no `stops:` block.
         "stops": stops["asset"],
         "stops_placements": stops["placements_document"],
+        # HyD's roadside planters (`P3-98`, `Q247`); `null` where the city
+        # declares no `planters:` block or the region holds no wall.
+        "planters": planters["asset"],
         "lamps": lamps["asset"],
         # Where the lamp library stands (`P5-3`), on `signs_placements`' terms.
         "lamps_placements": lamps["placements_document"],

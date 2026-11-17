@@ -3388,3 +3388,16 @@ share `twilight.tres`, a rose horizon; a shift never sees the 06:15 dawn.
 - The bed now carries drums and bass, so the thump, root-pulse and top-line layers became congas, a muted guitar and horn stabs; `tiers` is unchanged. The beds average −17 to −19 dBFS against −23 to −26, so `bed_db` went −12 → −18 to hold the level; still not set against a drive.
 - Not built: a cab-radio filter (rendered, heard once, not picked); music under the menu; a `drive.sh` flag (the music moves no frame).
 
+## `Q247` — HyD's roadside planters are built: a kerb-height wall, and a shrub bed where the walls close
+
+**Status.** 🟡 Built 2026-11-18 (`P3-98`) on the user's ask ("vegetation marked in open data which is not tree") and the user's pick of three renders. Owed: the user's drive into one, the PCK. Checklist in `.claude/rules/planters.md`.
+
+- Source: HyD Roadside Planter Wall (`INV_RPW`, `hyd_rcd_1632211024666_47455`), paged from CSDI in EPSG:2326. A polyline and an id; no height, level or planting. Wan Chai 48 features (22 close into a ring), Causeway Bay 6 (1).
+- The other candidates were measured and refused: iB1000 has no grass, shrub or planter class; the 3D Visualisation Map's `VEGETATION(TB)` is ~97% tree canopy; HyD Vegetation in Causeway Bay is 79% slope and 90% under canopy.
+- The look is the user's pick, B of three: A a kerb-height box with a flat green top (a thin line from a car), B the box with a low shrub mass, C the shrub alone. Wall 0.45 m; clumps 1.6 m across, 0.45–0.85 m over the wall, each its own height and green. All authored.
+- Only where surveyed, as `Q171`: a bed is a ring one feature's walls close; an open wall stands bare.
+- Never on the drawn road: cut back to 0.05 m outside the level-0 carriageway region (58.9 m² in Wan Chai), refused whole over half on it (3 of 22 rings). Cut by the tiles' walls that stand through it (5.2 m²): a ring round a lift tower is not planted through.
+- Built: Wan Chai 19 beds, 30 walls, 897 m² planted, 10,166 triangles; Causeway Bay 1 bed, 5 walls, 26 m², 374. One draw a region.
+- A planter is a crash: the walls ship as `planters_collision-colonly` in the same `.glb` (3,481 / 213 triangles), the first generated layer after the road to carry its own body. The planting collides with nothing.
+- `city.json` schema 49 names `planters`.
+- Not done: a level for a wall on a deck (the layer has none); registering the railings beside a wall; lighting at night.

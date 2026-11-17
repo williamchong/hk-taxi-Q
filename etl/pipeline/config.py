@@ -159,6 +159,7 @@ from pipeline.config_blocks.parked import (  # noqa: F401
     Vehicle,
     _parked,
 )
+from pipeline.config_blocks.planters import Planters, _planters
 from pipeline.config_blocks.railings import (  # noqa: F401
     _RAILING_ROLES,
     RailingClass,
@@ -471,6 +472,9 @@ class Config:
     # Optional on the same terms: absent, the region ships no trees, and there
     # is no fill where neither inventory surveyed one.
     trees: Trees | None = None
+    # HyD's roadside planters, built by `pipeline/planters.py` (`P3-98`,
+    # `Q247`). Optional on the same terms: absent, the region ships none.
+    planters: Planters | None = None
     # The signalled junctions and their authored stages, by
     # `pipeline/signals.py` (`P3-3a`, `Q173`). Optional: absent, the region
     # ships no signal plan and no car stops for a light.
@@ -854,6 +858,7 @@ def load_config(path: Path | None = None) -> Config:
         road_marks=_road_marks(document.get("road_marks"), f"{path}:road_marks"),
         parked=_parked(document.get("parked"), f"{path}:parked"),
         trees=_trees(document.get("trees"), f"{path}:trees", table),
+        planters=_planters(document.get("planters"), f"{path}:planters", table),
         signals=_signals(document.get("signals"), f"{path}:signals"),
         bus_routes=_bus_routes(document.get("bus_routes"), f"{path}:bus_routes"),
         census_stations=_census_stations(document.get("traffic_census"), f"{path}:traffic_census"),
@@ -894,6 +899,8 @@ def load_config(path: Path | None = None) -> Config:
     if city.trees is not None:
         for index, publisher in enumerate(city.trees.publishers):
             _check_source_exists(city, publisher.source, f"{path}:trees.publishers[{index}].source")
+    if city.planters is not None:
+        _check_source_exists(city, city.planters.source, f"{path}:planters.source")
     if city.bus_routes is not None:
         for index, route_set in enumerate(city.bus_routes.sets):
             _check_source_exists(city, route_set.source, f"{path}:bus_routes.sets[{index}].source")

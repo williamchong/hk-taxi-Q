@@ -251,7 +251,10 @@ const NOT_MEASURED: float = -1.0
 ##
 ## 48 since `P3-94` (`Q242`): the manifest names `stops.glb` and
 ## `stops_placements.json`, the authored flags and shelters at published stops.
-const SCHEMA_VERSION: int = 48
+##
+## 49 since `P3-98` (`Q247`): the manifest names `planters.glb`, HyD's roadside
+## planter walls and the beds they close.
+const SCHEMA_VERSION: int = 49
 
 
 ## One entry of `tiles` — a square of the city, at every tier the ETL built.
@@ -508,6 +511,10 @@ var parked_placements_path: String
 var trees_path: String
 var trees_placements_path: String
 
+## HyD's roadside planters (`P3-98`, `Q247`), or **empty** where the region
+## ships none. Optional on `tramway_path`'s terms.
+var planters_path: String
+
 ## The signalled junctions and their authored stages (`P3-3a`, `Q173`), read by
 ## `SignalPlan`. Empty where the city declares no `signals:` block or staged
 ## nothing: no car stops for a light.
@@ -704,6 +711,7 @@ static func load_manifest(region: String = "") -> CityManifest:
 	)
 	manifest.trees_path = _resolve(document.get("trees"), manifest.directory)
 	manifest.trees_placements_path = _resolve(document.get("trees_placements"), manifest.directory)
+	manifest.planters_path = _resolve(document.get("planters"), manifest.directory)
 	manifest.signals_plan_path = _resolve(document.get("signals_plan"), manifest.directory)
 	manifest.signal_heads_placements_path = _resolve(
 		document.get("signal_heads_placements"), manifest.directory
@@ -837,6 +845,7 @@ func shipped() -> PackedStringArray:
 		parked_placements_path,
 		trees_path,
 		trees_placements_path,
+		planters_path,
 		signals_plan_path,
 		signal_heads_placements_path,
 		tram_lines_path,

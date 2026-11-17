@@ -51,6 +51,7 @@ from pipeline import (
     lamps,
     landmarks,
     parked,
+    planters,
     podiums,
     railings,
     region,
@@ -188,6 +189,9 @@ STAGES: dict[str, Callable[[list[str]], int]] = {
     # After `fares`, `tramlines` and `busroutes`, whose documents say where a
     # stop is, and `surface` for the kerb a pole stands past. Before `export`.
     "stops": stops.main,
+    # After `carve` and `surface`, on `trees`' terms: the ground a wall stands
+    # on and the carriageway it is cut back from. Before `export`.
+    "planters": planters.main,
     "export": export.main,
 }
 
@@ -242,6 +246,7 @@ NEEDS: dict[str, tuple[str, ...]] = {
     "busroutes": ("surface",),
     "parked": ("surface", "fares", "tramlines", "fence", "busroutes"),
     "stops": ("surface", "fares", "tramlines", "busroutes"),
+    "planters": ("carve", "surface"),
     "export": (
         "basemap",
         "landmarks",
@@ -264,6 +269,7 @@ NEEDS: dict[str, tuple[str, ...]] = {
         "parked",
         "busroutes",
         "stops",
+        "planters",
     ),
 }
 

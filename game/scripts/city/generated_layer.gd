@@ -102,6 +102,7 @@ const LAMPS: String = "lamps"
 const SIGNS: String = "signs"
 const WATER: String = "water"
 const TREES: String = "trees"
+const PLANTERS: String = "planters"
 
 ## One row per layer. `file` is the asset in a region's bundle directory; `noun` and
 ## `module` build the rebuild hint and the verify tools' skip line; `absence` is
@@ -258,6 +259,19 @@ const LAYERS: Dictionary[String, Dictionary] = {
 		"module": "trees",
 		"absence": "A city that declares no tree inventory ships none, and that is not a failure.",
 		"placements": "trees_placements.json",
+		"casts_shadow": true,
+		"shadow_meshes": [],
+	},
+	# HyD's roadside planters (`P3-98`, `Q247`): one merged mesh and the one
+	# `-colonly` body a row of this table carries — the walls, so a car hits a
+	# planter. It casts: a hedge with no shadow floats.
+	PLANTERS:
+	{
+		"file": "planters.glb",
+		"noun": "planters",
+		"module": "planters",
+		"absence": "A region HyD draws no planter wall in ships none, and that is not a failure.",
+		"placements": "",
 		"casts_shadow": true,
 		"shadow_meshes": [],
 	},

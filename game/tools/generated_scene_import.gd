@@ -104,6 +104,10 @@ const SHADERS: Dictionary = {
 	# `vertex_albedo.gdshader` on `water`'s terms, and its fallback is the same
 	# quiet one, which is why `verify_trees.gd` checks the dispatch by `resource_path`.
 	"trees": "res://tuning/trees.tres",
+	# HyD's roadside planters (`P3-98`): `PLANTERS_MATERIAL` in
+	# `etl/pipeline/planters.py`, on the trees' terms and with their quiet
+	# fallback, so `verify_planters.gd` checks the dispatch by `resource_path`.
+	"planters": "res://tuning/planters.tres",
 	# The lit signal heads (`P3-3e`): `MATERIAL` in `tools/make_signal_heads.py`,
 	# on the AUTHORED `heads.glb`. Its own shader, because the lamp is read from
 	# `INSTANCE_CUSTOM` (`SignalController`'s light) against the lens circuit on

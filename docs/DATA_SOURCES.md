@@ -420,6 +420,17 @@ its `HHMM`; a `frequencies` end is exclusive.
 
 ---
 
+## Roadside planters (`Q247`)
+
+- **HyD Roadside Planter Wall** — `hyd_rcd_1632211024666_47455`, Highways Department,
+  `csdi:INV_RPW`, native EPSG:2326, found 2026-11-18. `paged_sources.planter_walls` reads
+  `OBJECTID` and the geometry: 5,325 polylines territory-wide, 48 in Wan Chai and 6 in Causeway
+  Bay. ⚠️ A line and `RPW_UID`, nothing else: no height, no level, nothing on the planting. 22 of
+  Wan Chai's 48 features close into a ring; the rest are a wall along one side.
+- Looked at and not built: **HyD Vegetation** (`VIS_INV_VEG`) — Causeway Bay's 78 polygons are 79%
+  slope and 90% under canopy the trees already stand; iB1000 has no grass, shrub or planter class;
+  the 3D Visualisation Map's `VEGETATION(TB)` is ~97% tree canopy.
+
 ## Trees (`Q171`)
 
 Three point inventories, paged off the CSDI REST service like the pavement polygons

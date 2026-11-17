@@ -245,6 +245,13 @@ func _check_documents(manifest: Manifest) -> PackedStringArray:
 				GeneratedLayer.placements_path(GeneratedLayer.TREES)
 			)
 		)
+	# And the planters (`P3-98`): a region HyD draws no wall in names none.
+	if not manifest.planters_path.is_empty():
+		problems.append_array(
+			_check_document(
+				"planters", manifest.planters_path, GeneratedLayer.path(GeneratedLayer.PLANTERS)
+			)
+		)
 	if not manifest.boxjunctions_path.is_empty():
 		problems.append_array(
 			_check_document(

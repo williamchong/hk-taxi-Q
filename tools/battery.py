@@ -332,6 +332,36 @@ TRIGGERS: dict[str, Trigger] = {
             Tool("paint_clearance.py", (*_GENERATED, "--layer", "stopmarks")),
         ),
     ),
+    "planters": Trigger(
+        "`pipeline/planters.py`, the `planters` config block, or what a planter is cut by",
+        (
+            Report(
+                "planters.json",
+                (
+                    "read",
+                    "closed",
+                    "open",
+                    "rings",
+                    "in_carriageway",
+                    "cut_away",
+                    "no_ground",
+                    "beds",
+                    "walls",
+                    "walls_too_small",
+                    "walls_no_ground",
+                    "bed_area_m2",
+                    "road_cut_m2",
+                    "building_cut_m2",
+                    "clumps",
+                    "max_ground_fall_m",
+                    "facing_away",
+                    "triangles",
+                    "collider_triangles",
+                    "bytes",
+                ),
+            ),
+        ),
+    ),
     "stops": Trigger(
         "`pipeline/stops.py`, the `stops` config block, or where a stop's furniture stands",
         (

@@ -87,6 +87,7 @@ run calls the same entry point. In run order:
 | `arrows`, `boxjunctions`, `crossings`, `stopmarks`, `roadmarks` | Published road paint, each its own mesh |
 | `railings`, `signs`, `lamps`, `trees` | Published street furniture, each its own mesh or placement list |
 | `stops` | Authored flags and tram shelters at the stops the bundle already publishes |
+| `planters` | HyD's roadside planter walls, and a shrub bed where a ring of them closes |
 | `signals` | The signalled junctions and their stages |
 | `tramlines` | The tramway as lines a tram can run |
 | `busroutes` | The bus and green-minibus routes moving traffic keeps to |

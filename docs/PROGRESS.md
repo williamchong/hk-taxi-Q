@@ -101,6 +101,8 @@ Phase 3 — `B2` and the road
 - `P3-84` 🟡 Detail lines on vehicles — owed: the weight pick (1.2 / 2 / 3 cm), a night frame.
 - `P3-85` 🟡 Roster at die-cast detail — owed: the box lorry's share of moving traffic (parked only).
 - `P3-87` 🟡 Pressed panels. `P3-88` 🟡 Tram doors and lamps.
+- `P3-98` 🟡 Roadside planters (`Q247`): 19 beds and 30 walls in Wan Chai, 1 and 5 in Causeway Bay —
+  owed: the user's drive into one, the PCK, a wall HyD draws on a deck.
 - `P3-93` 🟡 Stop furniture: flags at bus and minibus stops, tram shelters on solid posts
   (`Q242`; sizes the user's pick) — owed: his drive into a pole and a shelter post. `P3-96` 🟡 cost: 9 draws, 2.30 MB of PCK, desktop frame time unmoved, the iPhone Air at its 120 fps cap with and without.
 - `P3-92` 🟡 Stand signs: `TS324` taxi stand, `TS322` / `TS323` minibus stand, `TS3643` pick-up
@@ -299,6 +301,7 @@ Bundle, from `etl/out` (schemas: `city.json` 46, `roadgraph.json` 15, `roadsurfa
 | Signals | 73 junctions, 72 staged, 178 approaches, 514 head posts / 22, 21, 41, 89 |
 | Parked placed | 716 of 1,346 candidates / 340 of 705; no parked trams |
 | Trees drawn | 2,254 of 2,331 / 3,317 of 3,427 |
+| Planters | 19 beds of 22 rings, 30 walls, 897 m² planted, 10,166 triangles / 1 of 1, 5, 26 m², 374 |
 | Bus route directions kept | 464 of 486 / 241 of 251 |
 | Fare nodes, street spots | 48, 221 / 7, 166 |
 | Harbour | 748,723 m² of sea / 177,055 m² |

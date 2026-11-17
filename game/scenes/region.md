@@ -40,6 +40,10 @@ below.
 - `Signs` (`P3-16`): the published signs on the poles TD surveyed. `posts = true` (`Q191`): a
   cylinder up every `pole` placement, none under a face. Not in `prop_cells.tres`, so one body a
   region.
+- `Planters` (`P3-98`, `Q247`): HyD's roadside planter walls and the beds they close, one merged
+  mesh. The one layer here whose `.glb` brings its own body: `planters_collision-colonly`, the
+  walls alone, so a car hits a planter and passes through nothing but the hedge above it. No
+  export flag: the collider is the asset's, not the placer's.
 - `Stops` (`P3-94`, `Q242`): the authored flags and tram shelters at published stops.
   `posts = true`: a cylinder up every `pole` and every shelter post (`tram_post`), none under a
   flag or a shelter's roof. Not in `prop_cells.tres`.

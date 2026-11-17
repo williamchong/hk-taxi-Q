@@ -49,6 +49,7 @@ from pipeline.fence import FENCE_NAME, FENCE_SCHEMA
 from pipeline.lamps import LAMPS_MANIFEST_NAME, LAMPS_MANIFEST_SCHEMA
 from pipeline.landmarks import ASSETS_NAME, ASSETS_SCHEMA
 from pipeline.parked import PARKED_MANIFEST_NAME, PARKED_MANIFEST_SCHEMA
+from pipeline.planters import PLANTERS_MANIFEST_NAME, PLANTERS_MANIFEST_SCHEMA
 from pipeline.railings import RAILINGS_MANIFEST_NAME, RAILINGS_MANIFEST_SCHEMA
 from pipeline.roadmarks import ROADMARKS_MANIFEST_NAME, ROADMARKS_MANIFEST_SCHEMA
 from pipeline.roads import ROADGRAPH_NAME, ROADGRAPH_SCHEMA
@@ -342,6 +343,13 @@ class _Region:
                 "asset": None,
                 "placements_document": None,
             },
+            # And no `planters:` block (`P3-98`).
+            PLANTERS_MANIFEST_NAME: {
+                "schema_version": PLANTERS_MANIFEST_SCHEMA,
+                "city_id": city.id,
+                "region_id": REGION,
+                "asset": None,
+            },
             # Same shape and same reason a fourth time: `testville` declares no
             # `road_marks:` block, so the stage found nothing and says so.
             ROADMARKS_MANIFEST_NAME: {
@@ -573,6 +581,17 @@ class TestAssembly:
         region.build()
         assert region.manifest()["stopmarks"] == "stopmarks.glb"
         assert "stopmarks.glb" in shipped(region.manifest())
+
+    def test_built_planters_are_shipped(self, region) -> None:
+        """The optional-key contract again, for `P3-98`'s `planters.glb`."""
+        region.build()
+        assert region.manifest()["planters"] is None
+
+        region.documents[PLANTERS_MANIFEST_NAME]["asset"] = "planters.glb"
+        (region.out_dir / "planters.glb").write_bytes(b"glb")
+        region.build()
+        assert region.manifest()["planters"] == "planters.glb"
+        assert "planters.glb" in shipped(region.manifest())
 
     def test_stood_stop_furniture_is_shipped_with_its_placements(self, region) -> None:
         """The optional-key contract for `P3-94`'s library and its document."""
@@ -1143,6 +1162,7 @@ class TestOrchestrator:
             "busroutes",
             "parked",
             "stops",
+            "planters",
             "export",
         ]
 
@@ -1189,6 +1209,7 @@ class TestOrchestrator:
             "busroutes",
             "parked",
             "stops",
+            "planters",
             "export",
         ]
 

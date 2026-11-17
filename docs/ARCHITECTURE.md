@@ -131,7 +131,7 @@ the cache the import writes.
 | `sidecars` | Every `*.glb.import` under `assets/generated/` and `assets/authored/` carries the pinned `meshes/*` keys. 0 sidecars passes (a clone has no city) | yes |
 | `warnings` | `--check-only` per script, grepping `treated as error\|Parse Error`; the swept count must equal the script count | yes |
 | Always tools | `verify_beam_budget`, `verify_vehicle`, `verify_mesh_contract`, `verify_hud`, `verify_input`, `verify_authored`, `verify_menu`, `verify_day_cycle`, `verify_perf_recorder`. No built region needed | yes |
-| Region tools | Once per region in `regions.json` (`--region=`): `verify_city`, `verify_tiles`, `verify_road_surface`, `verify_road_graph`, `verify_city_streamer`, `verify_spawn`, `verify_landmarks`, `verify_fence`, `verify_tramway`, `verify_arrows`, `verify_boxjunctions`, `verify_crossings`, `verify_stopmarks`, `verify_stops`, `verify_railings`, `verify_signs`, `verify_roadmarks`, `verify_lamps`, `verify_fares`, `verify_water`, `verify_parked`, `verify_trees`, `verify_signals`, `verify_traffic`, `verify_trams` | no |
+| Region tools | Once per region in `regions.json` (`--region=`): `verify_city`, `verify_tiles`, `verify_road_surface`, `verify_road_graph`, `verify_city_streamer`, `verify_spawn`, `verify_landmarks`, `verify_fence`, `verify_tramway`, `verify_arrows`, `verify_boxjunctions`, `verify_crossings`, `verify_stopmarks`, `verify_stops`, `verify_railings`, `verify_signs`, `verify_roadmarks`, `verify_lamps`, `verify_fares`, `verify_water`, `verify_parked`, `verify_trees`, `verify_planters`, `verify_signals`, `verify_traffic`, `verify_trams` | no |
 | `verify_join` | The runtime merge of the first two synced regions against `pipeline/join.py`; SKIPs on one region | no |
 
 - `VERIFY_GENERATED=0` skips the last two rows and says so (CI sets it).
@@ -169,7 +169,7 @@ diff per item. `--list` prints the table. **Its exit code says every item ran, n
 held.** Both sides are graded by this checkout's tools unless `--tools-from side`.
 
 Triggers: `arrows`, `boxjunctions`, `busroutes`, `carve`, `collider`, `crossings`, `fence`,
-`lamps`, `lanes`, `off-grade`, `parked`, `q19`, `railings`, `region`, `roadmarks`, `signs`,
+`lamps`, `lanes`, `off-grade`, `parked`, `planters`, `q19`, `railings`, `region`, `roadmarks`, `signs`,
 `stopmarks`, `stops`, `surface-region`, `width`. Not in the table: anything needing a frame, a
 drive, a sweep of a free value, or `tools/skidpad.sh`.
 
@@ -232,11 +232,11 @@ tools/                      check.sh, battery.py, sync_generated.sh, export.sh, 
 fastlane/                   the App Store listing
 ```
 
-Stage order (28): `fetch`, `podiums`, `basemap`, `buildings`, `landmarks`, `roads`, `carve`,
+Stage order (29): `fetch`, `podiums`, `basemap`, `buildings`, `landmarks`, `roads`, `carve`,
 `region`, `surface`, `clearance`, `fence`, `fares`, `tramway`, `arrows`, `boxjunctions`,
 `crossings`, `stopmarks`, `roadmarks`, `railings`, `signs`, `lamps`, `trees`, `signals`,
 `tramlines`,
-`busroutes`, `parked`, `stops`, `export`.
+`busroutes`, `parked`, `stops`, `planters`, `export`.
 
 `scenes/dev/` and `scripts/dev/` are not shipped. A fresh clone boots to an empty world with a
 `push_warning`, because the level needs the gitignored `assets/generated/`.
@@ -294,7 +294,7 @@ per-stage reports (`buildings.json`, `clearance.json`, `signs.json`, …). The g
   `road_surface`, `landmark_assets`, `bounds_game`. `fence` and `basemap` are written on every run;
   an empty document means nothing to draw, a missing one means the stage never ran.
 - `OPTIONAL_ASSET_KEYS`, each nullable: `tramway`, `arrows`, `arrows_placements`, `boxjunctions`,
-  `crossings`, `stopmarks`, `stops`, `stops_placements`, `lamps`, `lamps_placements`, `railings`, `railings_placements`, `signs`,
+  `crossings`, `stopmarks`, `stops`, `stops_placements`, `planters`, `lamps`, `lamps_placements`, `railings`, `railings_placements`, `signs`,
   `signs_text_atlas`, `signs_placements`, `roadmarks`, `water`, `parked_placements`, `trees`,
   `trees_placements`, `signals_plan`, `signal_heads_placements`, `tram_lines`, `bus_routes`. Null
   where the estate publishes no such layer or every feature failed the join; a stage names its
@@ -557,6 +557,7 @@ node in `region.tscn`: railings a box per placement (`collides`, `Q159`), lamp a
 | `signs.glb` | `signs`; lettering on `signs_text` | `COLOR_0` (four-colour livery) | Position from the pole layer, facing derived per post then turned per plate (`Q62`, `Q72`). `cull_back`, each plate drawn twice. The lettering atlas ships as `signs_text.png` (`signs_text_atlas`), never embedded (`Q70`) |
 | `lamps.glb` | `lamps` (on `signs.gdshader`) | `COLOR_0` | Registered outward onto the kerb, refused inside any ribbon (`Q78`). The lantern lights at night (`Q160`), with a pool under it (`lamp_pools.gd`) |
 | `trees.glb` | `trees` (on `vertex_albedo.gdshader`) | `COLOR_0` | HyD and LCSD inventories only (`Q171`); refused in the carriageway, off the ground or under a deck |
+| `planters.glb` | `planters` (on `vertex_albedo.gdshader`) | `COLOR_0` | HyD's planter walls and the beds they close (`Q247`), one merged mesh. Carries `planters_collision-colonly`, the walls alone — the one generated layer after the road with a body of its own |
 | `water.glb` | `sea_water` → `water.tres` | `COLOR_0` | `basemap.json`'s `water` as one flat mesh at `water_level_m`, facing +Y |
 
 - Winding decides visibility under `cull_back`. Godot winds front faces clockwise and glTF
