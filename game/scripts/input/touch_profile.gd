@@ -107,10 +107,6 @@ extends Resource
 ## The steering wheel hangs from the thumb (`Q238`): where the thumb lands is
 ## its twelve o'clock, and its middle is this many design units straight below.
 ## The radius it is drawn at, and the one a thumb going round it is read on.
-##
-## So a thumb sliding along the top and a thumb setting off round the rim make
-## the same movement, and no rule has to tell one from the other; a spin is the
-## thumb going on down the side.
 @export_range(10.0, 400.0, 1.0) var wheel_radius_px: float
 
 ## The radius round the wheel's middle inside which a moving thumb turns
@@ -118,8 +114,17 @@ extends Resource
 ## across it is half a turn.
 @export_range(0.0, 200.0, 1.0) var wheel_hub_px: float
 
-## The degrees a thumb goes round the wheel's middle for full lock from centre,
-## either way: the angle the drawn wheel turns.
+## The degrees round the wheel's middle, from its twelve o'clock, at which a
+## thumb is spinning the wheel and no longer sliding across it (`Q243`). Under
+## it the thumb's sideways offset alone steers, however far it has sunk. Over
+## 90, so the thumb is below the wheel's middle before a spin is read: at 120 a
+## slide 100 units out has to sink 135 to be taken for one.
+@export_range(90.0, 360.0, 1.0, "suffix:°") var spin_enter_deg: float
+
+## The degrees round the wheel's middle at which a spinning thumb has full
+## lock, and the angle the drawn wheel turns at full lock. Over
+## `spin_enter_deg`: the spin carries the wheel from where the slide had it to
+## the lock between the two.
 @export_range(30.0, 720.0, 1.0, "suffix:°") var spin_lock_deg: float
 
 ## Path to the shipped table. Named here so `input_router.gd` and
@@ -148,26 +153,6 @@ func steer_from(offset_px: float, curve: float) -> float:
 ## which the router carries between touches (`Q238`).
 func steer_share(offset_px: float) -> float:
 	return _axis_from(offset_px, steer_travel_px)
-
-
-## The share of the lock a thumb `bearing_deg` round the wheel's middle has
-## turned it, -1.0 to 1.0, clockwise to the right.
-##
-## Measured along the rim and put through the slide's own dead band, so the two
-## readings are the same kind of number. ⚠️ **And so that a LEVEL slide is
-## never moved by this one**: a thumb `x` along the top is `r·atan(x/r)` round
-## the rim, which is under `x`, of a rim travel (`spin_lock_deg` of it) that is
-## over `steer_travel_px` — at the shipped numbers 161 against 140. The larger
-## reading steers (`InputRouter`), and along the top that is always the slide.
-## A slide that sinks as it goes is partly round the wheel, and reads so.
-## `verify_input.gd` holds the order of those two travels.
-func spin_share(bearing_deg: float) -> float:
-	return _axis_from(deg_to_rad(bearing_deg) * wheel_radius_px, rim_travel_px())
-
-
-## The length of rim a thumb goes round for full lock.
-func rim_travel_px() -> float:
-	return deg_to_rad(spin_lock_deg) * wheel_radius_px
 
 
 ## The steering a wheel at `share` of its travel gives: the share to the power

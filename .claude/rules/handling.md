@@ -71,7 +71,8 @@ run it.
 | `bump` | `collision_align_s` on `brush30` | `yaw` is the face's 30° when right; under 0.3 s the car swings past the wall. The kerb and rut rows read nothing |
 
 No pad row exists for `touch.steer_return_at_top_s`, `wheel_radius_px`, `wheel_hub_px`,
-`spin_lock_deg` (`Q238`): `verify_input.gd` holds the logic, the handset grades the values.
+`spin_enter_deg`, `spin_lock_deg` (`Q238`, `Q243`): `verify_input.gd` holds the logic, the handset
+grades the values.
 
 ## Where a number lives
 

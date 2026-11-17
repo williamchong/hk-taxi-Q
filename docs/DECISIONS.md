@@ -3212,7 +3212,7 @@ share `twilight.tres`, a rose horizon; a shift never sees the 06:15 dawn.
 
 ## `Q238` — The touch wheel is the car's: it stays turned when the thumb lifts, comes back with speed, and a thumb that goes round it turns it
 
-**Status.** Built 2026-11-17 on the user's design, amended the same day off the handset (path-based spin detection withdrawn). Desk picks; the handset drive owed.
+**Status.** Built 2026-11-17 on the user's design, amended the same day off the handset (path-based spin detection withdrawn). `Q243` reverses "no spin state" and "the larger steers". Desk picks; the handset drive owed.
 
 - The wheel has a position (`InputRouter._wheel`): a sliding thumb adds to it, a lift leaves it,
   and `steer_for` returns it in proportion to speed (`steer_return_at_top_s`) — it holds on a
@@ -3291,3 +3291,22 @@ share `twilight.tres`, a rose horizon; a shift never sees the 06:15 dawn.
 - Cost from the start line at 3 s: 119 draws against 116 with `--hide-layers=stopmarks`, `prims`
   741,629 against 738,923. The handset's frame time is owed.
 - Off switch: delete the `stop_marks:` block.
+
+## `Q243` — A thumb spins the wheel only once it is well down its side; until then the slide steers
+
+**Status.** Built 2026-11-18 on the user's ask ("only a more explicit spin turns the wheel into spin mode, and left right works most of the time"); reverses `Q238`'s "no spin state" and "the larger steers". Desk picks; the handset drive owed.
+
+- The slide alone steers, at any height, until the thumb is `spin_enter_deg` (120°) round the
+  wheel's middle. Then the spin carries the wheel from where the slide had it to full lock at
+  `spin_lock_deg` (180°); back inside 120° the slide steers again, the difference shrinking to
+  nothing by the landing point (`InputRouter._go_round`, `_thumb_wheel`).
+- Reason: under `Q238` a slide that sank about a radius (77 units, 6 mm) was read as a turn, and a
+  stroke back across under the hub left a bearing that outvoted the slide on the other side.
+- Deciding number: a slide 100 units out now sinks 135 units before it is a spin, 106 at 50 out;
+  about 77 before. Above the wheel's middle the bearing is re-read from the thumb's place, so
+  nothing a hub pass left is carried.
+- `TouchProfile.spin_share` and `rim_travel_px` are gone with the rule they served.
+  `verify_input.gd` holds a sunk slide across the wheel as a slide; it fails at
+  `spin_enter_deg = 92`.
+- Still withdrawn: curvature detection, a SLIDE / SPIN option. Cost: the wheel eases from 0.28 to
+  0.21 of lock between three and four o'clock on the way into a spin.

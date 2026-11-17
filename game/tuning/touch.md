@@ -33,16 +33,24 @@ travel is full lock the instant a thumb lands. `verify_input.gd` refuses one.
   returns in proportion to speed, this many seconds from full lock at the limiter (never at rest,
   0.7 s at 10 kph, 0.23 s at 30, 0.06 s at 120), and a landing thumb takes it up from there. If a
   lift at 20–30 kph keeps the car turning, lower it; 0 snaps to centre at every speed.
-- `wheel_radius_px = 77.0`, `wheel_hub_px = 24.0`, `spin_lock_deg = 120.0` (`Q238`, the user's
-  design): the wheel hangs from the thumb. The landing point is twelve o'clock and the wheel's
-  middle is 77 units below (0.55 of `steer_travel_px`). The thumb's angle round the middle turns
-  the wheel, 120° for full lock; inside 24 units of the middle nothing is read. Slide and spin
-  both go through one dead band and the larger steers.
-  - A plain slide along the top is unchanged by construction: rim travel (161 units) exceeds the
-    slide's 140. `verify_input.gd` requires that; a smaller radius, or a `spin_lock_deg` under
-    105° at this radius, breaks it.
-  - Costs: a thumb landing in the bottom 6 mm of the glass can only slide, and a slide that sinks
-    most of a radius while out to the side starts to read as a turn.
+- `wheel_radius_px = 77.0`, `wheel_hub_px = 24.0` (`Q238`, the user's design): the wheel hangs
+  from the thumb. The landing point is twelve o'clock and the wheel's middle is 77 units below
+  (0.55 of `steer_travel_px`). Inside 24 units of the middle no bearing is read.
+- `spin_enter_deg = 120.0`, `spin_lock_deg = 180.0` (`Q243`, the user's ask: left and right work
+  most of the time, only an explicit spin turns the wheel). The slide alone steers, at any height,
+  until the thumb is 120° round the wheel's middle (four o'clock or eight o'clock). From there
+  the spin carries the wheel from where the slide had it to full lock at 180°, the bottom. Back
+  inside 120° the slide steers again, and what the spin left over shrinks to nothing by the
+  landing point. A lift ends a spin.
+  - How far a slide must sink before it is taken for a spin: 77 + 0.58 x units at `x` sideways,
+    so 106 at 50 out and 135 at 100 out (8 and 11 mm on the iPhone Air). Before `Q243` the turn
+    took over at about 77, and a stroke back across under the hub could leave the wheel turned
+    the wrong way.
+  - To ask for more of a spin, raise `spin_enter_deg` (135 gives 127 and 177 units); keep
+    `spin_lock_deg` over it. `verify_input.gd` requires enter over 90 and lock over enter.
+  - Costs: from three to four o'clock the wheel eases a little (0.28 to 0.21 of lock) before the
+    spin takes it up; a thumb landing in the bottom 6 mm of the glass can only slide.
+  - `spin_lock_deg` is also the angle the drawn wheel turns at full lock, now 180°.
   - The fixed wheel (`Q239`) is slid across and never gone round.
 
 The handbrake threshold and its hysteresis are not declared (`Q83`, deferred by `Q97`).

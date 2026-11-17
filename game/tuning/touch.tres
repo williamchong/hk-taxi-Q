@@ -14,4 +14,5 @@ steer_attack_at_top_s = 2.0
 steer_return_at_top_s = 0.05
 wheel_radius_px = 77.0
 wheel_hub_px = 24.0
-spin_lock_deg = 120.0
+spin_enter_deg = 120.0
+spin_lock_deg = 180.0

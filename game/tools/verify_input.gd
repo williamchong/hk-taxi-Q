@@ -177,22 +177,23 @@ func _check_profile() -> void:
 		"profile",
 		"steer_return_at_top_s is %.3f" % _touch.steer_return_at_top_s
 	)
-	# The slide must be the larger reading along the wheel's top, or going
-	# round would move it: the rim's travel over the slide's (`spin_share`).
+	# A spin begins below the wheel's middle and ends at a lock beyond it
+	# (`Q243`): at 90 or under a level slide would be one.
 	_expect(
 		(
 			_touch.wheel_radius_px > _touch.wheel_hub_px
 			and _touch.wheel_hub_px > 0.0
-			and _touch.rim_travel_px() >= _touch.steer_travel_px
+			and _touch.spin_enter_deg > 90.0
+			and _touch.spin_lock_deg > _touch.spin_enter_deg
 		),
 		"profile",
 		(
-			"the wheel is %.0f units round a %.0f hub, its lock %.0f of rim to the slide's %.0f"
+			"the wheel is %.0f units round a %.0f hub, a spin from %.0f to %.0f degrees"
 			% [
 				_touch.wheel_radius_px,
 				_touch.wheel_hub_px,
-				_touch.rim_travel_px(),
-				_touch.steer_travel_px
+				_touch.spin_enter_deg,
+				_touch.spin_lock_deg
 			]
 		)
 	)
@@ -688,7 +689,8 @@ func _check_wheel() -> void:
 
 ## A thumb that goes round the wheel turns it (`Q238`): the wheel hangs from
 ## where the thumb landed, so the thumb is on its twelve o'clock, and the turn
-## is the thumb's angle round its middle. Nothing tells a spin from a slide.
+## is the thumb's angle round its middle once it is `spin_enter_deg` round
+## (`Q243`); short of that the slide steers.
 func _check_spin(home: Vector2) -> void:
 	var travel: float = _touch.steer_travel_px
 	var curve: float = _touch.steer_curve
@@ -709,19 +711,33 @@ func _check_spin(home: Vector2) -> void:
 		_move(FINGER_A, home + Vector2(x, 0.0))
 		same = same and is_equal_approx(_steer(), _touch.steer_from(x, curve))
 	_expect(same, "spin", "a thumb sliding along the wheel's top steers as a slide alone does")
+	# 🔴 And sunk below the wheel's middle it still is (`Q243`): out to the
+	# side, across under the hub and out the other side, short of a spin.
+	var sunk: float = radius + _touch.wheel_hub_px * 0.5
+	for x: float in [travel, -travel, travel * 0.5]:
+		_move(FINGER_A, home + Vector2(x, sunk))
+		same = same and is_equal_approx(_steer(), _touch.steer_from(x, curve))
+	_expect(same, "spin", "a slide that has sunk past the wheel's middle is still a slide")
 	_move(FINGER_A, home)
 
 	# Round the rim, clockwise from the top, a twenty-fourth at a time.
 	for i: int in 6:
 		_move(FINGER_A, _on_circle(middle, radius, i + 1))
-	var quarter: float = _touch.shape(_touch.spin_share(90.0), curve)
+	var quarter: float = _touch.steer_from(radius, curve)
 	_expect(
-		is_equal_approx(_steer(), quarter) and quarter > _touch.steer_from(radius, curve),
+		is_equal_approx(_steer(), quarter),
 		"spin",
-		"a quarter round to three o'clock is %.3f, more than its sideways offset is worth" % quarter
+		"a quarter round to three o'clock is its sideways offset still, %.3f" % quarter
 	)
-	for i: int in 6:
+	for i: int in 4:
 		_move(FINGER_A, _on_circle(middle, radius, i + 7))
+	_expect(
+		_steer() > quarter and _steer() < 1.0,
+		"spin",
+		"on down the side the turn takes the wheel up, %.3f at five o'clock" % _steer()
+	)
+	for i: int in 2:
+		_move(FINGER_A, _on_circle(middle, radius, i + 11))
 	_expect(
 		is_equal_approx(_steer(), 1.0),
 		"spin",

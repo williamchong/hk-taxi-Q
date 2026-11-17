@@ -180,6 +180,19 @@ var _wheel_at_landing: float = 0.0
 ## landed on its twelve o'clock, in degrees, clockwise positive (`_go_round`).
 ## Not wrapped: a thumb that has been right round has turned it 360.
 var _bearing_deg: float = 0.0
+## Whether the steering thumb is going round the wheel (`Q243`): only once it
+## is `spin_enter_deg` round, and until it comes back inside that or lifts.
+## Until then the slide alone steers.
+var _spinning: bool = false
+## The wheel and the bearing as the spin began: the spin carries the wheel on
+## from there to full lock at `spin_lock_deg`, so taking it up moves nothing.
+var _spin_base: float = 0.0
+var _spin_from_deg: float = 0.0
+## What a spin that ended left the wheel off its slide by, and the sideways
+## offset the thumb had then. It shrinks with the thumb's way back to where it
+## landed, so the landing point is the wheel at its landing again.
+var _slide_bias: float = 0.0
+var _bias_reach_px: float = 0.0
 ## The layer the zones stand on, kept so `rebuild_zones` can retire it.
 var _zones: CanvasLayer = null
 ## The keyboard's input assist (`Q210`), or null when it did not load — then a
@@ -480,11 +493,11 @@ func _return_wheel(speed_share: float, delta: float) -> void:
 	steer = wheel_turn()
 
 
-## The steering thumb moved from `from` to `to`: add the angle that is round
-## the wheel's middle (`Q238`). The thumb landed on the wheel's twelve o'clock,
-## so sideways along the top is hardly an angle at all and on down the side is
-## a large one — which is the whole of how a spin is told from a slide: it is
-## not told, it is read, and `_thumb_wheel` takes the larger of the two.
+## The steering thumb moved from `from` to `to`: keep how far round the
+## wheel's middle it is, and whether that is a spin yet (`Q243`). The thumb
+## landed on the wheel's twelve o'clock, so a slide stays near the top and a
+## spin goes on down the side: `spin_enter_deg` round is where the one becomes
+## the other, and back inside it the slide steers again.
 ##
 ## Not for a fixed wheel (`Q239`), whose thumb is read from its middle: there a
 ## thumb landing on the hub would have no bearing to start from.
@@ -492,6 +505,17 @@ func _go_round(from: Vector2, to: Vector2) -> void:
 	if _steer_thumb.fixed:
 		return
 	var centre: Vector2 = wheel_centre()
+	var now: Vector2 = to - centre
+	var reach: float = absf(to.x - _steer_thumb.origin.x)
+	if not _spinning:
+		if reach < _bias_reach_px:
+			_slide_bias *= reach / _bias_reach_px
+			_bias_reach_px = reach
+		if now.y < 0.0:
+			# Above the wheel's middle a sliding thumb is where it is: nothing a
+			# move through the hub left behind is carried into the next stroke.
+			_bearing_deg = rad_to_deg(Vector2.UP.angle_to(now))
+			return
 	# The whole move, not its two ends: a flick across the wheel between two
 	# events reads as half a turn, either way round. ⚠️ A move the hub
 	# swallows is not made up afterwards — a thumb drawn through it has the
@@ -499,22 +523,38 @@ func _go_round(from: Vector2, to: Vector2) -> void:
 	var nearest: Vector2 = Geometry2D.get_closest_point_to_segment(centre, from, to)
 	if nearest.distance_to(centre) < _touch.wheel_hub_px:
 		return
-	var was: Vector2 = from - centre
-	var now: Vector2 = to - centre
 	# Screen Y runs down, so a positive angle here is clockwise on the glass.
-	_bearing_deg += rad_to_deg(was.angle_to(now))
+	_bearing_deg += rad_to_deg((from - centre).angle_to(now))
+	var round_enough: bool = absf(_bearing_deg) >= _touch.spin_enter_deg
+	if round_enough == _spinning:
+		return
+	# Read under the old mode, at the thumb's new place: the wheel the other
+	# mode takes up.
+	var wheel: float = _thumb_wheel()
+	_spinning = round_enough
+	_slide_bias = 0.0
+	_bias_reach_px = 0.0
+	if _spinning:
+		_spin_base = wheel
+		_spin_from_deg = absf(_bearing_deg)
+	elif reach > 0.0:
+		# Off the slide before its clamp: a slide past the lock would leave the
+		# difference short, and the wheel would jump by the rest.
+		_slide_bias = wheel - _wheel_at_landing - _touch.steer_share(_steer_thumb.offset().x)
+		_bias_reach_px = reach
 
 
-## The wheel the thumb that is down has: where it was at the landing, and the
-## larger of the thumb's slide and its turn round the wheel. Along the top the
-## slide is always the larger (`TouchProfile.spin_share`); down the side the
-## turn is. Where the two disagree on the WAY the thumb has been round past the
-## bottom, and its sideways offset has come back across: the turn.
+## The wheel the thumb that is down has. Sliding: where it was at the landing
+## and the thumb's sideways offset, whatever its height (`Q243`). Spinning:
+## from the wheel the spin began on to full lock at `spin_lock_deg` round, the
+## way the thumb is going; unwound past where it began, the wheel it began on.
 func _thumb_wheel() -> float:
+	if _spinning:
+		var span: float = maxf(_touch.spin_lock_deg - _spin_from_deg, 1.0)
+		var over: float = clampf((absf(_bearing_deg) - _spin_from_deg) / span, 0.0, 1.0)
+		return lerpf(_spin_base, signf(_bearing_deg), over)
 	var slid: float = _touch.steer_share(_steer_thumb.offset().x)
-	var spun: float = _touch.spin_share(_bearing_deg)
-	var turn: float = spun if slid * spun < 0.0 or absf(spun) > absf(slid) else slid
-	return clampf(_wheel_at_landing + turn, -1.0, 1.0)
+	return clampf(_wheel_at_landing + slid + _slide_bias, -1.0, 1.0)
 
 
 ## The slow ramp's progress that gives `input`, the inverse of its `curve`.
@@ -573,6 +613,9 @@ func _finger(index: int, at: Vector2, pressed: bool) -> void:
 		# A fixed wheel is where the thumb is on it, whatever it was left at.
 		_wheel_at_landing = 0.0 if _steer_thumb.fixed else _wheel
 		_bearing_deg = 0.0
+		_spinning = false
+		_slide_bias = 0.0
+		_bias_reach_px = 0.0
 		return
 	_drive_thumb.claim(index, at)
 
