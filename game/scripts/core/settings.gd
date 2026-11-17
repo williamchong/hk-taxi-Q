@@ -14,6 +14,8 @@ const KEY_LANGUAGE: String = "language"
 const KEY_DAY_CYCLE: String = "day_cycle"
 const KEY_SOUND: String = "sound"
 const KEY_VOLUME: String = "volume"
+const KEY_MUSIC: String = "music"
+const KEY_MUSIC_VOLUME: String = "music_volume"
 const KEY_STEERING: String = "steering"
 const KEY_STEER_ON_RIGHT: String = "steer_on_right"
 const KEY_ANCHOR: String = "anchor"
@@ -27,6 +29,8 @@ const FRAME_CAPS: PackedInt32Array = [60, 30]
 const FRAME_CAP_FAST: int = 120
 ## The bus the sound options act on: every other bus sends to it.
 const MASTER_BUS: StringName = &"Master"
+## The bus the music options act on (`Q246`): `DriveMusic` plays into it alone.
+const MUSIC_BUS: StringName = &"Music"
 ## What the player has done, beside what they chose: the best shift's total.
 const RECORDS: String = "records"
 const KEY_SHIFT_BEST: String = "shift_best_hkd"
@@ -85,13 +89,39 @@ static func set_volume(level: float) -> void:
 	_write(KEY_VOLUME, clampf(level, 0.0, 1.0))
 
 
-## The Master bus set to the saved sound options: `Main` at boot, the options
-## menu on a change. Off, or a slider at nothing, mutes the bus — nothing in
-## dB says silence.
+## Whether the driving music plays (`Q246`, the user's ask). On where none was
+## ever saved; the sound's own switch silences it with everything else.
+static func music_on() -> bool:
+	return bool(_read().get_value(SECTION, KEY_MUSIC, true))
+
+
+static func set_music_on(on: bool) -> void:
+	_write(KEY_MUSIC, on)
+
+
+## How loud the music is under the sound's own level, 0 to 1 along its slider;
+## full where none was ever saved, and clamped on the read like `volume`.
+static func music_volume() -> float:
+	return clampf(float(_read().get_value(SECTION, KEY_MUSIC_VOLUME, 1.0)), 0.0, 1.0)
+
+
+static func set_music_volume(level: float) -> void:
+	_write(KEY_MUSIC_VOLUME, clampf(level, 0.0, 1.0))
+
+
+## The Master and Music buses set to the saved sound options: `Main` at boot,
+## the options menu on a change. Off, or a slider at nothing, mutes the bus —
+## nothing in dB says silence.
 static func apply_sound() -> void:
-	var level: float = volume()
-	var bus: int = AudioServer.get_bus_index(MASTER_BUS)
-	AudioServer.set_bus_mute(bus, not sound_on() or level <= 0.0)
+	_set_bus(MASTER_BUS, sound_on(), volume())
+	_set_bus(MUSIC_BUS, music_on(), music_volume())
+
+
+static func _set_bus(bus_name: StringName, on: bool, level: float) -> void:
+	var bus: int = AudioServer.get_bus_index(bus_name)
+	if bus < 0:
+		return
+	AudioServer.set_bus_mute(bus, not on or level <= 0.0)
 	if level > 0.0:
 		AudioServer.set_bus_volume_db(bus, level_db(level))
 

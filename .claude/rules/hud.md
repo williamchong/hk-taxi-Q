@@ -121,7 +121,8 @@ stalls. A run naming either flag saves no record.
 - Two modes behind PLAY (`Q162`); a shift's end opens a fresh menu on REPORT; the shift's clock is
   the hour, never a countdown; TIME OF DAY is free mode's alone.
 - OPTIONS is a list of groups, a page each, never a scroll (`Q223`). A pick that changes a drive
-  (`ControlOptions`) takes a `drive.sh` flag that beats it. Sound is the Master bus alone (`Q221`).
+  (`ControlOptions`) takes a `drive.sh` flag that beats it. Sound is the Master bus (`Q221`); MUSIC's
+  switch and slider on the same page are the `Music` bus alone (`Q246`).
 - The camera follows the page through `Main` → `DriveLevel.frame_menu` (`Q164`).
 - The 成績表 (`LedgerCard`, `Q169`, `Q206`): on touch it stacks into one scrolling column — a
   change owes handset frames of RECORD and REPORT in both languages, and SAVE RESULT copies the

@@ -9,6 +9,11 @@ paths:
   - "game/scripts/vehicle/taxi_audio_profile.gd"
   - "game/tuning/taxi_audio.{tres,md}"
   - "game/default_bus_layout.tres"
+  - "tools/make_bgm.py"
+  - "etl/tests/test_make_bgm.py"
+  - "game/scripts/audio/*"
+  - "game/tuning/music.{tres,md}"
+  - "game/tools/verify_music.gd"
 ---
 
 # The sounds — before marking work done
@@ -37,3 +42,21 @@ paths:
 - **The taxi is silent while `parked`** (`Q185`): loops fade over `park_fade_s`. `verify_vehicle`
   reads the LEVEL (a headless player with no stream holds no `stream_paused`). A voice is written
   only on a change, so never check for a write every tick.
+
+## The music — `make_bgm.py`, `music.tres`, `drive_music.gd` (`Q246`)
+
+Owed: `python tools/make_bgm.py`, `pytest tests/test_make_bgm.py` from `etl/`, `tools/check.sh`
+(runs `verify_music`), and a drive HEARD — a level is never set off a number.
+
+- **Thirteen loops of the same eight bars, in one `AudioStreamSynchronized`, only turned up and
+  down**: four beds (stereo) and the combo's layers (mono; the three drum layers are two bars).
+  Every file's length divides the bed's, or it drifts. Nothing is started, stopped or pitched.
+- **The hour is the rig's** (`mood_from` on `RigCycle`'s scale), never a second clock; a resting
+  rig plays `held_mood`. **The count is `FareSystem`'s combo signals**, never a poll.
+- **The files share one scale**: `FULL` in the script mirrors `tiers`' last row, so that row over
+  the loudest bed peaks at `PEAK`. Raise a row past it and the mix clips.
+- A new bed or layer is a name in the script AND in `music.tres` (`test_make_bgm.py` holds the
+  mirror). The day and night chords share three notes a slot so the beds cross-fade; keep that.
+- Silent while `parked`, like the taxi. Its switch and slider are the `Music` bus
+  (`Settings.apply_sound`); the sound's own are still the Master.
+- ⚠️ The source `.wav`s are 16.7 MB in git, not LFS. Unheard on the web build and on a handset.

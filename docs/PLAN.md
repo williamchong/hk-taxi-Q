@@ -229,6 +229,7 @@ Built, something owed (🟡). Each is checked by its verify tool; the row names 
 | `P3-8` | Taxis in the traffic by licence (`Q183`); the bus-lane penalty dropped (`Q181`) | Minibus behaviour, the user's to define first; the user's look and drive |
 | `P3-78` | Buses and green minibuses on their published routes (`Q182`) | The user's drive |
 | `P3-79` | The taxi's own sounds — `tools/make_vehicle_sounds.py`, `taxi_audio.tres` (`Q185`) | The user's ears; the PCK cost |
+| `P3-97` | The driving music — `tools/make_bgm.py`, `music.tres`, `DriveMusic`: a bed for each part of the day, layers by the style combo's count, MUSIC options on SOUND (`Q246`) | The user's drive heard; the web build; a handset; the PCK cost |
 | `P3-81` | A free drive's REPORT (`Q189`) | The user's look and a real drive ended |
 | `P3-82` | The taxi at a die-cast's detail (`Q190`) | The user's look; the headlamp spots |
 | `P3-83` | Posts collide — a cylinder per lamp column, sign pole and signal post (`Q191`) | `phys` on the throttle route; the user's drive into each |

@@ -20,6 +20,7 @@
 [ext_resource type="Script" path="res://scripts/traffic/tram_system.gd" id="26_trams"]
 [ext_resource type="Script" path="res://scripts/vehicle/taxi_horn.gd" id="29_horn"]
 [ext_resource type="Script" uid="uid://dagrgp7jiynq0" path="res://scripts/vehicle/taxi_audio.gd" id="30_audio"]
+[ext_resource type="Script" path="res://scripts/audio/drive_music.gd" id="31_music"]
 [ext_resource type="Script" uid="uid://d1gf36j2js6mk" path="res://scripts/traffic/signal_controller.gd" id="27_signals"]
 [ext_resource type="Script" uid="uid://cg3ycg2i4crlw" path="res://scripts/traffic/signal_heads.gd" id="28_heads"]
 
@@ -94,6 +95,12 @@ vehicle = NodePath("../Taxi")
 [node name="Sounds" type="Node" parent="." node_paths=PackedStringArray("vehicle")]
 script = ExtResource("30_audio")
 vehicle = NodePath("../Taxi")
+
+[node name="Music" type="Node" parent="." node_paths=PackedStringArray("vehicle", "rig", "fares")]
+script = ExtResource("31_music")
+vehicle = NodePath("../Taxi")
+rig = NodePath("../Lighting")
+fares = NodePath("../Fares")
 
 [node name="FareGuide" type="Node3D" parent="." node_paths=PackedStringArray("fares", "vehicle")]
 script = ExtResource("21_guide")

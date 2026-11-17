@@ -128,6 +128,7 @@ Phase 3 — `B1`, `B3`, `B4`
 - `P3-8` 🟡 Taxis in the traffic — owed: minibus behaviour.
 - `P3-78` 🟡 Routed buses and green minibuses — owed: the frame cost.
 - `P3-79` 🟡 The taxi's sounds — owed: the user's ears, the PCK cost.
+- `P3-97` 🟡 The driving music (`Q246`): four beds by the hour, six layers by the combo's count, MUSIC on / off and a slider on SOUND — owed: the user's drive heard (`bed_db`), the web build, a handset, the PCK cost (3.37 MB imported).
 - `P3-49` 🟡 Skills, the receipt, the passenger's face. `P3-50` 🟡 Penalties — owed: a crash-tier
   hit on the street.
 - `P3-51` 🟡 Air and the eight jumpable ramps — the flyover parapet band stays off (`Q147`).

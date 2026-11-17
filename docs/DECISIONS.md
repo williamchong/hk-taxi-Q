@@ -3372,3 +3372,17 @@ share `twilight.tres`, a rose horizon; a shift never sees the 06:15 dawn.
 - Not seen: the Tiny City 1:64 `Q190` was built from. If it carries the corner cluster, the old pair of values is the way back.
 - The roster taxi follows (`Q200`): `parked.glb` rebuilt. Roster 11,650 → 11,722 triangles and the throttle route 727,638 → 728,814 primitives at 1 s, both measured before the picks below, which add 24 triangles a taxi.
 - The user's picks from a sheet of four (2026-11-18): the head lamp lens is `CLEAR`, a tenth colour, so the lit lamp burns white; the reversing lens is the inboard `reverse_lamp_width_m` 0.16 of the cluster's foot and the rest of that band is brake lens (2,178 triangles). Not taken: brighter hubs, a chrome strip under the clusters.
+
+## `Q246` — The drive has music: a bed for each part of the day and layers that climb with the style combo
+
+**Status.** 🟡 Built 2026-11-18 (`P3-97`) on the user's ask and the user's picks by ear from rendered loops. Reverses `Q221`'s "there is no music" and, for the music alone, its "sound is the Master bus alone". Owed: the user's drive heard (`bed_db` is not yet set against one), the web build, a handset, the PCK.
+
+- Thirteen loops of the same eight bars at 75 bpm, synthesised by `tools/make_bgm.py` like every other sound: four beds and six combo layers. They play locked in one `AudioStreamSynchronized` and are only turned up and down (`DriveMusic`, `music.tres`), so nothing waits for a beat and nothing drifts.
+- **The hour is the rig's.** Morning from 05:30, afternoon from 11:00, night from 18:30, midnight from 00:00, each fading in over half an hour of the clock. A held hour (ALWAYS DAY) plays the afternoon bed.
+- The user's picks: day in the major (Fmaj9 Em7 Dm9 G13sus), night on its minor side (Dm9 Am9 B♭maj9 G9sus) for "more difference"; morning a single-note piano line; midnight no piano at all. Each night chord shares three notes with the day chord in its slot, so the two cross-fade.
+- **The combo is ×1 to ×8** (`StyleCombo.total()`, a count past 8 keeps the last row): shaker, thump, root pulse, arpeggio, clap, top line, then everything lifted. Each count adds or lifts and none drops. The layers leave over 2.5 s when the combo ends.
+- This is not `fares.md`'s refused "sound on a skill": no one-shot, no award sound — the count moves the music's own layers. The combo is still never money (`Q205`).
+- The menu's SOUND page gains MUSIC on / off and its own slider, on a `Music` bus; the sound's switch and slider stay the Master and silence the music with everything else. Silent while parked, like the taxi (`Q185`), and faded in over 5 s as the car drives off (the user's ask); the menu has no music.
+- Cost: 3.37 MB imported (QOA) for 16.7 MB of source `.wav`, which is in git and not LFS. The PCK delta is not measured.
+- Not built: a cab-radio filter (rendered, heard once, not picked); music under the menu; a `drive.sh` flag (the music moves no frame).
+

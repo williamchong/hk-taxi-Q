@@ -94,6 +94,10 @@
       "en": "VOLUME %d%%",
       "zh": "音量 %d%%"
     },
+    "music": {
+      "en": "MUSIC",
+      "zh": "音樂"
+    },
     "controls": {
       "en": "CONTROLS",
       "zh": "操控"

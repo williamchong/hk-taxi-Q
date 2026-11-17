@@ -73,9 +73,13 @@ VERIFY_TOOLS=(
 # verify_day_cycle is here because its subject is committed tuning too: the rig
 # scene, its cycle and the clock (Q160). What it holds is that the DAY writes
 # nothing — the promise every scripted daylight frame rests on.
+#
+# verify_music is here because its subject is committed too: the music's table
+# and its files (Q246). What it holds is what no frame shows — the beds'
+# shares round the day, and the combo's layers at each count.
 ALWAYS_TOOLS=(
 	verify_beam_budget verify_vehicle verify_mesh_contract verify_hud verify_input
-	verify_authored verify_menu verify_day_cycle verify_perf_recorder
+	verify_authored verify_menu verify_day_cycle verify_perf_recorder verify_music
 )
 
 # Tuning resources and scenes that carry no sidecar .md, and are allowed not

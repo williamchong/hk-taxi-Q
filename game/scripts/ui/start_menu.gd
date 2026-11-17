@@ -558,20 +558,39 @@ func _controls(column: VBoxContainer) -> void:
 		)
 
 
-## The sound (`Q221`): on or off, and how loud. The Master bus, so every voice
-## follows.
+## The sound (`Q221`): on or off, and how loud — the Master bus, so every voice
+## follows. Then the driving music's own switch and level under it (`Q246`).
 func _sound(column: VBoxContainer) -> void:
 	_choices(
 		column,
 		"Sounds",
 		"",
 		[
-			["On", "sound_on", _pick_sound.bind(true)],
-			["Off", "sound_off", _pick_sound.bind(false)],
+			["On", "sound_on", _pick_switch.bind(true, Settings.sound_on, Settings.set_sound_on)],
+			[
+				"Off",
+				"sound_off",
+				_pick_switch.bind(false, Settings.sound_on, Settings.set_sound_on)
+			],
 		],
 		0 if Settings.sound_on() else 1
 	)
-	_volume(column)
+	_volume(column, "Volume", Settings.volume(), Settings.set_volume)
+	_choices(
+		column,
+		"Music",
+		"music",
+		[
+			["On", "sound_on", _pick_switch.bind(true, Settings.music_on, Settings.set_music_on)],
+			[
+				"Off",
+				"sound_off",
+				_pick_switch.bind(false, Settings.music_on, Settings.set_music_on)
+			],
+		],
+		0 if Settings.music_on() else 1
+	)
+	_volume(column, "MusicVolume", Settings.music_volume(), Settings.set_music_volume)
 
 
 ## Save the steering thumb's response and say so; the page is redrawn so the
@@ -627,28 +646,29 @@ func _pick_time(cycle: bool) -> void:
 	_relabel.call_deferred()
 
 
-## Save the sound's switch, set the bus and redraw the page so the marker
-## moves.
-func _pick_sound(on: bool) -> void:
-	if on == Settings.sound_on():
+## A switch of the sound's or the music's: `save` it where it differs from
+## `saved`, set the buses and redraw the page so the marker moves.
+func _pick_switch(on: bool, saved: Callable, save: Callable) -> void:
+	if on == saved.call():
 		return
-	Settings.set_sound_on(on)
+	save.call(on)
 	Settings.apply_sound()
 	_relabel.call_deferred()
 
 
-## How loud, under `column`: the level named over a slider a choice's size, so
-## a thumb takes it. The track is the muted ink, what is filled the dial's
-## amber like a current choice, and the lighter ink under the pointer or the
-## focus, where left and right move it a notch.
-func _volume(column: VBoxContainer) -> void:
-	var level: Label = _note(column, "Volume", _volume_text(Settings.volume()), _style.chip_muted)
+## How loud, under `column`: the level `at` named in a line called `node_name`
+## over a slider a choice's size (`node_name` + "Slider"), so a thumb takes it,
+## and `save` handed where it went. The track is the muted ink, what is filled
+## the dial's amber like a current choice, and the lighter ink under the
+## pointer or the focus, where left and right move it a notch.
+func _volume(column: VBoxContainer, node_name: String, at: float, save: Callable) -> void:
+	var level: Label = _note(column, node_name, _volume_text(at), _style.chip_muted)
 	var slider := HSlider.new()
-	slider.name = "VolumeSlider"
+	slider.name = node_name + "Slider"
 	slider.min_value = 0.0
 	slider.max_value = 1.0
 	slider.step = _profile.volume_step
-	slider.value = Settings.volume()
+	slider.value = at
 	slider.custom_minimum_size = _profile.button_px
 	slider.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
 	slider.add_theme_stylebox_override(&"slider", _track(_style.chip_muted))
@@ -656,7 +676,7 @@ func _volume(column: VBoxContainer) -> void:
 	slider.add_theme_stylebox_override(&"grabber_area_highlight", _track(_style.chip_ink))
 	# Hover IS focus, as on a choice.
 	slider.mouse_entered.connect(slider.grab_focus)
-	slider.value_changed.connect(_on_volume.bind(level))
+	slider.value_changed.connect(_on_volume.bind(save, level))
 	column.add_child(slider)
 
 
@@ -671,8 +691,8 @@ func _track(ink: Color) -> StyleBoxFlat:
 
 ## The slider moved: saved and heard at once, and the line over it renamed. No
 ## rebuild — the slider under the thumb is under the root a rebuild frees.
-func _on_volume(value: float, level: Label) -> void:
-	Settings.set_volume(value)
+func _on_volume(value: float, save: Callable, level: Label) -> void:
+	save.call(value)
 	Settings.apply_sound()
 	level.text = _volume_text(value)
 

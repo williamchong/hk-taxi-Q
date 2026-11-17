@@ -106,6 +106,7 @@ const KEYS: PackedStringArray = [
 	"sound_on",
 	"sound_off",
 	"volume",
+	"music",
 	"controls",
 	"display",
 	"steering",
@@ -383,12 +384,77 @@ func _check_options() -> void:
 			"ON sounds again at the slider's level"
 		)
 		await process_frame
+		await _check_music(menu, master)
 	menu.queue_free()
 	await _check_groups()
 	_forget_settings_file()
 	SettingsScript.use_file(SettingsScript.PATH)
-	AudioServer.set_bus_mute(master, false)
-	AudioServer.set_bus_volume_db(master, 0.0)
+	for bus: int in [master, AudioServer.get_bus_index(SettingsScript.MUSIC_BUS)]:
+		AudioServer.set_bus_mute(bus, false)
+		AudioServer.set_bus_volume_db(bus, 0.0)
+
+
+## The music's own switch and level under the sound's (`Q246`): they move the
+## Music bus and never the Master, and the sound's leave the Music bus alone.
+func _check_music(menu: Node, master: int) -> void:
+	var music: int = AudioServer.get_bus_index(SettingsScript.MUSIC_BUS)
+	var page: Control = menu._pages.get(StartMenuScript.Page.SOUND)
+	var slider: HSlider = page.get_node_or_null("MusicVolumeSlider")
+	_expect(
+		music >= 0 and slider != null and page.get_node_or_null("Music/Off/Button") != null,
+		"options",
+		"SOUND carries the music's switch and slider, and the layout its bus"
+	)
+	if music < 0 or slider == null:
+		return
+	var master_db: float = AudioServer.get_bus_volume_db(master)
+	slider.value = 0.5
+	_expect(
+		(
+			SettingsScript.music_volume() == 0.5
+			and is_equal_approx(AudioServer.get_bus_volume_db(music), SettingsScript.level_db(0.5))
+			and AudioServer.get_bus_volume_db(master) == master_db
+			and "50" in (page.get_node("MusicVolume") as Label).text
+		),
+		"options",
+		"the music's slider at half is saved, named and heard on its bus alone"
+	)
+	slider.value = 0.0
+	_expect(
+		AudioServer.is_bus_mute(music) and not AudioServer.is_bus_mute(master),
+		"options",
+		"the music's slider at nothing silences the music and nothing else"
+	)
+	slider.value = 0.5
+	(page.get_node("Music/Off/Button") as Button).pressed.emit()
+	_expect(
+		(
+			not SettingsScript.music_on()
+			and AudioServer.is_bus_mute(music)
+			and not AudioServer.is_bus_mute(master)
+			and SettingsScript.sound_on()
+		),
+		"options",
+		"the music's OFF is saved and mutes the music alone"
+	)
+	await process_frame
+	page = menu._pages.get(StartMenuScript.Page.SOUND)
+	_expect(
+		(
+			(page.get_node("Music/Off/Button") as Button).disabled
+			and not (page.get_node("Sounds/Off/Button") as Button).disabled
+			and (page.get_node("MusicVolumeSlider") as HSlider).value == 0.5
+		),
+		"options",
+		"the rebuilt page marks the music's OFF, not the sound's, and keeps its level"
+	)
+	(page.get_node("Music/On/Button") as Button).pressed.emit()
+	_expect(
+		SettingsScript.music_on() and not AudioServer.is_bus_mute(music),
+		"options",
+		"the music's ON plays again at its slider's level"
+	)
+	await process_frame
 
 
 ## OPTIONS is a list of groups, a page each (`Q223`): which are listed is the
@@ -1176,6 +1242,38 @@ func _check_settings() -> void:
 	)
 	SettingsScript.set_sound_on(true)
 	SettingsScript.set_volume(1.0)
+	# The music (`Q246`): on and full unsaved, its own two keys, held to the
+	# slider's ends like the sound's.
+	_expect(
+		SettingsScript.music_on() and SettingsScript.music_volume() == 1.0,
+		"settings",
+		"the music is on and full unsaved"
+	)
+	var hand_music := ConfigFile.new()
+	hand_music.load(SETTINGS_PATH)
+	hand_music.set_value(SettingsScript.SECTION, SettingsScript.KEY_MUSIC_VOLUME, 1.7)
+	hand_music.save(SETTINGS_PATH)
+	SettingsScript.use_file(SETTINGS_PATH)
+	_expect(
+		SettingsScript.music_volume() == 1.0,
+		"settings",
+		"a music level edited past full reads full"
+	)
+	SettingsScript.set_music_on(false)
+	SettingsScript.set_music_volume(0.25)
+	SettingsScript.use_file(SETTINGS_PATH)
+	_expect(
+		(
+			not SettingsScript.music_on()
+			and SettingsScript.music_volume() == 0.25
+			and SettingsScript.sound_on()
+			and SettingsScript.volume() == 1.0
+		),
+		"settings",
+		"the music off at a quarter reads so after a restart, the sound untouched"
+	)
+	SettingsScript.set_music_on(true)
+	SettingsScript.set_music_volume(1.0)
 	# The thumbs and the frame cap (`Q223`): the shipped scheme until picked,
 	# and a cap the game does not offer reads the first that it does.
 	_expect(

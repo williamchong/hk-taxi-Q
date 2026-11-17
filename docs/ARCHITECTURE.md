@@ -669,7 +669,7 @@ declared `bounds`.
 | `ParkedLayer` | The parked roster by the hour, re-stood only out of view (`Q161`) |
 | `FareSystem` | The fare loop (`fares.tres`); `FareMeter` charges TD's tariff (`tariff.tres`); `SkillTracker`, `NearMiss`, `StyleCombo` (`skills.tres`); `SessionTally`. `.claude/rules/fares.md` |
 | `Hud`, `StartMenu` | Speed, street plate, wrong-way sign, minimap, meter, tip clock, callout, `TouchSticks`, `PauseButton`; menu pages from `menu.tres` and `menu_text.json`, `LoadingCover`, `ShaderWarmup`, `LedgerCard`. `.claude/rules/hud.md` |
-| Audio | No director: `TaxiAudio`, `TaxiHorn`, `TaxiDoor`, `TaxiHire`, the tram bell and traffic horns play their own. Buses `SFX`, `Engine`, `Cabin` under `Master` with a compressor (`default_bus_layout.tres`). `.claude/rules/audio.md` |
+| Audio | No director: `TaxiAudio`, `TaxiHorn`, `TaxiDoor`, `TaxiHire`, the tram bell and traffic horns play their own. `DriveMusic` plays the driving music, by the rig's hour and the combo's count (`Q246`). Buses `SFX`, `Engine`, `Cabin`, `Music` under `Master` with a compressor (`default_bus_layout.tres`). `.claude/rules/audio.md` |
 
 Rules:
 

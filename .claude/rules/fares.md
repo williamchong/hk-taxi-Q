@@ -113,5 +113,6 @@ assertion (`Q72`); bars are asserted from BOTH sides. `TICK_S` 0.25 is exact in 
 - **Cabin sounds are `TaxiHire`'s, on the loop's signals** (`Q185`, `Q178`): flag down at `boarded`,
   up at `delivered` / `bailed`, card beep and a coin per `coin_hkd` of tip up to `coin_max`, the
   meter's beep on `meter_changed` only. No sound on a skill or penalty (built, heard, removed).
+  The music's layers follow the combo's count (`DriveMusic`, `Q246`): music, not an award's sound.
 - A zero field is refused with the file named (`TuningTable.any_zero`); no defaults in a profile.
 - Not here: cross-harbour and the tunnel toll (`P3-1b`), operating hours (`Q14`).
