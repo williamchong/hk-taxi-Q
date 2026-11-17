@@ -1,20 +1,10 @@
 [gd_resource type="ShaderMaterial" format=3 uid="uid://8021hi0isst6"]
 
 [ext_resource type="Shader" uid="uid://b8mivjq4jkq6j" path="res://assets/shaders/vehicle_body.gdshader" id="1_vehicle"]
-[ext_resource type="Shader" uid="uid://t6b1liy66pav" path="res://assets/shaders/vehicle_outline.gdshader" id="2_outline"]
-
-[sub_resource type="ShaderMaterial" id="ShaderMaterial_outline"]
-render_priority = 0
-shader = ExtResource("2_outline")
-shader_parameter/outline_colour = Color(0.02, 0.02, 0.02, 1)
-shader_parameter/outline_m = 0.01
-shader_parameter/outline_height_m = 0.7
-shader_parameter/outline_soft_m = 0.1
 
 [resource]
 resource_name = "vehicle_body"
 render_priority = 0
-next_pass = SubResource("ShaderMaterial_outline")
 shader = ExtResource("1_vehicle")
 shader_parameter/sky_zenith = Color(0.24, 0.47, 0.78, 1)
 shader_parameter/sky_horizon = Color(0.85, 0.91, 0.96, 1)

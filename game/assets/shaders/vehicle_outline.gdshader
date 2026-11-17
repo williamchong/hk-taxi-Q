@@ -1,6 +1,10 @@
 // The black line round a vehicle (`Q248`): the body drawn a second time, grown
 // and inside out, so only its rim shows past the body in front of it.
 //
+// Not on `vehicle_body.tres` since the city's screen line went black and drew
+// this line itself (`Q248`'s amendment); kept as the line a vehicle takes back
+// as a `next_pass` if that pass is hidden.
+//
 // ⚠️ **Grown along the vertex's place on the body, never along `NORMAL`.** The
 // bodies are flat-shaded, so each face carries its own normal and a hull pushed
 // along them opens at every fold: the line came out dashed. A vertex's place

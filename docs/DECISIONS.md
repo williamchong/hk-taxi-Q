@@ -2353,7 +2353,7 @@ forces", so that another car is a spec sheet and not a re-tune.
 
 ## `Q158` — The city takes an outline in its own hue, not a banded sun
 
-**Status.** ✅ Closed on the user's pick from frames (`P3-64`, `P3-65`); the car's hull afterimage is reversed by `P3-70` (a light tail). The handset's frame time is owed.
+**Status.** ✅ Closed on the user's pick from frames (`P3-64`, `P3-65`); the car's hull afterimage is reversed by `P3-70` (a light tail). ⚠️ The own-hue ink below is reversed by `Q248`'s amendment (2026-11-18): the line is black, `ink_from_surface` 0. The handset's frame time is owed.
 
 - **The outline ships**: `cel_outline.gdshader`, one full-screen quad (`CelOutline`) in both rigs,
   values in `tuning/cel_outline.tres`. It inks where the Laplacian of inverse depth is large (zero
@@ -3415,6 +3415,8 @@ share `twilight.tres`, a rose horizon; a shift never sees the 06:15 dawn.
 - **Outline**: `vehicle_outline.gdshader` as the material's `next_pass`, the body grown and inside out, 1 cm (3 cm read too thick from the chase camera, the user's call). Grown by the vertex's place on the body, not its normal — flat-shaded faces opened at every fold and the line came out dashed. Folded away in the shadow pass; fades with a traffic car (`vehicle_fade.gdshaderinc`).
 - Cost, Fleming Road with traffic, desktop: frame p95 12.5–12.6 → 12.6–12.8 ms (inside run noise); `prims` 0.96–0.97 M → 1.49 M, every vehicle submitted twice.
 - Refused from the same sheets: a sampled normal map for the crown (per-kind maps, and its spike moved nothing from the chase camera), two-tone cel light, white strokes on glass, a line or seat removed from glass alone.
-- Way back: `paint_reflect` 0 and `crown` 0 are `Q215`'s car; removing `next_pass` removes the outline.
-- Next, planned not built: the city and the other assets in the same line (`P3-99`'s follow-on).
+- Way back: `paint_reflect` 0 and `crown` 0 are `Q215`'s car.
+- **Amended 2026-11-18, the user's pick from a sheet of seven city lines and a night A/B: the city's line goes black and the vehicles' outline pass comes off.** `cel_outline.tres` `ink_from_surface` 1.0 → 0.0 at the same 1.5 px (reverses `Q158`'s own-hue ink). The screen pass then draws the black line round every vehicle, so `next_pass` is removed; `vehicle_outline.gdshader` and its batching stay as the way back. Start line, same tick: `prims` 988,372 → 709,510 by day, 1,145,639 → 854,323 at night. The one-pass line is a fixed 1.5 px, thins with speed and is gone by 240 m.
+- Refused on the same sheets: 2.5 px (lamp posts and sign poles ink solid), half black, a darker own-hue, and a moonlit rim on the vehicles' own pass at night — the screen pass already draws that rim round a car, and at 1 cm the two were not told apart.
+- Next, planned not built: façade glass a step glossier; the handset's cost of the screen pass (`Q158`) now carries the vehicles' line too.
 

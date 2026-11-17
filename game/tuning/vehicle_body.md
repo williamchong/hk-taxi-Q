@@ -53,8 +53,9 @@ braking must not brake the rest.
   gradient. The lean is the fragment's place on the body over the radius, soft-limited so a bus's
   end leans no further than a car's. `crown_along` 1.0 turned a wing's far end to the ground and it
   went grey. A door is its own mesh and crowns about its own origin. `crown` 0 is the flat sheet.
-- `next_pass`, `outline_m = 0.01`, `outline_height_m = 0.7`, `outline_soft_m = 0.1`,
-  `outline_colour` (`Q248`, `vehicle_outline.gdshader`): the black line round every vehicle, the
-  body drawn again grown and inside out. 0.01 is the user's call from the chase camera, where 0.03
-  read too thick. It draws every vehicle twice. Removing `next_pass` removes the line. The taxi's
-  tyres are their own material and take none.
+- No `next_pass` (`Q248`, amended 2026-11-18): the black line round a vehicle is the city's screen
+  pass, black since the same day (`cel_outline.tres`). `vehicle_outline.gdshader` stays as the way
+  back, the body drawn again grown and inside out: a `next_pass` ShaderMaterial on it with
+  `outline_m` 0.01 (the user's call from the chase camera; 0.03 read too thick), `outline_height_m`
+  0.7, `outline_soft_m` 0.1 and `outline_colour` 0.02 grey. It draws every vehicle twice
+  (`prims` +39% at the start line), and is the line a car keeps if the screen pass is ever hidden.

@@ -5,8 +5,8 @@
 **Low-poly, flat-shaded, saturated. Accurate city, toy vehicles.** Stylise the actors, not the
 stage: recognition is the product, and stylised proportions destroy it (`Q8`).
 
-- **City:** real massing and position, real street layout, flat per-building colour, an ink
-  outline in each surface's own hue.
+- **City:** real massing and position, real street layout, flat per-building colour, a thin
+  black ink outline.
 - **Vehicles:** die-cast toys. The taxi's body is a 1:64 Tiny City Crown Comfort's (`Q190`) on the
   real car's wheelbase, track and wheels (`Q153`) — physics hardpoints and model are one set of
   numbers (`make_vehicle.Chassis`).
@@ -112,10 +112,10 @@ Rules any façade change must keep:
 
 ### The outline (`Q158`)
 
-Every crease and silhouette carries a thin line in its own surface's hue, darkened — the user's
-pick over black ink and over no line. `cel_outline.gdshader` on the rig's `CelOutline` quad
-(`visible` is the switch; values in `tuning/cel_outline.tres`): depth-only edges, colour read from
-the nearer side at half its linear value, faded out by 240 m, a pale rim at night. One draw call;
+Every crease and silhouette carries a thin black line — the user's pick on 2026-11-18, to sit with
+the vehicles' comic line (`Q248`), reversing the first pick of each surface's own hue darkened. `cel_outline.gdshader` on the rig's `CelOutline` quad
+(`visible` is the switch; values in `tuning/cel_outline.tres`): depth-only edges, one ink
+colour, faded out by 240 m, a pale rim at night. One draw call;
 it inks everything on screen. Vehicles add detail lines from their own mesh (`Q196`, `Q232`).
 
 ### What buildings will not get
@@ -221,9 +221,10 @@ the road drives on the pavement.
   clearcoat lobe added over the paint (`Q215`), and since `Q248` a share of the painted sky mixed
   into the albedo again over crowned panels, on the user's pick: it costs the red `C*` 4.0 in sun,
   and red identifies 紅的.
-- **Comic line** (`Q248`): every vehicle's detail lines are black, and a 1 cm black outline is
-  drawn round it by a second pass (`vehicle_outline.gdshader`). The city keeps `Q158`'s outline
-  in its own hue.
+- **Comic line** (`Q248`): every vehicle's detail lines are black, and the black line round
+  it is the city's screen pass (`Q158`), black for the whole frame. The vehicles' own outline pass
+  (`vehicle_outline.gdshader`) was built, shipped a day and switched off: the screen pass draws
+  the same line in one draw.
 - **Lamps** (`vehicle_lamps.gd`, `tuning/vehicle_lamps.tres`): `UV.x` carries a circuit id per
   lens, written per instance. Rear lamps read the car, front lamps read the light, and the roof
   sign reads the fare — lit for hire, dark with a passenger. Emission is the lens's hue at a fixed

@@ -5,12 +5,15 @@ Rationale for `game/tuning/cel_outline.tres` (`Q119`).
 The ink line round the city (`P3-64`, `Q158`), drawn by `cel_outline.gdshader` on the `CelOutline`
 quad in both rig scenes. The shader's header says how it works and why it reads depth alone.
 
-- `ink_from_surface` 1.0, `surface_darkness` 0.5: the user's pick. Each edge is the frame's own
-  colour on its nearer side, halved in linear light. `ink_colour` is the ink at
-  `ink_from_surface` 0.
+- `ink_from_surface` 0.0: the line is `ink_colour`, near black, the user's pick on 2026-11-18 from a
+  sheet of seven so the city sits in the vehicles' comic line (`Q248`). It also draws the black
+  line round every vehicle, which is why they carry no outline pass of their own. Before it, 1.0
+  with `surface_darkness` 0.5 (each edge its nearer surface's colour, halved in linear light);
+  `surface_darkness` is a no-op at 0.
 - `ink_strength` 1.0: the hue already softens the line.
 - `line_width_px` 1.5 at rest (the shader's default is 1.0). The drawn line is about twice the
-  sample step.
+  sample step. 2.5 was on the same sheet and
+  refused: lamp posts and sign poles ink solid.
 - `speed_thin_px` 0.5, `speed_fade` 0.2 (`P3-65`): at `car_outline.tres`'s `full_speed_kph` the
   line is 1.0 px at 80% strength. Thinner and fainter with speed, never bolder. The shader floors
   the width at 1.0 px. Read through the `outline_speed` global; a scene with no car keeps the
