@@ -37,6 +37,11 @@ from pipeline.config_blocks.arrows import (  # noqa: F401
     Arrows,
     _arrows,
 )
+from pipeline.config_blocks.backdrop import (  # noqa: F401
+    Backdrop,
+    BackdropBand,
+    _backdrop,
+)
 from pipeline.config_blocks.base import (  # noqa: F401
     LayerSpec,
     Material,
@@ -440,6 +445,9 @@ class Config:
     # The minimap's harbour and parks (`pipeline/basemap.py`). Optional: absent,
     # the map draws its roads on a bare field, as it did before.
     basemap: Basemap | None = None
+    # The far shore across the harbour (`pipeline/backdrop.py`, `P3-100`,
+    # `Q249`). Optional: absent, the sea ends at the basemap's reach.
+    backdrop: Backdrop | None = None
     # Published yellow box junctions, drawn by `pipeline/boxjunctions.py`
     # (`P3-18`). Optional for the same reason `arrows` is — and the fallback it
     # deliberately does not offer is sharper: the region publishes 20 boxes
@@ -642,6 +650,15 @@ class Config:
         reach = 0.0 if self.join is None else self.join.reach_m
         near = self.neighbours(region_id)
         return {side: reach if side in near else 0.0 for side in SIDES}
+
+    def fetch_extents(self, source_id: str, region_id: str) -> tuple[GeodeticBounds, ...]:
+        """Rectangles away from the region whose sheets of `source_id` its build
+        reads all the same — the far shore's strip (`backdrop:`), for a region
+        that ships it. The fetch downloads them beside the region's own."""
+        backdrop = self.backdrop
+        if backdrop is None or backdrop.source != source_id or region_id not in backdrop.regions:
+            return ()
+        return (backdrop.bounds,)
 
     def read_bounds(self, region_id: str) -> GeodeticBounds:
         """The geodetic rectangle a region's sheets are selected on.
@@ -850,6 +867,7 @@ def load_config(path: Path | None = None) -> Config:
         signs=_signs(document.get("signs"), f"{path}:signs"),
         lamps=_lamps(document.get("lamps"), f"{path}:lamps", table),
         basemap=_basemap(document.get("basemap"), f"{path}:basemap", table),
+        backdrop=_backdrop(document.get("backdrop"), f"{path}:backdrop", table),
         boxjunctions=_boxjunctions(document.get("boxjunctions"), f"{path}:boxjunctions"),
         crossings=_crossings(document.get("crossings"), f"{path}:crossings"),
         stop_marks=_stop_marks(document.get("stop_marks"), f"{path}:stop_marks"),
@@ -896,6 +914,9 @@ def load_config(path: Path | None = None) -> Config:
         # Not a `LayerSpec` — it carries no schema mapping — so the walk passes it.
         _check_declared_source(city, city.basemap, f"{path}:basemap.source")
         _check_basemap_reach_is_fetched(city, path)
+    if city.backdrop is not None:
+        _check_tiled_source_exists(city, city.backdrop.source, f"{path}:backdrop.source")
+        _check_backdrop(city, path)
     if city.trees is not None:
         for index, publisher in enumerate(city.trees.publishers):
             _check_source_exists(city, publisher.source, f"{path}:trees.publishers[{index}].source")
@@ -914,6 +935,33 @@ def load_config(path: Path | None = None) -> Config:
         # A key nothing read is a setting that tunes nothing — see `_Read`.
         raise ValueError(f"{path} declares keys nothing reads: {', '.join(unread)}")
     return city
+
+
+def _check_backdrop(city: Config, path: Path) -> None:
+    """The backdrop stands on the basemap's shore, in regions the city declares.
+
+    A misspelt region ships no backdrop anywhere, which reads exactly like a
+    city that declares none — `_check_carve_regions_are_declared`'s reason.
+    """
+    backdrop = city.backdrop
+    assert backdrop is not None
+    if city.basemap is None:
+        raise ValueError(
+            f"{path}:backdrop needs a basemap: block — the far sea is its water run on"
+        )
+    if backdrop.source != city.basemap.source:
+        raise ValueError(
+            f"{path}:backdrop.source is {backdrop.source!r} and basemap.source is "
+            f"{city.basemap.source!r} — the far shore's buildings and its shoreline are one map's"
+        )
+    unknown = sorted(backdrop.regions - set(city.regions))
+    if unknown:
+        raise ValueError(f"{path}:backdrop.regions names undeclared regions: {', '.join(unknown)}")
+    if backdrop.ground_level_m <= city.basemap.water_level_m:
+        raise ValueError(
+            f"{path}:backdrop.ground_level_m is {backdrop.ground_level_m} m, not above "
+            f"basemap.water_level_m {city.basemap.water_level_m} m — the far shore would be awash"
+        )
 
 
 def _check_basemap_reach_is_fetched(city: Config, path: Path) -> None:

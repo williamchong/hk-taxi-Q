@@ -75,6 +75,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "etl"))
 
 from pipeline.arrows import ARROWS_MANIFEST_NAME  # noqa: E402
+from pipeline.backdrop import BACKDROP_MANIFEST_NAME  # noqa: E402
 from pipeline.boxjunctions import BOXJUNCTIONS_MANIFEST_NAME  # noqa: E402
 from pipeline.buildings import BUILDINGS_MANIFEST_NAME, BUILDINGS_MANIFEST_SCHEMA  # noqa: E402
 from pipeline.config import Config, load_config  # noqa: E402
@@ -123,6 +124,9 @@ class Bundle:
     # The painted layers' triangles — road marks, boxes, crossings, the stood
     # arrows. Never streamed, so resident from every camera (`Q135`).
     paint: int = 0
+    # The far shore — the skyline, its ground and the far sea (`P3-100`). One
+    # asset drawn whole from every camera, and counted on its own line.
+    far_shore: int = 0
 
 
 @dataclass(frozen=True)
@@ -206,6 +210,20 @@ def paint_triangles(out_dir: Path) -> int:
     return total
 
 
+# `backdrop.json`'s three counts: the skyline, its ground and the far sea.
+FAR_SHORE_KEYS = ("skyline_triangles", "shore_triangles", "sea_triangles")
+
+
+def far_shore_triangles(out_dir: Path) -> int:
+    """What `backdrop.glb` holds resident, on `paint_triangles`' terms: read
+    bare, and 0 for a region that ships none."""
+    path = out_dir / BACKDROP_MANIFEST_NAME
+    if not path.is_file():
+        return 0
+    document = json.loads(path.read_text(encoding="utf-8"))
+    return sum(int(document.get(key) or 0) for key in FAR_SHORE_KEYS)
+
+
 def load_bundle(out_dir: Path, region: str) -> Bundle:
     """The region's tiles and road chunks, its cameras, and the whole road's triangles."""
     rebuild = f"cd etl && python -m pipeline --region {region}"
@@ -232,6 +250,7 @@ def load_bundle(out_dir: Path, region: str) -> Bundle:
         whole_road=int(surface["triangles"]),
         lod1_cell_m=float(cells[-1]) if cells else None,
         paint=paint_triangles(out_dir),
+        far_shore=far_shore_triangles(out_dir),
     )
 
 
@@ -248,6 +267,7 @@ def shifted(bundle: Bundle, dx: float, dz: float) -> Bundle:
         whole_road=bundle.whole_road,
         lod1_cell_m=bundle.lod1_cell_m,
         paint=bundle.paint,
+        far_shore=bundle.far_shore,
     )
 
 
@@ -262,6 +282,7 @@ def composed(frame: Bundle, other: Bundle) -> Bundle:
         whole_road=frame.whole_road + other.whole_road,
         lod1_cell_m=frame.lod1_cell_m,
         paint=frame.paint + other.paint,
+        far_shore=frame.far_shore + other.far_shore,
     )
 
 
@@ -354,6 +375,12 @@ def report(region: str, bundle: Bundle, profile: Profile, budget: int, band_by: 
         f"  + paint, never streamed {bundle.paint:,} = {with_paint:,}"
         f" ({budget_share(with_paint, budget)} of budget) — resident; its cells cull at draw (Q135)"
     )
+    if bundle.far_shore:
+        with_far_shore = with_paint + bundle.far_shore
+        print(
+            f"  + far shore, drawn whole {bundle.far_shore:,} = {with_far_shore:,}"
+            f" ({budget_share(with_far_shore, budget)} of budget) — past the far plane (Q249)"
+        )
     ratio = lod_ratio(bundle.units)
     if ratio is not None:
         cell = f" at a {bundle.lod1_cell_m:.1f} m LOD1 cell" if bundle.lod1_cell_m else ""

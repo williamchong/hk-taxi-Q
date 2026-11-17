@@ -26,6 +26,7 @@ import pytest
 
 from pipeline import __main__ as orchestrator
 from pipeline.arrows import ARROWS_MANIFEST_NAME, ARROWS_MANIFEST_SCHEMA
+from pipeline.backdrop import BACKDROP_MANIFEST_NAME, BACKDROP_MANIFEST_SCHEMA
 from pipeline.basemap import BASEMAP_NAME, BASEMAP_SCHEMA
 from pipeline.boxjunctions import BOXJUNCTIONS_MANIFEST_NAME, BOXJUNCTIONS_MANIFEST_SCHEMA
 from pipeline.buildings import BUILDINGS_MANIFEST_NAME, BUILDINGS_MANIFEST_SCHEMA
@@ -350,6 +351,13 @@ class _Region:
                 "region_id": REGION,
                 "asset": None,
             },
+            # And no `backdrop:` block (`P3-100`).
+            BACKDROP_MANIFEST_NAME: {
+                "schema_version": BACKDROP_MANIFEST_SCHEMA,
+                "city_id": city.id,
+                "region_id": REGION,
+                "asset": None,
+            },
             # Same shape and same reason a fourth time: `testville` declares no
             # `road_marks:` block, so the stage found nothing and says so.
             ROADMARKS_MANIFEST_NAME: {
@@ -592,6 +600,17 @@ class TestAssembly:
         region.build()
         assert region.manifest()["planters"] == "planters.glb"
         assert "planters.glb" in shipped(region.manifest())
+
+    def test_a_built_far_shore_is_shipped(self, region) -> None:
+        """The optional-key contract again, for `P3-100`'s `backdrop.glb`."""
+        region.build()
+        assert region.manifest()["backdrop"] is None
+
+        region.documents[BACKDROP_MANIFEST_NAME]["asset"] = "backdrop.glb"
+        (region.out_dir / "backdrop.glb").write_bytes(b"glb")
+        region.build()
+        assert region.manifest()["backdrop"] == "backdrop.glb"
+        assert "backdrop.glb" in shipped(region.manifest())
 
     def test_stood_stop_furniture_is_shipped_with_its_placements(self, region) -> None:
         """The optional-key contract for `P3-94`'s library and its document."""
@@ -1163,6 +1182,7 @@ class TestOrchestrator:
             "parked",
             "stops",
             "planters",
+            "backdrop",
             "export",
         ]
 
@@ -1210,6 +1230,7 @@ class TestOrchestrator:
             "parked",
             "stops",
             "planters",
+            "backdrop",
             "export",
         ]
 

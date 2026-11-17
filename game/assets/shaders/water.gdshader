@@ -22,6 +22,7 @@ shader_type spatial;
 render_mode cull_back, diffuse_burley, specular_schlick_ggx;
 
 #include "res://assets/shaders/colour.gdshaderinc"
+#include "res://assets/shaders/far_shore.gdshaderinc"
 
 // The rig's exposure (`Q38`), multiplied in after `vertex_srgb_to_linear` and
 // nowhere else — `colour.gdshaderinc` has the account.
@@ -99,6 +100,16 @@ void vertex() {
 	up_view = view[1];
 	tilt_a = view * vec3(-first.x, 0.0, -first.y) * wave_slope;
 	tilt_b = view * vec3(-second.x, 0.0, -second.y) * wave_slope;
+	// The far sea (`P3-100`, `Q249`): `backdrop.glb`'s water runs past the far
+	// plane and says so with a zero in `COLOR_0`'s fourth byte, which nothing
+	// else here reads. One water and one material; `far_shore.gdshaderinc` has
+	// the account. The other branch is what the engine writes unasked.
+	vec3 view_position = (MODELVIEW_MATRIX * vec4(VERTEX, 1.0)).xyz;
+	if (COLOR.a < 0.5) {
+		POSITION = far_shore_clip(PROJECTION_MATRIX, view_position);
+	} else {
+		POSITION = PROJECTION_MATRIX * vec4(view_position, 1.0);
+	}
 }
 
 void fragment() {

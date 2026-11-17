@@ -37,6 +37,7 @@ from concurrent.futures import FIRST_COMPLETED, Future, ThreadPoolExecutor, wait
 
 from pipeline import (
     arrows,
+    backdrop,
     basemap,
     boxjunctions,
     buildings,
@@ -192,6 +193,9 @@ STAGES: dict[str, Callable[[list[str]], int]] = {
     # After `carve` and `surface`, on `trees`' terms: the ground a wall stands
     # on and the carriageway it is cut back from. Before `export`.
     "planters": planters.main,
+    # The far shore, cut by `basemap`'s shoreline rule: it reads the sheets and
+    # nothing a stage wrote. Before `export`.
+    "backdrop": backdrop.main,
     "export": export.main,
 }
 
@@ -247,6 +251,7 @@ NEEDS: dict[str, tuple[str, ...]] = {
     "parked": ("surface", "fares", "tramlines", "fence", "busroutes"),
     "stops": ("surface", "fares", "tramlines", "busroutes"),
     "planters": ("carve", "surface"),
+    "backdrop": ("fetch",),
     "export": (
         "basemap",
         "landmarks",
@@ -270,6 +275,7 @@ NEEDS: dict[str, tuple[str, ...]] = {
         "busroutes",
         "stops",
         "planters",
+        "backdrop",
     ),
 }
 

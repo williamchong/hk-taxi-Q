@@ -24,6 +24,7 @@ from resident_budget import (
     band_of,
     centre_distance_to,
     composed,
+    far_shore_triangles,
     load_bundle,
     lod_ratio,
     main,
@@ -281,6 +282,19 @@ class TestThePaint:
         # A layer that drew nothing publishes a null asset and no count.
         (tmp_path / "crossings.json").write_text('{"triangles": null}', encoding="utf-8")
         assert paint_triangles(tmp_path) == 730
+
+    def test_the_far_shore_is_its_three_counts_and_nothing_where_none_ships(
+        self, tmp_path: Path
+    ) -> None:
+        assert far_shore_triangles(tmp_path) == 0
+        (tmp_path / "backdrop.json").write_text(
+            '{"skyline_triangles": 4976, "shore_triangles": 434, "sea_triangles": 216}',
+            encoding="utf-8",
+        )
+        assert far_shore_triangles(tmp_path) == 5626
+        # A region that ships none publishes a null asset and zero counts.
+        (tmp_path / "backdrop.json").write_text('{"asset": null}', encoding="utf-8")
+        assert far_shore_triangles(tmp_path) == 0
 
     def test_a_pair_holds_both_regions_paint(self) -> None:
         west = Bundle([], [], 0, None, paint=700)

@@ -2873,10 +2873,28 @@ class TestBasemapBlock:
 
         def without(doc: dict[str, Any]) -> None:
             doc.pop("basemap")
+            # The far shore stands on the basemap's water (`P3-100`).
+            doc.pop("backdrop")
             doc["materials"].pop("sea_water")
             doc["materials"].pop("park_grass")
 
         assert load_config(rewrite(without)).basemap is None
+
+    def test_a_far_shore_without_the_basemap_is_refused(self, rewrite) -> None:
+        def without(doc: dict[str, Any]) -> None:
+            doc.pop("basemap")
+            doc["materials"].pop("sea_water")
+            doc["materials"].pop("park_grass")
+
+        with pytest.raises(ValueError, match="backdrop needs a basemap"):
+            load_config(rewrite(without))
+
+    def test_a_far_shore_in_an_undeclared_region_is_refused(self, rewrite) -> None:
+        def misspelt(doc: dict[str, Any]) -> None:
+            doc["backdrop"]["regions"] = ["wan_chia"]
+
+        with pytest.raises(ValueError, match="undeclared regions: wan_chia"):
+            load_config(rewrite(misspelt))
 
     def test_the_water_is_a_material_and_sits_at_sea_level(self, hong_kong) -> None:
         """The world's water (2026-09-25): its colour comes from `materials:`

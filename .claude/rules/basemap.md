@@ -33,6 +33,8 @@ paths:
 - **`water.gdshader`**: render, `grep -i "shader error"`, and diff two frames at different sim
   times (a wave that does not move renders perfectly). `NORMAL` in the fragment is view space; a
   world normal goes through `VIEW_MATRIX`. Its own shader, never `vertex_albedo.gdshader`.
+- `water.gdshader` also draws the far sea (`backdrop.glb`, vertices with `COLOR_0` alpha 0) past
+  the far plane, and `basemap.read_sea` feeds it: a change to either owes the `backdrop` rule.
 - The `water` extent moves with `reach_m` and the fetched sheets; a missing sheet reads as open sea.
   `hud` owns the minimap half.
 - Water is not a floor: no collider. A car off the quay lands on the sunk ground and

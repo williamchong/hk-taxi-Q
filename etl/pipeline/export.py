@@ -45,6 +45,7 @@ from pathlib import Path, PurePosixPath
 
 from pipeline import __version__
 from pipeline.arrows import ARROWS_MANIFEST_NAME, ARROWS_MANIFEST_SCHEMA
+from pipeline.backdrop import BACKDROP_MANIFEST_NAME, BACKDROP_MANIFEST_SCHEMA
 from pipeline.basemap import BASEMAP_NAME, BASEMAP_SCHEMA
 from pipeline.boxjunctions import BOXJUNCTIONS_MANIFEST_NAME, BOXJUNCTIONS_MANIFEST_SCHEMA
 from pipeline.buildings import BUILDINGS_MANIFEST_NAME, BUILDINGS_MANIFEST_SCHEMA
@@ -311,7 +312,10 @@ CITY_NAME = "city.json"
 # planter walls and the beds they close — a new shipped asset, and the first
 # generated layer after the road to carry a collider. A v48 reader ships a
 # region without it.
-CITY_SCHEMA = 49
+# 50 since `P3-100` (`Q249`): the manifest names `backdrop.glb`, the far shore
+# across the harbour and the sea out to it. A v49 reader ships a region whose
+# harbour ends at the basemap's reach.
+CITY_SCHEMA = 50
 
 # The hero-building placement document (`P3-6`), written by this stage from the
 # city config — ~2 entries derived from `landmarks:` plus one CRS conversion,
@@ -357,6 +361,7 @@ OPTIONAL_ASSET_KEYS = (
     "stops",
     "stops_placements",
     "planters",
+    "backdrop",
     "lamps",
     "lamps_placements",
     "railings",
@@ -412,6 +417,7 @@ INPUTS: tuple[Input, ...] = (
     Input(STOPMARKS_MANIFEST_NAME, STOPMARKS_MANIFEST_SCHEMA, "stopmarks"),
     Input(STOPS_MANIFEST_NAME, STOPS_MANIFEST_SCHEMA, "stops"),
     Input(PLANTERS_MANIFEST_NAME, PLANTERS_MANIFEST_SCHEMA, "planters"),
+    Input(BACKDROP_MANIFEST_NAME, BACKDROP_MANIFEST_SCHEMA, "backdrop"),
     Input(LAMPS_MANIFEST_NAME, LAMPS_MANIFEST_SCHEMA, "lamps"),
     Input(RAILINGS_MANIFEST_NAME, RAILINGS_MANIFEST_SCHEMA, "railings"),
     Input(SIGNS_MANIFEST_NAME, SIGNS_MANIFEST_SCHEMA, "signs"),
@@ -501,6 +507,7 @@ def build_region(
     stopmarks = documents[STOPMARKS_MANIFEST_NAME]
     stops = documents[STOPS_MANIFEST_NAME]
     planters = documents[PLANTERS_MANIFEST_NAME]
+    backdrop = documents[BACKDROP_MANIFEST_NAME]
     lamps = documents[LAMPS_MANIFEST_NAME]
     railings = documents[RAILINGS_MANIFEST_NAME]
     signs = documents[SIGNS_MANIFEST_NAME]
@@ -630,6 +637,9 @@ def build_region(
         # HyD's roadside planters (`P3-98`, `Q247`); `null` where the city
         # declares no `planters:` block or the region holds no wall.
         "planters": planters["asset"],
+        # The far shore (`P3-100`, `Q249`); `null` where the city declares no
+        # `backdrop:` block or this region is not one that ships it.
+        "backdrop": backdrop["asset"],
         "lamps": lamps["asset"],
         # Where the lamp library stands (`P5-3`), on `signs_placements`' terms.
         "lamps_placements": lamps["placements_document"],

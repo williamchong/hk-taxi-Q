@@ -103,6 +103,7 @@ const SIGNS: String = "signs"
 const WATER: String = "water"
 const TREES: String = "trees"
 const PLANTERS: String = "planters"
+const BACKDROP: String = "backdrop"
 
 ## One row per layer. `file` is the asset in a region's bundle directory; `noun` and
 ## `module` build the rebuild hint and the verify tools' skip line; `absence` is
@@ -275,6 +276,22 @@ const LAYERS: Dictionary[String, Dictionary] = {
 		"casts_shadow": true,
 		"shadow_meshes": [],
 	},
+	# The far shore (`P3-100`, `Q249`): the skyline across the harbour and the
+	# sea out to it, past the camera's far plane. `beyond_far`, so the engine
+	# does not cull at that plane what the material draws beyond it. No shadow:
+	# nothing it could fall on is drawn.
+	BACKDROP:
+	{
+		"file": "backdrop.glb",
+		"noun": "far shore",
+		"module": "backdrop",
+		"absence":
+		"A region that is not one of `backdrop.regions` ships none, and that is not a failure.",
+		"placements": "",
+		"casts_shadow": false,
+		"shadow_meshes": [],
+		"beyond_far": true,
+	},
 }
 
 
@@ -352,6 +369,12 @@ static func casts_shadow(layer: String, mesh_name: String) -> bool:
 		return true
 	var only: Array = row["shadow_meshes"]
 	return bool(row["casts_shadow"]) and (only.is_empty() or mesh_name in only)
+
+
+## Whether the layer is drawn past the camera's far plane
+## (`far_shore.gdshaderinc`), and so must not be culled at it.
+static func beyond_far(layer: String) -> bool:
+	return bool(_row(layer).get("beyond_far", false))
 
 
 ## The library meshes a casting layer's shadow is narrowed to; empty when every

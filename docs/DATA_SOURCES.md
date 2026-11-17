@@ -420,6 +420,16 @@ its `HHMM`; a `frequencies` end is exclusive.
 
 ---
 
+## The far shore (`Q249`)
+
+- **iB1000 `Building`** over Kowloon, the same `tiled_sources.topography` sheets the basemap
+  reads: 27 more sheets (922 MB) for 114.152–114.198 E, 22.2915–22.308 N, fetched for Wan Chai
+  through `backdrop.bounds`. `BASELEVEL` and `ROOFLEVEL` are read: 3,536 footprints in the strip,
+  133 with no level, 1,146 at least 30 m tall.
+- ⚠️ `Shoreline` does not separate land from sea there: West Kowloon's waterfront and east Tsim
+  Sha Tsui's are gaps of several hundred metres, so `basemap.sea_of` finds one piece. The shore
+  is a closing of the footprints and the sea walls instead.
+
 ## Roadside planters (`Q247`)
 
 - **HyD Roadside Planter Wall** — `hyd_rcd_1632211024666_47455`, Highways Department,

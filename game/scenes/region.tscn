@@ -11,6 +11,10 @@
 script = ExtResource("1_layer")
 layer = "water"
 
+[node name="Backdrop" type="Node3D" parent="." unique_id=1650274119]
+script = ExtResource("1_layer")
+layer = "backdrop"
+
 [node name="Tramway" type="Node3D" parent="." unique_id=867783560]
 script = ExtResource("1_layer")
 layer = "tramway"

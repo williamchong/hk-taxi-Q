@@ -40,6 +40,9 @@ below.
 - `Signs` (`P3-16`): the published signs on the poles TD surveyed. `posts = true` (`Q191`): a
   cylinder up every `pole` placement, none under a face. Not in `prop_cells.tres`, so one body a
   region.
+- `Backdrop` (`P3-100`, `Q249`): the far shore — the skyline across the harbour, its ground and
+  the sea out to it, two draws. Past the camera's far plane by its material
+  (`tuning/backdrop.md`), so the node lifts the engine's cull off it. No body, no shadow.
 - `Planters` (`P3-98`, `Q247`): HyD's roadside planter walls and the beds they close, one merged
   mesh. The one layer here whose `.glb` brings its own body: `planters_collision-colonly`, the
   walls alone, so a car hits a planter and passes through nothing but the hedge above it. No

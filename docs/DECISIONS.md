@@ -3403,6 +3403,20 @@ share `twilight.tres`, a rose horizon; a shift never sees the 06:15 dawn.
 - Walls under a deck (checked 2026-11-18): 22 of Wan Chai's 48 features, 710 of 2,224 m. In plan the 17 under a flyover are street-level islands (the large ones cross the deck's carriageway); four under footbridges, 139 m, sit on street islands but are not settled by shape; one (10 m under) was not looked at. None found on a deck.
 - Not done: registering the railings beside a wall; lighting at night.
 
+## `Q249` — The far shore is built: Kowloon's skyline as one silhouette mesh, drawn past the far plane
+
+**Status.** 🟡 Built 2026-11-18 (`P3-100`) on the user's ask. Owed: the user's pick of the density (frames at 2,000 / 5,000 / 10,000), a night look, the handset and the web build, the PCK. Checklist in `.claude/rules/backdrop.md`.
+
+- A real mesh at its true place, not a sky panorama: iB1000 `Building` footprints over a strip of Kowloon (114.152–114.198 E, 22.2915–22.308 N; 27 more sheets, 922 MB fetched), each extruded to its published `ROOFLEVEL`, tallest first under `triangle_cap`. At 5,000: 278 of 1,146 blocks over 30 m, down to 56.0 m, tallest 460.6 m; 4,976 skyline + 434 shore + 216 sea triangles, 378 KB, 510 m off the frame.
+- **The camera's `far` stays 400 m.** Raising it to 8,000 was measured and refused: `prims` 460–587k → 781–930k (+70%), draws 139–156 → 253–290, the streamed city behind the car entering the frustum. `far_shore.gdshaderinc` squeezes everything past `pin_from_m` (500 m) into the last `pin_band_m` (8 m) of depth instead, in one projective step so depth order holds; `extra_cull_margin` defeats the engine's own cull.
+- Cost, measured by `--hide-layers=backdrop` on the same drive: +5,626 primitives and +2 draws, every tick, with traffic or trams alone.
+- The shore is a closing (200 m) of the footprints and sea walls, holes filled — not `basemap.sea_of`. Kowloon's published shoreline has gaps of hundreds of metres (West Kowloon, east Tsim Sha Tsui) and the cut finds no sea.
+- The far sea is a rectangle from the frame's north edge to the strip, plus the sea of the region and its neighbours a second time: the far plane clips the basemap's water 400 m out, short of the frame on a diagonal. Drawn by `water.gdshader`, told apart by `COLOR_0` alpha 0. ⚠️ Not a survey: undrawn land beside the region reads as water from across the map.
+- Only Wan Chai ships it; Causeway Bay is drawn beside it. `city.json` schema 50 names `backdrop`.
+- 24-bit depth (Compatibility, the web build) orders the band at about 35 m a step at 1 km. One frame from Expo Drive East under `gl_compatibility` showed no artefact; the web build itself is owed.
+- Unlit at night: the skyline is dark blocks against the sky. Lit windows are not built.
+- Colour is three height bands off `materials:` (`Q33`); the default density is 5,000 pending the pick.
+
 ## `Q248` — Vehicles are glossy and inked: crowned panels, the painted sky back on paint, black lines and a black outline
 
 **Status.** 🟡 Built 2026-11-18 (`P3-99`) on the user's picks from sheets, set against a photo of a real Crown Comfort. Reverses `Q215`'s "paint takes none of the painted sky" and amends `Q196`'s line weight. Owed: the handset's frame time, the web build (varyings), a night look, the PCK.

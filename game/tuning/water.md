@@ -28,3 +28,7 @@ lighten it to make the harbour bluer. The blue is the reflected sky, and its dia
   cited albedo.
 - `wave_bearing_deg = 20.0`: the first train runs roughly along the harbour. A bearing, because
   the frame's north is -Z (`crs.py`).
+- `street_far_m = 400.0`, `pin_band_m = 8.0`, `pin_from_m = 500.0`: `far_shore.gdshaderinc`'s
+  squeeze, for the far sea in `backdrop.glb` (`Q249`) — vertices whose `COLOR_0` alpha is 0. The
+  region's own water ignores them. The same three numbers as `backdrop.tres`, explained in
+  `backdrop.md`; `verify_backdrop.gd` refuses a pair that differs.

@@ -362,6 +362,30 @@ TRIGGERS: dict[str, Trigger] = {
             ),
         ),
     ),
+    "backdrop": Trigger(
+        "`pipeline/backdrop.py`, the `backdrop` config block, or the basemap's sea it runs on",
+        (
+            Report(
+                "backdrop.json",
+                (
+                    "triangle_cap",
+                    "blocks_read",
+                    "blocks_no_level",
+                    "blocks_tall",
+                    "blocks_drawn",
+                    "min_height_drawn_m",
+                    "tallest_m",
+                    "skyline_triangles",
+                    "shore_triangles",
+                    "sea_triangles",
+                    "shore_m2",
+                    "sea_m2",
+                    "gap_m",
+                    "bytes",
+                ),
+            ),
+        ),
+    ),
     "stops": Trigger(
         "`pipeline/stops.py`, the `stops` config block, or where a stop's furniture stands",
         (

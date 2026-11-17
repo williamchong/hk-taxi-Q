@@ -3451,6 +3451,48 @@ basemap:
   # sink under the sea. No mesh of its own — the ground already is one.
   park_material: park_grass
 
+# The far shore (`P3-100`, `Q249`): Kowloon across Victoria Harbour, seen from
+# the Wan Chai waterfront and never driven. `pipeline/backdrop.py` extrudes the
+# topographic map's own building blocks between their published base and roof
+# levels into one silhouette mesh, stands them on a flat shore cut along the
+# basemap's shoreline, and runs the sea out to it.
+backdrop:
+  source: topography
+  member: "{tile}/{tile}.gdb"
+  # West Kowloon to Hung Hom, from the Tsim Sha Tsui sea wall to about 1.8 km
+  # inland: 27 more sheets, ~1.2 GB at build time (the user's standing rule: a
+  # download is never the reason to go without).
+  bounds:
+    west: 114.152
+    east: 114.198
+    south: 22.2915
+    north: 22.308
+  # Causeway Bay is drawn joined to Wan Chai and its box holds no waterfront,
+  # so it ships no copy.
+  regions: [wan_chai]
+  buildings:
+    layer: Building
+    fields:
+      base: BASELEVEL
+      roof: ROOFLEVEL
+  min_height_m: 30.0
+  simplify_m: 4.0
+  triangle_cap: 5000
+  # Reclaimed Kowloon stands at about +4 to +5 mPD; one flat slab at this.
+  ground_level_m: 4.5
+  # The published shoreline does not close over Kowloon (West Kowloon and east
+  # Tsim Sha Tsui are gaps of several hundred metres), so the slab is closed
+  # over what stands on it: a waterfront with nothing published for 400 m is sea.
+  ground_close_m: 200.0
+  ground_material: concrete_kerb
+  bands:
+    - above_m: 0.0
+      material: render_pale
+    - above_m: 60.0
+      material: tile_neutral
+    - above_m: 120.0
+      material: panel_grey
+
 lamps:
   source: topography
   member: "{tile}/{tile}.gdb"

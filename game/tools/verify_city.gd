@@ -252,6 +252,13 @@ func _check_documents(manifest: Manifest) -> PackedStringArray:
 				"planters", manifest.planters_path, GeneratedLayer.path(GeneratedLayer.PLANTERS)
 			)
 		)
+	# And the far shore (`P3-100`): a region off `backdrop.regions` names none.
+	if not manifest.backdrop_path.is_empty():
+		problems.append_array(
+			_check_document(
+				"backdrop", manifest.backdrop_path, GeneratedLayer.path(GeneratedLayer.BACKDROP)
+			)
+		)
 	if not manifest.boxjunctions_path.is_empty():
 		problems.append_array(
 			_check_document(

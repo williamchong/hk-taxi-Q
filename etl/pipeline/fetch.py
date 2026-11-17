@@ -739,6 +739,16 @@ def _tiles_for(
         region_bounds=city.bounds_past(region.id, source.fetch_margin_m),
         region_crs=city.geodetic_crs,
     )
+    # And the sheets a stage reads away from the region altogether — the far
+    # shore (`backdrop:`), a kilometre over the water. Its own rectangles, never
+    # a wider margin: a margin that reached Kowloon would fetch the ring.
+    keys = {tile.key for tile in tiles}
+    for extent in city.fetch_extents(source.id, region.id):
+        for tile in select_tiles(index, source, region_bounds=extent, region_crs=city.geodetic_crs):
+            if tile.key not in keys:
+                keys.add(tile.key)
+                tiles.append(tile)
+    tiles.sort(key=lambda artefact: artefact.key)
     log.info(
         "  %s: %d of %d sheets overlap %s",
         source.id,

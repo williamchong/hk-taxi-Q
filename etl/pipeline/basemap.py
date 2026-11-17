@@ -189,6 +189,29 @@ def sea_of(
     return grown
 
 
+def read_sea(
+    city: Config,
+    region_id: str,
+    report: BasemapReport,
+    *,
+    sources_root: Path | None = None,
+) -> tuple[Polygon, BaseGeometry]:
+    """A region's frame and the sea in it, in projected metres.
+
+    The one reading of a region's harbour: `build_region` draws it, and
+    `pipeline/backdrop.py` runs the far sea on from it — for the region and
+    for each neighbour drawn beside it.
+    """
+    spec = city.basemap
+    assert spec is not None
+    frame = frame_of(city, region_id, spec.reach_m)
+    shoreline = read_shoreline(
+        _layers(city, spec, region_id, spec.shoreline, frame, sources_root), spec
+    )
+    buildings = read_polygons(_layers(city, spec, region_id, spec.buildings, frame, sources_root))
+    return frame, sea_of(frame, shoreline, buildings, spec, report)
+
+
 def triangles_of(
     geometry: BaseGeometry, simplify_m: float, transform: GameTransform
 ) -> list[list[float]]:
@@ -262,13 +285,7 @@ def build_region(
         write_document(out_dir / BASEMAP_NAME, _document(city.id, region_id, [], [], report))
         return report
     transform = city.game_transform(region_id)
-    frame = frame_of(city, region_id, spec.reach_m)
-
-    shoreline = read_shoreline(
-        _layers(city, spec, region_id, spec.shoreline, frame, sources_root), spec
-    )
-    buildings = read_polygons(_layers(city, spec, region_id, spec.buildings, frame, sources_root))
-    sea = sea_of(frame, shoreline, buildings, spec, report)
+    frame, sea = read_sea(city, region_id, report, sources_root=sources_root)
 
     parks = read_polygons(
         _layers(city, spec, region_id, spec.parks, frame, sources_root),

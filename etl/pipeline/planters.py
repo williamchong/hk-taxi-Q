@@ -196,7 +196,7 @@ def _heights(ground: Faces, ring: np.ndarray) -> np.ndarray | None:
     return found
 
 
-def _prism(
+def prism(
     builder: ColouredBuilder,
     polygon: shapely.Polygon,
     floor_of: Callable[[np.ndarray], np.ndarray],
@@ -277,7 +277,7 @@ def _clumps(
                     # ground so no clump floats where the wall falls away.
                     wall_top = float(floor_of(np.array([[centre.x, centre.y]]))[0])
                     wall_top += spec.wall_height_m
-                    _prism(
+                    prism(
                         builder,
                         piece,
                         lambda plan, level=wall_top: np.full(len(plan), level),
@@ -357,7 +357,7 @@ def build_planters(
             return heights[tree.nearest(shapely.points(plan))]
 
         for builder in (drawn, solid):
-            _prism(builder, shape, floor, spec.sink_m, spec.wall_height_m, wall_colour, wall_colour)
+            prism(builder, shape, floor, spec.sink_m, spec.wall_height_m, wall_colour, wall_colour)
         if planted:
             _clumps(drawn, spec, shape, floor, report)
         report.max_ground_fall_m = max(

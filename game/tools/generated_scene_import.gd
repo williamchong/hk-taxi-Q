@@ -108,6 +108,11 @@ const SHADERS: Dictionary = {
 	# `etl/pipeline/planters.py`, on the trees' terms and with their quiet
 	# fallback, so `verify_planters.gd` checks the dispatch by `resource_path`.
 	"planters": "res://tuning/planters.tres",
+	# The far shore (`P3-100`): `BACKDROP_MATERIAL` in `etl/pipeline/backdrop.py`.
+	# Its own shader, because it draws past the far plane
+	# (`far_shore.gdshaderinc`); a mesh that missed the dispatch is culled there
+	# and draws nothing, so `verify_backdrop.gd` checks it by `resource_path`.
+	"backdrop": "res://tuning/backdrop.tres",
 	# The lit signal heads (`P3-3e`): `MATERIAL` in `tools/make_signal_heads.py`,
 	# on the AUTHORED `heads.glb`. Its own shader, because the lamp is read from
 	# `INSTANCE_CUSTOM` (`SignalController`'s light) against the lens circuit on
