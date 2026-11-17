@@ -3,12 +3,12 @@
 importer="wav"
 type="AudioStreamWAV"
 uid="uid://bshulu31khv2q"
-path="res://.godot/imported/bgm_fire_day_top.wav-30856dd4555ed042597a17c7423fab02.sample"
+path="res://.godot/imported/bgm_fire_day_horns.wav-d94e57ab4ebebab1a9d5f37ab6d85e08.sample"
 
 [deps]
 
-source_file="res://assets/authored/audio/bgm_fire_day_top.wav"
-dest_files=["res://.godot/imported/bgm_fire_day_top.wav-30856dd4555ed042597a17c7423fab02.sample"]
+source_file="res://assets/authored/audio/bgm_fire_day_horns.wav"
+dest_files=["res://.godot/imported/bgm_fire_day_horns.wav-d94e57ab4ebebab1a9d5f37ab6d85e08.sample"]
 
 [params]
 

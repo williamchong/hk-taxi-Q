@@ -2,19 +2,20 @@
 
 Rationale for `game/tuning/music.tres` (`Q119`).
 
-The driving music (`P3-97`, `Q246`, the user's ask and the user's picks by ear): a quiet bed under
-the drive that changes with the hour, and layers that come in as the style combo climbs. Read by
+The driving music (`P3-97`, `Q246`, the user's ask and the user's picks by ear): a street groove
+under the drive (swung drums, a walking bass, an electric piano) that thins out with the hour, and layers that come in as the style combo climbs. Read by
 `scripts/audio/music_profile.gd`; played by `scripts/audio/drive_music.gd`, the `Music` node of
 `city_drive.tscn`. The files are `tools/make_bgm.py`'s, thirteen loops of the same eight bars at
-75 bpm, held in one `AudioStreamSynchronized` and only ever turned up and down. No `@export`
+84 bpm, held in one `AudioStreamSynchronized` and only ever turned up and down. No `@export`
 declares a default, so a key absent here is 0 and `usable()` refuses it.
 
 ## Level
 
-- `bed_db` −12: the music's level into the `Music` bus with both sliders full. ⚠️ **Not yet set
-  against a drive.** It was picked to sit under the engine (`engine_db` −18 on a file that peaks
-  near full scale; the beds average −23 to −26 dBFS), and the audio rule's bar is a drive heard,
-  so the first one moves this.
+- `bed_db` −18: the music's level into the `Music` bus with both sliders full. ⚠️ **Not yet set
+  against a drive.** It was −12 under the first beds, which averaged −23 to −26 dBFS and were
+  picked to sit under the engine (`engine_db` −18 on a file that peaks near full scale). The
+  groove's beds average −17 to −19 dBFS, so −18 holds the same average level and nothing more:
+  the audio rule's bar is a drive heard, so the first one moves this.
 - `start_fade_s` 5 (the user's ask: "fade in the music when game start"): from silent to its
   level as the car first drives off, and again after every park. The level follows the travel
   squared, as the sliders do, so the fade is heard along its whole length: half way is 12 dB under.
@@ -47,17 +48,19 @@ next 07:00), so the music and the sky cannot disagree and a shift hears morning 
 
 ## Combo
 
-`tiers` is a row of six for each count, ×1 first: `shaker`, `thump`, `bass`, `arp`, `top`, `clap`.
+`tiers` is a row of six for each count, ×1 first: `shaker`, `conga`, `guitar`, `arp`, `horns`,
+`clap`. The bed has its own drums and bass, so a layer adds to the rhythm section and never
+doubles it.
 
-| Count | shaker | thump | bass | arp | top | clap | What comes in |
+| Count | shaker | conga | guitar | arp | horns | clap | What comes in |
 |---|---|---|---|---|---|---|---|
 | ×1 | 0 | 0 | 0 | 0 | 0 | 0 | the bed alone |
 | ×2 | 0.5 | 0 | 0 | 0 | 0 | 0 | the shaker |
-| ×3 | 0.7 | 0.6 | 0 | 0 | 0 | 0 | a soft thump on the beat |
-| ×4 | 0.8 | 0.7 | 0.6 | 0 | 0 | 0 | the root in quavers |
+| ×3 | 0.7 | 0.6 | 0 | 0 | 0 | 0 | the congas |
+| ×4 | 0.8 | 0.7 | 0.6 | 0 | 0 | 0 | a muted guitar off the beat |
 | ×5 | 0.9 | 0.8 | 0.7 | 0.6 | 0 | 0 | the quaver arpeggio |
-| ×6 | 1 | 0.9 | 0.85 | 0.85 | 0 | 0.5 | a clap on two and four |
-| ×7 | 1 | 1 | 1 | 1 | 0.6 | 0.7 | the semiquaver top line |
+| ×6 | 1 | 0.9 | 0.85 | 0.85 | 0 | 0.5 | a clap on the snare |
+| ×7 | 1 | 1 | 1 | 1 | 0.6 | 0.7 | the horns' stabs |
 | ×8 | 1.2 | 1.15 | 1 | 1.1 | 1 | 1 | everything, lifted |
 
 - The count is `StyleCombo.total()`; a count past ×8 keeps the last row. Every row adds a layer
@@ -65,6 +68,6 @@ next 07:00), so the music and the sky cannot disagree and a shift hears morning 
 - ⚠️ The last row is mirrored by `make_bgm.py`'s `FULL`: the files share one scale, set so that
   row over the loudest bed peaks at 0.9. A louder row clips; `test_make_bgm.py` holds the mirror.
 - `tier_rise_s` 1, `tier_fall_s` 2.5: a layer takes a second from silent to full, so a skill is
-  answered within the bar it was done in (a bar is 3.2 s); when the combo ends the layers leave
+  answered within the bar it was done in (a bar is 2.9 s); when the combo ends the layers leave
   over 2.5 s, its own `combo_gap_s`, rather than cut.
 - The combo is still never money and still has no one-shot (`fares.md`: built, heard, removed).

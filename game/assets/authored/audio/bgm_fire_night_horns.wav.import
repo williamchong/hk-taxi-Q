@@ -3,12 +3,12 @@
 importer="wav"
 type="AudioStreamWAV"
 uid="uid://dd3uctgpb5kcp"
-path="res://.godot/imported/bgm_fire_night_top.wav-b28aa8aee407bb319567d6d8fb2d45cc.sample"
+path="res://.godot/imported/bgm_fire_night_horns.wav-e358eb1d5ca081855046142634faf887.sample"
 
 [deps]
 
-source_file="res://assets/authored/audio/bgm_fire_night_top.wav"
-dest_files=["res://.godot/imported/bgm_fire_night_top.wav-b28aa8aee407bb319567d6d8fb2d45cc.sample"]
+source_file="res://assets/authored/audio/bgm_fire_night_horns.wav"
+dest_files=["res://.godot/imported/bgm_fire_night_horns.wav-e358eb1d5ca081855046142634faf887.sample"]
 
 [params]
 

@@ -4,7 +4,7 @@
 
 [resource]
 script = ExtResource("1_music")
-bed_db = -12.0
+bed_db = -18.0
 start_fade_s = 5.0
 park_fade_s = 1.5
 moods = PackedStringArray("morning", "afternoon", "night", "midnight")
@@ -13,8 +13,8 @@ mood_side = PackedStringArray("day", "day", "night", "night")
 mood_fade = 0.036
 held_mood = "afternoon"
 mood_ease_s = 3.0
-stems = PackedStringArray("shaker", "thump", "bass", "arp", "top", "clap")
-sided_stems = PackedStringArray("bass", "arp", "top")
+stems = PackedStringArray("shaker", "conga", "guitar", "arp", "horns", "clap")
+sided_stems = PackedStringArray("guitar", "arp", "horns")
 tiers = PackedFloat32Array(0, 0, 0, 0, 0, 0, 0.5, 0, 0, 0, 0, 0, 0.7, 0.6, 0, 0, 0, 0, 0.8, 0.7, 0.6, 0, 0, 0, 0.9, 0.8, 0.7, 0.6, 0, 0, 1, 0.9, 0.85, 0.85, 0, 0.5, 1, 1, 1, 1, 0.6, 0.7, 1.2, 1.15, 1, 1.1, 1, 1)
 tier_rise_s = 1.0
 tier_fall_s = 2.5

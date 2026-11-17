@@ -48,6 +48,10 @@ paths:
 Owed: `python tools/make_bgm.py`, `pytest tests/test_make_bgm.py` from `etl/`, `tools/check.sh`
 (runs `verify_music`), and a drive HEARD — a level is never set off a number.
 
+- **The bed is a street groove, never an ambient wash** (the user's call, "too spacy"): swung
+  drums, a walking bass and an electric piano, thinned by the hour. No echoing bells, no shimmer
+  pad, no noise wash; midnight's low pad is the one held voice. The bed owns the drums and bass,
+  so a layer adds to them (shaker, congas, guitar, arpeggio, horns, clap) and never doubles them.
 - **Thirteen loops of the same eight bars, in one `AudioStreamSynchronized`, only turned up and
   down**: four beds (stereo) and the combo's layers (mono; the three drum layers are two bars).
   Every file's length divides the bed's, or it drifts. Nothing is started, stopped or pitched.
@@ -59,4 +63,4 @@ Owed: `python tools/make_bgm.py`, `pytest tests/test_make_bgm.py` from `etl/`, `
   mirror). The day and night chords share three notes a slot so the beds cross-fade; keep that.
 - Silent while `parked`, like the taxi. Its switch and slider are the `Music` bus
   (`Settings.apply_sound`); the sound's own are still the Master.
-- ⚠️ The source `.wav`s are 16.7 MB in git, not LFS. Unheard on the web build and on a handset.
+- ⚠️ The source `.wav`s are 14.9 MB in git, not LFS. Unheard on the web build and on a handset.

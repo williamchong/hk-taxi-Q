@@ -3,12 +3,12 @@
 importer="wav"
 type="AudioStreamWAV"
 uid="uid://u0erm1fl72ma"
-path="res://.godot/imported/bgm_fire_day_bass.wav-5a7b18a00ff53b96bc7e3c2f80da537d.sample"
+path="res://.godot/imported/bgm_fire_day_guitar.wav-1f35acd895e73c6d007aadda356632ad.sample"
 
 [deps]
 
-source_file="res://assets/authored/audio/bgm_fire_day_bass.wav"
-dest_files=["res://.godot/imported/bgm_fire_day_bass.wav-5a7b18a00ff53b96bc7e3c2f80da537d.sample"]
+source_file="res://assets/authored/audio/bgm_fire_day_guitar.wav"
+dest_files=["res://.godot/imported/bgm_fire_day_guitar.wav-1f35acd895e73c6d007aadda356632ad.sample"]
 
 [params]
 

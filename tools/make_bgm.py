@@ -6,6 +6,10 @@ same eight bars at one tempo (the three drum layers two of them, repeated), so t
 plays them locked together and only turns each up and down: a bed fades into the next as
 the hour moves, and a layer comes in as the combo climbs (`music.tres`).
 
+The bed is a street groove, on the user's pick by ear: swung drums, a walking bass and an
+electric piano, thinned out by the hour. The layers add to that rhythm section and never
+double it.
+
 Authored, not recorded, so it comes under the hand-authored licence with nothing to
 attribute. Every voice is an enveloped note placed modulo the loop, so each loop is exactly
 periodic. Byte-identical each run: every draw is seeded.
@@ -24,12 +28,14 @@ import numpy as np
 
 RATE_HZ = 22050
 TAU = 2.0 * np.pi
-BPM = 75.0
+BPM = 84.0
 BEAT_S = 60.0 / BPM
 BARS = 8
 ROWS = round(BARS * 4 * BEAT_S * RATE_HZ)
 # A chord lasts two bars.
 TWO_BARS_S = 8 * BEAT_S
+# How late an off semiquaver lands, as a share of a semiquaver: the groove's lean.
+SWING = 0.45
 OUT_DIR = Path(__file__).parent.parent / "game/assets/authored/audio"
 # A file's loudest sample when every layer plays at once over the loudest bed: the files
 # share one scale, so the game mixes them at the levels they were written against.
@@ -37,8 +43,8 @@ PEAK = 0.9
 
 # Day is IVmaj9 - iii7 - ii9 - V13sus in C; night is its minor side, ii9 - vi9 - bVIImaj9 -
 # V9sus, each chord sharing three notes or more with the day chord in its slot so the two
-# cross-fade without a clash. Two bars each; the roots sit at 147 Hz and up so a phone
-# speaker carries them.
+# cross-fade without a clash. Two bars each; the roots sit at 147 Hz and up and the bass
+# walks down to 139 at its lowest, so a phone speaker carries them.
 CHORDS = {
     "day": (
         (53, 57, 60, 64, 67),
@@ -53,25 +59,28 @@ CHORDS = {
         (55, 60, 62, 65, 69),
     ),
 }
-PENTATONIC = (72, 74, 76, 79, 81, 84)
 
 
 def hz(midi: float) -> float:
     return 440.0 * 2.0 ** ((midi - 69.0) / 12.0)
 
 
+def span(seconds: float) -> np.ndarray:
+    return np.arange(round(seconds * RATE_HZ)) / RATE_HZ
+
+
 def place(bed: np.ndarray, start_s: float, piece: np.ndarray, pan: float = 0.5) -> None:
     """Add a mono piece into the stereo loop at `start_s`, wrapping past the end."""
-    at = (round(start_s * RATE_HZ) + np.arange(piece.size)) % ROWS
-    np.add.at(bed[:, 0], at, piece * np.cos(pan * np.pi / 2.0))
-    np.add.at(bed[:, 1], at, piece * np.sin(pan * np.pi / 2.0))
+    rows = (round(start_s * RATE_HZ) + np.arange(piece.size)) % ROWS
+    np.add.at(bed[:, 0], rows, piece * np.cos(pan * np.pi / 2.0))
+    np.add.at(bed[:, 1], rows, piece * np.sin(pan * np.pi / 2.0))
 
 
 def rhodes(
     midi: float, level: float, seconds: float = 5.0, bright: float = 1.1, decay: float = 1.1
 ) -> np.ndarray:
     """An electric piano: a sine bent by a decaying modulator, a short tine on top."""
-    t = np.arange(round(seconds * RATE_HZ)) / RATE_HZ
+    t = span(seconds)
     f = hz(midi)
     index = bright * level * np.exp(-3.0 * t)
     body = np.sin(TAU * f * t + index * np.sin(TAU * f * t))
@@ -83,225 +92,230 @@ def rhodes(
     return level * envelope * tremolo * (body + tine)
 
 
-def pad(midi: float, seconds: float, detune_cents: float) -> np.ndarray:
+def pad(midi: float, seconds: float) -> np.ndarray:
     """A soft sustained voice: a few falling harmonics, slow in and slow out."""
-    t = np.arange(round(seconds * RATE_HZ)) / RATE_HZ
-    f = hz(midi + detune_cents / 100.0)
+    t = span(seconds)
+    f = hz(midi)
     tone = sum(np.sin(TAU * f * n * t) / n**2.2 for n in (1, 2, 3, 4))
     envelope = np.minimum(t / 1.4, 1.0) * np.minimum((seconds - t) / 1.8, 1.0)
-    return np.clip(envelope, 0.0, 1.0) * tone
+    return envelope * tone
 
 
-def bell(midi: float, level: float, seconds: float = 2.5) -> np.ndarray:
-    """The sparse top line: a glassy pluck."""
-    t = np.arange(round(seconds * RATE_HZ)) / RATE_HZ
+def at(beat: float) -> float:
+    """A beat's time in the loop, an off semiquaver pushed late by the swing."""
+    late = SWING * BEAT_S / 4.0 if round(beat * 4.0) % 2 else 0.0
+    return beat * BEAT_S + late
+
+
+def kick() -> np.ndarray:
+    """A drum that falls from 215 Hz to 105: low enough to push, high enough for a phone."""
+    t = span(0.25)
+    return np.exp(-14.0 * t) * np.sin(TAU * (105.0 * t + 110.0 / 30.0 * (1.0 - np.exp(-30.0 * t))))
+
+
+def hit(rng: np.random.Generator, seconds: float, decay: float) -> np.ndarray:
+    """A burst of noise: a hat, a shaker or a clap once its band is cut."""
+    t = span(seconds)
+    return rng.standard_normal(t.size) * np.exp(-decay * t)
+
+
+def snare(rng: np.random.Generator) -> np.ndarray:
+    t = span(0.2)
+    return 0.6 * hit(rng, 0.2, 24.0) + 0.5 * np.exp(-30.0 * t) * np.sin(TAU * 210.0 * t)
+
+
+def conga(f: float) -> np.ndarray:
+    t = span(0.18)
+    return np.exp(-22.0 * t) * np.sin(TAU * (f * t + f / 160.0 * (1.0 - np.exp(-40.0 * t))))
+
+
+def bass(midi: float, seconds: float) -> np.ndarray:
+    """A fingered electric bass: falling harmonics that darken as the note rings."""
+    t = span(seconds)
     f = hz(midi)
-    tone = np.sin(TAU * f * t) + 0.3 * np.exp(-6.0 * t) * np.sin(TAU * f * 3.0 * t)
-    return level * np.minimum(t / 0.003, 1.0) * np.exp(-2.6 * t) * tone
+    tone = sum(np.exp(-(2.0 + 5.0 * n) * t) * np.sin(TAU * f * n * t) / n for n in range(1, 7))
+    envelope = np.minimum(t / 0.004, 1.0) * np.minimum((seconds - t) / 0.03, 1.0)
+    return 0.5 * envelope * (tone + 0.5 * np.sin(TAU * f * t))
 
 
-# Each mood is eight bars at one tempo, so any two cross-fade in time.
-# comp: the piano's hits in two bars as (beat, level, first voice); ring: its decay per
-# second; pad: its level, with the voices' own octave (low) or two octaves up (high);
-# bells: notes per two bars, their echoes and how fast those fade; lead: the held night
-# voice as (beat, chord voice, beats long, level); wash: the level of a low city hum;
-# trim: the whole bed's level, where a thick pad would stand it over the others.
-# What a mood leaves out: no piano, nothing beside the pad's octave, no lead, no hum.
-QUIET = {
-    "comp": (),
-    "notes": (),
-    "pad_low": 0.0,
-    "pad_high": 0.0,
-    "lead": (),
-    "wash": 0.0,
-    "trim": 1.0,
-}
+def chank(chord: tuple[int, ...], level: float) -> np.ndarray:
+    """A muted guitar chord: bright, and dead in a tenth of a second."""
+    t = span(0.1)
+    tone = sum(np.sin(TAU * hz(midi + 12) * n * t) / n for midi in chord[1:4] for n in range(1, 6))
+    return level * np.minimum(t / 0.002, 1.0) * np.exp(-40.0 * t) * tone
+
+
+def brass(chord: tuple[int, ...], seconds: float) -> np.ndarray:
+    """A horn section's stab: the upper voices, sawish, with a quick swell."""
+    t = span(seconds)
+    tone = sum(
+        np.sin(TAU * hz(midi + 12) * n * t) / n**1.3 for midi in chord[2:] for n in range(1, 8)
+    )
+    envelope = np.minimum(t / 0.03, 1.0) * np.minimum((seconds - t) / 0.06, 1.0)
+    return 0.04 * envelope * tone
+
+
+# Each mood is the same eight bars of the same groove, so any two cross-fade in time.
+# chords: which side's; kick, snare, hat, bass: each one's level; comp: the piano's chords
+# in a bar as (beat, level), with bright its tone and ring its decay per second; line:
+# single piano notes over two bars instead, as (beat, chord voice, level); sparse: the kick
+# and hat thinned; pad: the level of a low held chord, which is all the harmony a mood
+# without a piano has; high: where the bed's top rolls off.
+QUIET = {"comp": (), "line": (), "sparse": False, "pad": 0.0, "bright": 1.0, "ring": 2.6}
 MOODS = {
     "morning": {
         "chords": "day",
-        "bright": 1.1,
-        "roll_s": 0.045,
-        "ring": 1.3,
-        # One piano note at a time, as (beat, chord voice, level): up the chord and back.
-        "notes": ((0.0, 0, 0.4), (1.5, 2, 0.3), (3.0, 3, 0.34), (4.5, 4, 0.3), (6.0, 2, 0.26)),
-        "pad": 0.065,
-        "pad_high": 0.45,
-        "bells": (4, 7),
-        "echoes": 2,
-        "echo_fall": 0.4,
-        "band": (180.0, 8000.0),
+        "kick": 0.3,
+        "snare": 0.12,
+        "hat": 0.15,
+        "bass": 0.6,
+        # One piano note at a time (the user's pick): up the chord and back.
+        "line": (
+            (0.0, 0, 0.34),
+            (1.75, 2, 0.26),
+            (2.5, 3, 0.3),
+            (4.0, 4, 0.3),
+            (5.75, 3, 0.24),
+            (6.5, 2, 0.26),
+        ),
+        "high": 6000.0,
     },
     "afternoon": {
         "chords": "day",
-        "bright": 1.6,
-        "roll_s": 0.02,
-        "ring": 1.8,
-        "comp": (
-            (0.0, 0.55, 0),
-            (1.5, 0.3, 2),
-            (3.0, 0.3, 0),
-            (4.5, 0.26, 1),
-            (5.5, 0.32, 1),
-            (7.0, 0.24, 2),
-        ),
-        "pad": 0.03,
-        "pad_high": 0.2,
-        "bells": (4, 6),
-        "echoes": 3,
-        "echo_fall": 0.45,
-        "band": (150.0, 7500.0),
+        "kick": 0.55,
+        "snare": 0.28,
+        "hat": 0.2,
+        "bass": 0.8,
+        "comp": ((0.0, 0.2), (1.75, 0.13), (2.5, 0.15)),
+        "high": 5000.0,
     },
     "night": {
         "chords": "night",
-        "bright": 0.5,
-        "roll_s": 0.07,
-        "ring": 0.6,
-        "comp": ((0.0, 0.45, 0),),
-        "pad": 0.085,
-        "pad_low": 0.9,
-        "bells": (0, 2),
-        "echoes": 5,
-        "echo_fall": 0.62,
-        "lead": ((2.0, 3, 3.0, 0.11), (5.5, 4, 2.0, 0.08)),
-        "wash": 0.02,
-        "band": (140.0, 2400.0),
-        "trim": 0.75,
+        "kick": 0.5,
+        "snare": 0.22,
+        "hat": 0.14,
+        "bass": 0.85,
+        "comp": ((0.0, 0.17), (2.5, 0.11)),
+        "bright": 0.6,
+        "ring": 2.0,
+        "high": 3000.0,
     },
+    # No piano at all (the user's pick).
     "midnight": {
         "chords": "night",
-        "bright": 0.3,
-        "roll_s": 0.12,
-        "ring": 0.5,
-        "pad": 0.11,
-        "pad_low": 1.0,
-        "bells": (0, 1),
-        "echoes": 7,
-        "echo_fall": 0.72,
-        "lead": ((4.0, 2, 3.5, 0.07),),
-        "wash": 0.035,
-        "band": (140.0, 1600.0),
-        "trim": 0.75,
+        "kick": 0.4,
+        "snare": 0.12,
+        "hat": 0.1,
+        "bass": 0.8,
+        "sparse": True,
+        "pad": 0.022,
+        "high": 2000.0,
     },
 }
-
-
-def lead(midi: float, seconds: float, level: float) -> np.ndarray:
-    """The night's held voice: a near-sine that swells in and grows a slow vibrato."""
-    t = np.arange(round(seconds * RATE_HZ)) / RATE_HZ
-    f = hz(midi)
-    wobble = 0.5 * np.minimum(t / 1.0, 1.0) * np.sin(TAU * 4.8 * t)
-    tone = np.sin(TAU * f * t + wobble) + 0.15 * np.sin(2.0 * (TAU * f * t + wobble))
-    envelope = np.minimum(t / 0.3, 1.0) * np.minimum((seconds - t) / 0.7, 1.0)
-    return level * np.clip(envelope, 0.0, 1.0) * tone
+BED_BANDS = {
+    "kick": (95.0, 2500.0),
+    "snare": (180.0, 6000.0),
+    "hat": (6000.0, 10000.0),
+    "bass": (120.0, 1800.0),
+}
 
 
 def bed(mood: str) -> np.ndarray:
     look = QUIET | MOODS[mood]
-    out = np.zeros((ROWS, 2))
-    rng = np.random.default_rng(852)
-    for slot, chord in enumerate(CHORDS[look["chords"]]):
-        start = slot * TWO_BARS_S
-        # The piano: the whole chord rolled from the bottom, then whatever the mood comps.
-        for beat, level, first in look["comp"]:
-            for step, midi in enumerate(chord[first:]):
-                note = rhodes(midi, level, bright=look["bright"], decay=look["ring"])
-                at = start + beat * BEAT_S + look["roll_s"] * step
-                place(out, at, note, 0.35 + 0.075 * (step + first))
-        for beat, voice, level in look["notes"]:
-            note = rhodes(chord[voice], level, bright=look["bright"], decay=look["ring"])
-            place(out, start + beat * BEAT_S, note, 0.4 + 0.05 * voice)
-        # The pad holds the upper voices an octave up, overlapping its neighbours.
-        for midi in chord[2:]:
-            for cents, pan in ((-5.0, 0.15), (5.0, 0.85)):
-                voice = pad(midi + 12, TWO_BARS_S + 1.8, cents)
-                if look["pad_low"]:
-                    voice = voice + look["pad_low"] * pad(midi, TWO_BARS_S + 1.8, -cents)
-                if look["pad_high"]:
-                    voice = voice + look["pad_high"] * pad(midi + 24, TWO_BARS_S + 1.8, -cents)
-                place(out, start - 0.9, look["pad"] * voice, pan)
-        # A few bell notes, each with fading echoes a dotted quaver apart.
-        count = rng.integers(look["bells"][0], look["bells"][1] + 1)
-        for beat in sorted(rng.choice(np.arange(2, 16), size=count, replace=False)):
-            midi = PENTATONIC[rng.integers(0, len(PENTATONIC))]
-            pan = float(rng.uniform(0.25, 0.75))
-            for echo in range(look["echoes"]):
-                place(
-                    out,
-                    start + beat * BEAT_S / 2.0 + echo * 0.75 * BEAT_S,
-                    bell(midi, 0.16 * look["echo_fall"] ** echo),
-                    pan if echo % 2 == 0 else 1.0 - pan,
-                )
-        for beat, voice, beats, level in look["lead"]:
-            for echo in range(3):
-                note = lead(chord[voice] + 12, beats * BEAT_S, level * 0.5**echo)
-                place(
-                    out, start + (beat + 1.5 * echo) * BEAT_S, note, 0.5 + 0.3 * (echo % 2) - 0.15
-                )
-    if look["wash"]:
-        hum = band(np.random.default_rng(31).standard_normal((ROWS, 2)), 200.0, 700.0)
-        out += look["wash"] * hum / np.sqrt(np.mean(hum**2))
-    return look["trim"] * band(out, *look["band"])
+    chords = CHORDS[look["chords"]]
+    parts = {name: np.zeros((ROWS, 2)) for name in (*BED_BANDS, "keys")}
+    rng = np.random.default_rng(11)
+    for slot, chord in enumerate(chords):
+        leading = chords[(slot + 1) % len(chords)][0] - 1
+        for bar in range(2):
+            b0 = slot * 8 + bar * 4
+            for beat in (0.0, 2.5) if look["sparse"] else (0.0, 1.75, 2.5):
+                place(parts["kick"], at(b0 + beat), kick())
+            for beat in (1.0, 3.0):
+                place(parts["snare"], at(b0 + beat), snare(rng))
+            # Quavers, and a semiquaver pushed in before the third and the next bar.
+            for semi in range(16):
+                if semi % 2 == 0 or (semi in (7, 15) and not look["sparse"]):
+                    tick = (0.9 if semi % 4 else 0.6) * hit(rng, 0.05, 80.0)
+                    place(parts["hat"], at(b0 + semi / 4.0), tick, 0.6)
+            # The bass walks the chord, and into the next one through its leading note.
+            walk = (0, 1, 2, 1) if bar == 0 else (0, 2, 1, None)
+            for beat, voice in enumerate(walk):
+                midi = leading if voice is None else chord[voice]
+                note = bass(midi if midi < 62 else midi - 12, 0.85 * BEAT_S)
+                place(parts["bass"], at(b0 + beat), note)
+            for beat, level in look["comp"]:
+                for midi in chord[1:]:
+                    note = rhodes(midi, level, 1.6, bright=look["bright"], decay=look["ring"])
+                    place(parts["keys"], at(b0 + beat), note, 0.45)
+        for beat, voice, level in look["line"]:
+            note = rhodes(chord[voice] + 12, level, 2.5, bright=1.0, decay=1.6)
+            place(parts["keys"], at(slot * 8 + beat), note, 0.4 + 0.05 * voice)
+        if look["pad"]:
+            for midi in chord[1:4]:
+                held = look["pad"] * pad(midi, TWO_BARS_S + 1.8)
+                place(parts["keys"], slot * TWO_BARS_S - 0.9, held)
+    out = sum(
+        look.get(name, 1.0) * band(part, *BED_BANDS.get(name, (140.0, 7500.0)))
+        for name, part in parts.items()
+    )
+    return band(out, 100.0, look["high"])
 
 
 # The combo's layers, and each one's level with the combo at its top: `music.tres`'s last
 # `tiers` row, mirrored here only to find the loudest the files can sum to.
-STEMS = ("shaker", "thump", "bass", "arp", "top", "clap")
+STEMS = ("shaker", "conga", "guitar", "arp", "horns", "clap")
 FULL = (1.2, 1.15, 1.0, 1.1, 1.0, 1.0)
 # The layers that play the chords, so there is one of each for the day and for the night.
-TONAL = ("bass", "arp", "top")
+TONAL = ("guitar", "arp", "horns")
+# Each layer's band and its level against the bed. The bed has its own drums and bass, so
+# a layer is something a street band would add on top.
+STEM_MIX = {
+    "shaker": (4500.0, 9000.0, 0.1),
+    "conga": (150.0, 2500.0, 0.45),
+    "guitar": (500.0, 4500.0, 1.0),
+    "arp": (140.0, 7000.0, 0.5),
+    "horns": (300.0, 4000.0, 1.0),
+    "clap": (900.0, 3200.0, 0.12),
+}
 
 
-def fire_stems(chords: str) -> dict[str, np.ndarray]:
+def fire_stems(side: str) -> dict[str, np.ndarray]:
     """The combo's layers over one side's chords, each a loop of its own."""
     stems = {name: np.zeros((ROWS, 2)) for name in STEMS}
-    tick = np.arange(round(0.09 * RATE_HZ)) / RATE_HZ
-    slap = np.arange(round(0.16 * RATE_HZ)) / RATE_HZ
-    fall = np.arange(round(0.22 * RATE_HZ)) / RATE_HZ
-    # A soft thump that falls from 190 Hz to 120: low enough to push, high enough for a phone.
-    thump = np.exp(-16.0 * fall) * np.sin(
-        TAU * (120.0 * fall + 70.0 / 16.0 * (1.0 - np.exp(-16.0 * fall)))
-    )
-    for slot, chord in enumerate(CHORDS[chords]):
-        start = slot * TWO_BARS_S
+    for slot, chord in enumerate(CHORDS[side]):
         # The same draws every two bars, so the drum layers repeat and ship as two.
         rng = np.random.default_rng(1997)
         climb = [midi + 12 for midi in chord[1:]]
         pattern = climb + climb[-2:0:-1]
-        root = 0.22 * rhodes(chord[0], 1.0, 0.6, bright=0.8, decay=7.0)
-        for quaver in range(16):
-            at = start + quaver * BEAT_S / 2.0
-            accent = 1.0 if quaver % 2 == 0 else 0.7
-            pluck = rhodes(pattern[quaver % len(pattern)], 0.2 * accent, 1.2, bright=1.8, decay=5.0)
-            place(stems["arp"], at, pluck, 0.3 + 0.4 * (quaver % 2))
-            place(stems["bass"], at, root, 0.5)
-            shake = rng.standard_normal(tick.size) * np.exp(-45.0 * tick)
-            place(stems["shaker"], at, (0.5 if quaver % 2 == 0 else 1.0) * shake, 0.65)
-            # A semiquaver ghost before every other off-beat keeps it leaning forward.
-            if quaver % 4 == 3:
-                ghost = 0.4 * rng.standard_normal(tick.size) * np.exp(-60.0 * tick)
-                place(stems["shaker"], at - BEAT_S / 4.0, ghost, 0.4)
-        # The top line runs the same climb in semiquavers, two octaves over the chord.
-        for semi in range(32):
-            midi = pattern[(semi * 3) % len(pattern)] + 12
-            level = 0.07 * (1.0 if semi % 4 == 0 else 0.6)
-            place(
-                stems["top"],
-                start + semi * BEAT_S / 4.0,
-                bell(midi, level, 0.5),
-                0.2 + 0.6 * (semi % 2),
-            )
-        for beat in range(8):
-            place(
-                stems["thump"], start + beat * BEAT_S, (0.5 if beat % 2 == 0 else 0.3) * thump, 0.5
-            )
-            if beat % 2 == 1:
-                clap = rng.standard_normal(slap.size) * np.exp(-32.0 * slap)
-                place(stems["clap"], start + beat * BEAT_S, clap, 0.5)
-    bands = {"shaker": (4500.0, 9000.0), "clap": (900.0, 3200.0), "thump": (110.0, 2000.0)}
-    levels = {"shaker": 0.45, "clap": 0.5, "top": 2.4}
+        for bar in range(2):
+            b0 = slot * 8 + bar * 4
+            # The shaker is loudest on the semiquavers the bed's hat leaves out.
+            for semi in range(16):
+                shake = (1.0 if semi % 2 else 0.45) * hit(rng, 0.07, 50.0)
+                place(stems["shaker"], at(b0 + semi / 4.0), shake)
+            for beat, f, level in (
+                (0.75, 250.0, 0.7),
+                (1.5, 250.0, 1.0),
+                (2.25, 190.0, 0.8),
+                (3.5, 250.0, 1.0),
+                (3.75, 190.0, 0.7),
+            ):
+                place(stems["conga"], at(b0 + beat), level * conga(f))
+            for beat, level in ((0.5, 1.0), (1.5, 0.8), (2.25, 0.5), (2.5, 1.0), (3.5, 0.8)):
+                place(stems["guitar"], at(b0 + beat), chank(chord, 0.05 * level))
+            for quaver in range(8):
+                midi = pattern[(bar * 8 + quaver) % len(pattern)]
+                level = 0.2 if quaver % 2 == 0 else 0.14
+                pluck = rhodes(midi, level, 1.2, bright=1.8, decay=5.0)
+                place(stems["arp"], at(b0 + quaver / 2.0), pluck)
+            for beat in (1.0, 3.0):
+                place(stems["clap"], at(b0 + beat), hit(rng, 0.16, 32.0))
+        # The horns punch once in the middle of the chord and answer twice at its end.
+        for beat, held in ((3.5, 0.3), (6.5, 0.25), (7.0, 0.7)):
+            place(stems["horns"], at(slot * 8 + beat), brass(chord, held * BEAT_S))
     return {
-        name: levels.get(name, 2.0) * band(stem, *bands.get(name, (140.0, 7000.0)))
-        for name, stem in stems.items()
+        name: STEM_MIX[name][2] * band(stem, *STEM_MIX[name][:2]) for name, stem in stems.items()
     }
 
 
