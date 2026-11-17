@@ -22,10 +22,12 @@ paths:
   vertex. `carved_volume_m3` accumulates per prism.
 - The prism is the surveyed `width_m`, never the drawn floor. A residual is never answered by
   widening the prism (`Q54`); the three residuals are the grader's 1.0 m plan bin.
-- `e99` is the one exception, not a precedent: cut at an authored 6.40 m because the obstruction is
-  interior and every width rule that catches it fences 59–67 edges (`Q19`). The carve moves the
-  wall to the carriageway edge, so a corridor reading barely changes (4.50 → 5.00 m). `e125`,
-  `e207` and `e781` stay fenced.
+- `e99` and `e207` are the two exceptions, each on the user's call and neither a precedent: cut at
+  an authored 6.40 m because the obstruction is interior and every width rule that catches it
+  fences 59–67 edges (`Q19`). On `e99` the carve moves the wall to the carriageway edge, so a
+  corridor reading barely changes (4.50 → 5.00 m); on `e207` it removes three flyover piers from
+  the lane (1.95 → 4.96 m) and the ramp overhead stands on nothing there. `e125` and `e781` stay
+  unlicensed.
 - The cut face is capped at the deck plus `parapets.face_above_m` (`EdgePlan.face_above_m`,
   `test_the_wall_is_capped_at_the_face_top`, `Q147`). A change owes the `e99` frame
   (`--camera=261,7,384 --look=229,5,422`) and a drive off `e99`.

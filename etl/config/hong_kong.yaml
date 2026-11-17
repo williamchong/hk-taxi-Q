@@ -4263,6 +4263,18 @@ roads:
 # unlicensed edges (e125, e207, e781) are P3-29's fence, and e99 earned its
 # exception by having its class and its containment measured, not by being
 # awkward. Numbers in DECISIONS.md Q19.
+#
+# 🔴 **e207 CANAL ROAD EAST is the NINTH, added 2026-11-18 on the user's call
+# after he met the flyover's piers in the lane** — the second `authored` 6.40 m
+# prism, and e207 leaves the unlicensed list above. Measured before the cut:
+# three single columns under the e257 ramp stand inside a 5.0 m kerb-to-kerb
+# territory, one on the centreline; every triangle in the bumper band within
+# the drawn 2.5 m is INFRASTRUCTURE (49, no BUILDING); the corridor read 1.95 m
+# (corridor_truth) and reads 4.96 m after. 141 triangles, 93.8 m2, 13.6 m of
+# wall; all 28 stations are soffit-bounded, so the ramp overhead keeps its
+# deck and stands on nothing here. No other row of carve.json moved, and the
+# parapet band takes 0 triangles on it. ⚠️ The edge now clears the 3.20 m lane
+# bar, so traffic routes down it.
 carve:
   # 🔴 Keyed by REGION because an edge id is a per-region ORDINAL and not an
   # identity: roads.py assigns `edge_id = len(pending)`, so the same eight
@@ -4279,7 +4291,7 @@ carve:
   # carriageway_occupancy on wan_chai, and that measurement has never been run
   # on the other three regions. An empty list is refused — say nothing instead.
   edges:
-    wan_chai: [233, 55, 485, 788, 398, 256, 327, 99]
+    wan_chai: [233, 55, 485, 788, 398, 256, 327, 99, 207]
 
   # How finely the ribbon is walked; the prism is rebuilt per station, so this
   # is how closely the cut follows a ramp's curve. Half `carriageway`'s own 4 m

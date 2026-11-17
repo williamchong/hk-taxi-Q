@@ -2528,7 +2528,7 @@ class TestCarve:
         `wan_chai`. Nobody has run it on the other three regions, so they have no
         list — which is a measurement not yet taken, never an omission."""
         assert hong_kong.carve is not None
-        assert hong_kong.carve.edges_for("wan_chai") == (233, 55, 485, 788, 398, 256, 327, 99)
+        assert hong_kong.carve.edges_for("wan_chai") == (233, 55, 485, 788, 398, 256, 327, 99, 207)
         for region_id in ("causeway_bay", "sha_tin", "mong_kok"):
             assert hong_kong.carve.edges_for(region_id) == ()
 

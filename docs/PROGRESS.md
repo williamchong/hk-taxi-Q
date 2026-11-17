@@ -163,8 +163,8 @@ change. Closed questions are not listed here: see the headings in `DECISIONS.md`
   instrument, not a wider `levels`.
 - `Q14` Stands carry operating hours `P1-5` discards. Deferred.
 - `Q15` Fare nodes snap by plan distance; a point on a deck snaps to the street below (`P4-2`).
-- `Q19` Solid geometry in the carriageway. Left: the building half, a drive of `e99`, the
-  carve-wall arm (`Q104`).
+- `Q19` Solid geometry in the carriageway. Left: the building half, a drive of `e99` and of
+  `e207` (carved 2026-11-18), the carve-wall arm (`Q104`).
 - `Q21` Should level −1 be drawn at all? 11 of 30 ends clipped at the region boundary.
 - `Q22` Off-grade carriageway hangs past its structure; no width rule reaches the rest.
 - `Q24` The road is a plane and the ground is not. Three mechanisms, none assigned

@@ -136,11 +136,12 @@ log = logging.getLogger(__name__)
 # ⚠️ The per-edge notes below describe the pre-region split and are kept as the
 # record of how the gap behaves, not as today's list.
 EXPECT = {
-    "wan_chai": (28, 32, 8),
+    "wan_chai": (27, 31, 8),
     "causeway_bay": (9, 13, 4),
 }
 # Edges the two disagree about: 3 the grader condemns and the pipeline clears
-# (`e207`, `e485`, `e781`), plus `e702` the other way. ⚠️ `e99` left this list at
+# (`e207`, `e485`, `e781`), plus `e702` the other way. ⚠️ `e207` left both starved
+# counts at its own carve (2026-11-18, 28 / 32 → 27 / 31). ⚠️ `e99` left this list at
 # its own carve — it was the largest of the grader-only gaps at 1.57 m. ⚠️ **A single number
 # here hides a swap** — `Q51` first said "five" where the split was 6 + 1, so read
 # the per-side lists in the report rather than this total.

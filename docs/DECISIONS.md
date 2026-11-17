@@ -157,7 +157,7 @@ from vector polygons (rule `basemap`).
 
 ## `Q19` — Solid geometry stands in the drawn carriageway
 
-**Status.** Structure half carved (`P3-28`), car-bar fence built (`P3-29`), on the user's call of 2026-08-31 · building half open and unowned · drives owed (the fence mouths, `e99`)
+**Status.** Structure half carved (`P3-28`), car-bar fence built (`P3-29`), on the user's call of 2026-08-31 · building half open and unowned · drives owed (the fence mouths, `e99`, `e207`)
 
 Rules `clearance`, `carve`, `fence` and `ground_clearance` own the checklists.
 
@@ -168,8 +168,12 @@ Rules `clearance`, `carve`, `fence` and `ground_clearance` own the checklists.
 - The grader and `clearance.json` are two populations; `tools/clearance_reconcile.py` holds the
   difference.
 - Carve (`pipeline/carve.py`, `carve.json`): the prism is the surveyed span, never the drawn floor.
-  `e99` FLEMING ROAD alone is carved at an `authored` width, on the user's report. The stage raises
-  on a second pass (`carved_edges` marker).
+  `e99` FLEMING ROAD and `e207` CANAL ROAD EAST are carved at an `authored` width, each on the
+  user's report. The stage raises on a second pass (`carved_edges` marker).
+- `e207` (2026-11-18): three piers of the `e257` ramp stood in a 5.0 m kerb-to-kerb lane, 100%
+  `INFRASTRUCTURE`. Corridor 1.95 → 4.96 m (`corridor_truth.py`); 141 triangles, 93.8 m², no other
+  `carve.json` row moved; reconcile ratchet 28 / 32 / 8 → 27 / 31 / 8. The ramp is left
+  unsupported there, and traffic now routes down the edge.
 - Fence (`pipeline/fence.py`, `fence.json`): every drivable level-0 edge under the car bar ends at
   a colliding barrier; closing them cost 0 routable pairs.
 - Structure between suspension travel and the bumper floor is graded, not gated, by
