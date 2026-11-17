@@ -115,6 +115,8 @@ stalls. A run naming either flag saves no record.
 - **The pause holds the TREE, never `DriveLevel.park`** (`Q165`); its OPTIONS omit language and
   thumb sides (a HUD renewed mid-fare misses the fare's signals). RESET CAR is
   `DriveLevel.recover` (`Q229`), fare and clock untouched.
+- The pause draws at `pause_fps` at most (`ControlOptions.hold_frames`, `Q165`); a FRAME RATE pick
+  under it lands on release. The boot menu is not held: its cover counts frames.
 - A language change is a new HUD, not a relabel. `--lang=` beats the saved option and the OS's.
 - Two modes behind PLAY (`Q162`); a shift's end opens a fresh menu on REPORT; the shift's clock is
   the hour, never a countdown; TIME OF DAY is free mode's alone.

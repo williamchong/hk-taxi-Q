@@ -92,6 +92,11 @@ const PATH: String = "res://tuning/menu.tres"
 @export var backdrop_width_px: float
 @export var backdrop_fade_from: float
 
+@export_group("Pause")
+## The most frames a second the pause draws (`Q165`,
+## `ControlOptions.hold_frames`); 0 leaves the drive's cap in force.
+@export var pause_fps: int
+
 @export_group("Boot cover")
 ## The cover over the menu's first seconds (`ShaderWarmup`): how many frames it
 ## waits for the city's first settle at most, how many more it lets pass once

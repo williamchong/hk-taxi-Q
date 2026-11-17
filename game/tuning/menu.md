@@ -73,6 +73,15 @@ brush is thin (`button_size_zh`, `heading_size_zh`), the 黑體 dense (`body_siz
 - `sheet_image_scale` 2.0 (`P3-80`, `Q188`): SAVE RESULT's picture is drawn at twice the sheet's
   size, text at the scale, never stretched.
 
+## The pause
+
+- `pause_fps` 30 (`Q165`): the most frames a second the pause draws. The tree is held but the city
+  is still drawn behind the menu, and the screen never sleeps (`keep_screen_on` is the engine's
+  default), so a phone left on PAUSE would draw at the drive's rate for as long as it lay there.
+  30 is a whole number of a 60 Hz panel's refreshes and keeps a tap's answer prompt; 15 lags.
+  Never above the cap in force, and 0 holds nothing. Not low-processor mode: the water and the
+  blinkers read `TIME`. The saving is not measured on a handset.
+
 ## The boot cover
 
 `ShaderWarmup` holds an opaque cover over the menu's first seconds so the web build compiles its

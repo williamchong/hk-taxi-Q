@@ -2460,7 +2460,8 @@ See `game/tuning/day_to_night.md`, `.claude/rules/facade.md`.
 - Ways in, all refused under `--menu=off`: Esc (`ui_cancel`, also resumes), the HUD's `PauseButton`, a tap on the 咪錶 (a style-less `PauseButton` over the meter), and the app losing the screen or focus.
 - The button is `FOCUS_NONE`: Space is the handbrake and a focused button takes `ui_accept`. Hidden where nothing can pause (`Hud.pausable`).
 - `InputRouter` releases both thumbs on `NOTIFICATION_PAUSED`: a paused tree sends no input, so a finger lifted over the menu would hold its last steer.
-- Not built: Android's back button (`quit_on_go_back` is the default, so back quits; `P0-3b`). Deferred to `P2-6`: lowering `Engine.max_fps` while paused.
+- Not built: Android's back button (`quit_on_go_back` is the default, so back quits; `P0-3b`).
+- The pause draws at `menu.tres`'s `pause_fps` 30 at most (2026-11-18, `ControlOptions.hold_frames`): the tree is held but the city is still drawn, and `keep_screen_on` is the engine's default, so a phone left on PAUSE never sleeps. Never above the cap in force; the cap it found is restored on release, then the saved pick, so a FRAME RATE change under the pause lands on resume. Refused: low-processor mode (`water.gdshader` and the blinkers read `TIME`) and a frozen frame (the backdrop blur reads the live screen). The watts saved are not measured on a handset.
 
 ## `Q166` — The parked roster is detailed inside its footprint
 

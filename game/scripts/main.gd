@@ -123,6 +123,9 @@ func pause() -> void:
 	if not _can_pause():
 		return
 	get_tree().paused = true
+	var profile: MenuProfile = load(MenuProfile.PATH) as MenuProfile
+	if profile != null:
+		ControlOptions.hold_frames(profile.pause_fps)
 	# Before anything can end the app: this is also the way out of a run, and
 	# nothing moves while the tree is held, so END needs no second save.
 	_bank_tally(false)
@@ -146,6 +149,7 @@ func pause() -> void:
 ## and the tree runs again.
 func _release_pause() -> void:
 	_pause_menu = null
+	ControlOptions.release_frames()
 	get_tree().paused = false
 
 

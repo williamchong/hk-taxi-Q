@@ -100,6 +100,7 @@ body_size_zh = 22
 backdrop_lod = 3.5
 backdrop_width_px = 760.0
 backdrop_fade_from = 0.55
+pause_fps = 30
 cover_wait_frames = 600
 cover_settle_frames = 30
 cover_warm_frames = 2

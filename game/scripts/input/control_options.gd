@@ -35,6 +35,9 @@ const MAX_FPS_SETTING: String = "application/run/max_fps"
 
 ## The cap the engine booted with, read at the first apply; -1 before it.
 static var _boot_cap: int = -1
+## The cap in force when the pause took the frame rate (`hold_frames`), 0 for
+## none; -1 while nothing holds it.
+static var _held_cap: int = -1
 
 
 ## The steering response this run drives with: one of `STEERINGS`.
@@ -115,9 +118,40 @@ static func frame_cap() -> int:
 ## off the cap the engine booted with, against the project's — so a flag that
 ## names the project's own 60 is not seen as one.
 static func apply_frame_cap() -> void:
-	if not caps_frames():
+	# A pick made under the pause is saved and lands on `release_frames`.
+	if not caps_frames() or _held_cap >= 0:
 		return
 	if _boot_cap < 0:
 		_boot_cap = Engine.max_fps
 	if _boot_cap == int(ProjectSettings.get_setting_with_override(MAX_FPS_SETTING)):
 		Engine.max_fps = frame_cap()
+
+
+## The cap a pause draws at (`Q165`): `pause_cap`, never above `running`, the
+## cap in force — a pause may only slow the frames. 0 is no cap, on either
+## side: a `pause_cap` of 0 holds nothing. Pure, so a check can ask.
+static func held_cap(running: int, pause_cap: int) -> int:
+	if pause_cap <= 0 or (running > 0 and running <= pause_cap):
+		return running
+	return pause_cap
+
+
+## Slow the frames while the pause is up (`Q165`): nothing under it moves but
+## the water and a blinker, and a phone left on it never sleeps. Every run, a
+## desk's uncapped one most of all.
+static func hold_frames(pause_cap: int) -> void:
+	if _held_cap >= 0:
+		return
+	_held_cap = Engine.max_fps
+	Engine.max_fps = held_cap(_held_cap, pause_cap)
+
+
+## The pause is over: the cap it found, then the saved one, which the pause's
+## own DISPLAY page may have changed. A desk and a `--max-fps` boot keep the
+## first — `apply_frame_cap` leaves both alone.
+static func release_frames() -> void:
+	if _held_cap < 0:
+		return
+	Engine.max_fps = _held_cap
+	_held_cap = -1
+	apply_frame_cap()

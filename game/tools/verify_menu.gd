@@ -1224,6 +1224,7 @@ func _check_settings() -> void:
 	SettingsScript.set_steering("")
 	SettingsScript.set_steer_on_right(false)
 	SettingsScript.set_frame_cap(60)
+	_check_pause_cap()
 	# 特更's best: only a higher total is a record, and it survives a restart.
 	_expect(SettingsScript.best_shift_hkd() == 0.0, "records", "no best with nothing saved")
 	_expect(SettingsScript.record_shift(120.5), "records", "a first shift is a record")
@@ -1238,6 +1239,46 @@ func _check_settings() -> void:
 	_expect(SettingsScript.record_shift(200.0), "records", "a higher total is a record")
 	_forget_settings_file()
 	SettingsScript.use_file(SettingsScript.PATH)
+
+
+## The pause's frame cap (`Q165`): it only ever slows the frames, and the cap it
+## found is back when it lifts — a desk's none and a `--max-fps` boot's own,
+## neither of which `apply_frame_cap` would restore.
+func _check_pause_cap() -> void:
+	var profile: Resource = load(MenuProfileScript.PATH)
+	var pause_fps: int = profile.get("pause_fps") if profile != null else -1
+	_expect(pause_fps >= 0, "pause cap", "pause_fps is %d (>= 0; 0 holds nothing)" % pause_fps)
+	_expect(
+		(
+			ControlOptionsScript.held_cap(0, 30) == 30
+			and ControlOptionsScript.held_cap(60, 30) == 30
+			and ControlOptionsScript.held_cap(120, 30) == 30
+			and ControlOptionsScript.held_cap(30, 30) == 30
+			and ControlOptionsScript.held_cap(20, 30) == 20
+			and ControlOptionsScript.held_cap(60, 0) == 60
+			and ControlOptionsScript.held_cap(0, 0) == 0
+		),
+		"pause cap",
+		"a pause caps an uncapped or faster run and never raises a slower one"
+	)
+	var before: int = Engine.max_fps
+	for running: int in [0, 120, 20]:
+		Engine.max_fps = running
+		ControlOptionsScript.hold_frames(30)
+		var held: int = Engine.max_fps
+		# A second pause cannot open over the first; a second hold must not
+		# take the pause's own cap for the one to go back to.
+		ControlOptionsScript.hold_frames(30)
+		ControlOptionsScript.release_frames()
+		_expect(
+			held == ControlOptionsScript.held_cap(running, 30) and Engine.max_fps == running,
+			"pause cap",
+			(
+				"a run at %d holds at %d and is back at %d (now %d)"
+				% [running, held, running, Engine.max_fps]
+			)
+		)
+	Engine.max_fps = before
 
 
 ## The lifetime record (`P3-76`, `Q169`): saved, restarted and summed; a run saved
