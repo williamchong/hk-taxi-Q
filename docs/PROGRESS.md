@@ -104,7 +104,7 @@ Phase 3 — `B2` and the road
 - `P3-99` 🟡 Glossy, inked vehicles (`Q248`): red `C*` 68.7 → 64.7 in sun, `prims` 0.97 M → 1.49 M on
   Fleming Road, desktop frame time unmoved — owed: the handset, the web build, the city's line.
 - `P3-98` 🟡 Roadside planters (`Q247`): 19 beds and 30 walls in Wan Chai, 1 and 5 in Causeway Bay —
-  owed: the user's drive into one, the PCK, a wall HyD draws on a deck.
+  owed: the user's drive into one, the PCK.
 - `P3-93` 🟡 Stop furniture: flags at bus and minibus stops, tram shelters on solid posts
   (`Q242`; sizes the user's pick) — owed: his drive into a pole and a shelter post. `P3-96` 🟡 cost: 9 draws, 2.30 MB of PCK, desktop frame time unmoved, the iPhone Air at its 120 fps cap with and without.
 - `P3-92` 🟡 Stand signs: `TS324` taxi stand, `TS322` / `TS323` minibus stand, `TS3643` pick-up

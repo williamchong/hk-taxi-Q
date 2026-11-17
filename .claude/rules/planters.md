@@ -29,7 +29,11 @@ feature's walls close into a ring.
   the wall is not. `verify_planters.gd` holds its top under the drawn mesh's.
 - A wall follows the ground under each ring point; `max_ground_fall_m` is what a level top would hide
   (0.88 m in Wan Chai).
-- ⚠️ `INV_RPW` has no level. A wall HyD draws on a deck stands on the tile ground under it.
+- ⚠️ `INV_RPW` has no level, so every wall stands on the tile ground. Checked 2026-11-18: 22 of
+  Wan Chai's 48 features lie over 10% under something drawn overhead (710 of 2,224 m). In plan, the
+  17 under a flyover are islands on the street beneath: the large ones run across the deck's own
+  carriageway, which a planter on it could not. Four under footbridges (139 m) sit on street
+  islands too, but shape does not rule out the bridge. One (10 m under) was not looked at.
 - A `materials:` colour or the basemap's `park_material` moves what counts as ground, as for the
   trees (`tile_corners` is shared with `trees.py`).
 - Railings stand within 0.5 m of 12 Wan Chai walls; nothing registers one to the other.
