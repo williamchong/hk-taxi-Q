@@ -98,6 +98,7 @@ INK: dict[str, Callable[[np.ndarray, np.ndarray, np.ndarray], np.ndarray]] = {
     "blue": lambda r, g, b: (b > 110) & (r < 110),
     "black": lambda r, g, b: (r < 90) & (g < 90) & (b < 90),
     "yellow": lambda r, g, b: (r > 170) & (g > 130) & (b < 110),
+    "green": lambda r, g, b: (g > 140) & (r < 110) & (b < 110),
 }
 
 

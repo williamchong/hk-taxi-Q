@@ -70,6 +70,7 @@ from pipeline.signs import (
     orphaned_supplementary,
     plate_extent_m,
     plate_frame,
+    stack_of,
     text_mesh_name,
     variant_name,
 )
@@ -169,6 +170,8 @@ BLOCK: dict[str, Any] = {
     "rect_wide_width_m": 0.60,
     "rect_wide_height_m": 0.25,
     "rect_info_width_m": 0.60,
+    "rect_stand_width_m": 0.60,
+    "rect_stand_height_m": 0.30,
     "rect_info_height_m": 0.55,
     "board_wide_width_m": 1.20,
     "board_wide_height_m": 0.40,
@@ -1195,6 +1198,22 @@ class TestTheReportPartitions:
         assert mesh is not None
         low, high = mesh.aabb()
         assert high[1] - low[1] > 0.7
+
+    def test_a_double_sided_plate_hangs_on_the_back_of_its_twin(self, spec):
+        """TD files a double-sided sign twice at one point; stacked, the pair
+        reads as two signs facing one way (`P3-92`)."""
+        faces = {**spec.faces, "TS102": replace(spec.faces["TS102"], back_to_back=True)}
+        paired = replace(spec, faces=faces)
+        hung, top = stack_of(paired, ["TS102", "TS102", "TS102", "TS115"])
+        low, back, third, other = hung
+        assert top > other[0]
+        assert back == (low[0], True)
+        assert not low[1] and not third[1] and not other[1]
+        assert low[0] < third[0] < other[0]
+        # Without the flag the same pole is a plain stack.
+        plain, _ = stack_of(spec, ["TS102", "TS102"])
+        assert [turned for _, turned in plain] == [False, False]
+        assert plain[0][0] < plain[1][0]
 
     def test_a_triangle_plate_is_equilateral(self, spec):
         """GIVE WAY is an equilateral triangle standing on its point.

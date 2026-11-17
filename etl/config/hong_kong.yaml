@@ -2024,6 +2024,21 @@ signs:
         - {draw: rect_wide, colour: white, size: 0.88}
         - {draw: arrow_double, colour: black, size: 0.78}
 
+    # -- stands (`P3-92`, `Q242`) --
+    # TAXI STAND 的士站, white on green; the lettering is the sheet's own cell.
+    # ⚠️ `TS322` / `TS323` (the minibus stand's pictogram, green and red) and
+    # `TS3643` (the taxi pick-up plate's figures and red taxi) are not here: a
+    # cell is baked in two colours and theirs have three.
+    # `back_to_back`: TD files the plate twice at one pole and one angle, the
+    # two faces of a double-sided sign (18 of Wan Chai's 24 poles).
+    TS324:
+      plate: rect_stand
+      rank: informatory
+      back_to_back: true
+      layers:
+        - {draw: rect_stand, colour: green, size: 1.00}
+        - {draw: text, colour: white, size: 1.00}
+
     TS733:
       plate: rect_wide
       rank: supplementary
@@ -2060,6 +2075,10 @@ signs:
     # TS589's border. The one colour here that arrived with P3-22.
     yellow: "#f0c020"
     grey: "#70737a"
+    # The stand plates' green (`TS324`, `P3-92`). The sheet draws pure #00ff00, a
+    # plotter's pen; this is the plate's own darker green at the livery's
+    # saturation. Authored — the user's to move.
+    green: "#1f8a4c"
 
   # ---- dimensions, every one of them authored ----
   # ⚠️ **NO SIGN DIMENSION IS PUBLISHED.** Every TS index sheet is stamped "NOT
@@ -2092,6 +2111,10 @@ signs:
   # NO THROUGH ROAD (TS615). Cell aspect 1.083.
   rect_info_width_m: 0.60
   rect_info_height_m: 0.55
+  # The stand plate (`TS324`, `P3-92`). TD's cell is 2 to 1; the size is authored,
+  # as every plate's is (`Q60`: no TS sheet carries a dimension).
+  rect_stand_width_m: 0.60
+  rect_stand_height_m: 0.30
   # The deviation board (TS414). Cell aspect 3.95 — but the sheet draws three
   # solid chevrons and two outlined, the outline being "repeat as required", so
   # the drawn width is a minimum rather than the sign. Three chevrons at this

@@ -151,6 +151,7 @@ from pipeline.config import (
     SIGN_RANK_SUPPLEMENTARY,
     SIGN_RECT,
     SIGN_RECT_INFO,
+    SIGN_RECT_STAND,
     SIGN_RECT_WIDE,
     SIGN_SLASH,
     SIGN_TEE,
@@ -485,6 +486,8 @@ class SignReport:
     # second-source axis, is `TS115` alone. `turned_plates_agree` asserts the
     # identity against `by_code` so it is computed rather than claimed.
     plates_turned: int = 0
+    # Second plates of a double-sided face, hung on the back of the first.
+    plates_back_to_back: int = 0
 
     # 🔴 **The turn-restriction diff `Q62` named — and it does NOT grade the
     # facing, which is the finding.** Every drawn `TS131`/`TS132`/`TS133` against
@@ -776,6 +779,7 @@ _PLATE_RECTS: dict[str, Callable[[Signs], tuple[float, float]]] = {
     SIGN_RECT: lambda spec: (spec.rect_width_m, spec.rect_height_m),
     SIGN_RECT_WIDE: lambda spec: (spec.rect_wide_width_m, spec.rect_wide_height_m),
     SIGN_RECT_INFO: lambda spec: (spec.rect_info_width_m, spec.rect_info_height_m),
+    SIGN_RECT_STAND: lambda spec: (spec.rect_stand_width_m, spec.rect_stand_height_m),
     SIGN_BOARD_WIDE: lambda spec: (spec.board_wide_width_m, spec.board_wide_height_m),
     SIGN_BOARD_TALL: lambda spec: (spec.board_tall_width_m, spec.board_tall_height_m),
 }
@@ -1232,6 +1236,32 @@ def facing_from_side(snap_heading_deg: float, side: float, one_way: bool) -> flo
     if one_way or side > 0.0:
         return (snap_heading_deg + 180.0) % 360.0
     return snap_heading_deg % 360.0
+
+
+def stack_of(spec: Signs, codes: list[str]) -> tuple[list[tuple[float, bool]], float]:
+    """Where each plate of one pole hangs, bottom to top: its centre's height
+    above the foot, and whether it is the reverse of a plate already hung. Then
+    the height the next plate would start at, which is what the pole is cut to.
+
+    A `back_to_back` face's second plate shares the first's height and faces the
+    other way; a third starts a new pair above.
+    """
+    height = spec.mount_height_m
+    fronts: dict[str, float] = {}
+    hung: list[tuple[float, bool]] = []
+    for code in codes:
+        face = spec.faces[code]
+        front = fronts.pop(code, None) if face.back_to_back else None
+        if front is not None:
+            hung.append((front, True))
+            continue
+        _, half_h = plate_extent_m(spec, face.plate)
+        centre = height + half_h
+        if face.back_to_back:
+            fronts[code] = centre
+        hung.append((centre, False))
+        height += 2.0 * half_h + spec.stack_gap_m
+    return hung, height
 
 
 def _plate_facing_deg(post_facing_deg: float, face: SignFace) -> float:
@@ -1909,11 +1939,10 @@ def build_region(
         )
 
     for post in _merge_placements(placements, spec.pole_merge_m, report):
-        height = spec.mount_height_m
-        for sign in post.plates:
+        hung, height = stack_of(spec, [sign.code for sign in post.plates])
+        for sign, (centre_m, reversed_plate) in zip(post.plates, hung, strict=True):
             face = spec.faces[sign.code]
-            _, half_h = plate_extent_m(spec, face.plate)
-            centre = np.array([post.x, post.y + height + half_h, post.z])
+            centre = np.array([post.x, post.y + centre_m, post.z])
             if face.mirror_by_side:
                 report.boards_mirrorable += 1
                 report.boards_mirrored += int(_mirrors(face, post.side))
@@ -1923,6 +1952,9 @@ def build_region(
             # the turn visible in the manifest.
             plate_facing_deg = _plate_facing_deg(post.facing_deg, face)
             report.plates_turned += int(plate_facing_deg != post.facing_deg)
+            if reversed_plate:
+                plate_facing_deg = (plate_facing_deg + 180.0) % 360.0
+                report.plates_back_to_back += 1
             mirrored = _mirrors(face, post.side)
             variant = variant_name(sign.code, mirrored)
             lettered_face = text is not None and sign.code in text.cells
@@ -1948,7 +1980,6 @@ def build_region(
             stands.append(placement(variant, centre, plate_facing_deg))
             if lettered_face:
                 stands.append(placement(text_mesh_name(sign.code), centre, plate_facing_deg))
-            height += 2.0 * half_h + spec.stack_gap_m
 
             report.drawn += 1
             report.by_code[sign.code] = report.by_code.get(sign.code, 0) + 1
@@ -2419,6 +2450,7 @@ def _write_manifest(out_dir: Path, city: Config, region_id: str, report: SignRep
         # addresses traffic coming the other way (`Q72`). Tracks the drawn NO
         # ENTRY family exactly; a fall to 0 means the turn stopped happening.
         "plates_turned": report.plates_turned,
+        "plates_back_to_back": report.plates_back_to_back,
         # 🔴 **The diff `Q62` named, over `TS131`/`TS132`/`TS133`.** The three
         # below close over those codes in `by_code`, and they are report-only for
         # the reason above. ⚠️ **Read `agreed` against `disagreed` and leave

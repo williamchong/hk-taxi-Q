@@ -327,8 +327,10 @@ def _plate_mask(cell: np.ndarray) -> np.ndarray | None:
     or a knockout — but a plate drawn as a solid blob is a face with nothing on
     it, and refusing it here would report as missing lettering.
     """
-    masks = ink_masks(cell, ("red", "black"))
-    inked = masks["red"] | masks["black"]
+    # Green is the stand plates' field (`TS324`, `P3-92`); no other cell in scope
+    # carries any, so the red and black faces' masks are unmoved.
+    masks = ink_masks(cell, ("red", "black", "green"))
+    inked = masks["red"] | masks["black"] | masks["green"]
     if not inked.any():
         return None
     field = enclosed_white(inked)

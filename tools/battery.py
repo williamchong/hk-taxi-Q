@@ -141,6 +141,7 @@ TRIGGERS: dict[str, Trigger] = {
                     "posts_merged_after_shift",
                     "shift_m",
                     "plates_turned",
+                    "plates_back_to_back",
                     "no_entry_against_flow",
                     "no_entry_on_two_way",
                     "facing_away",

@@ -47,6 +47,12 @@ paths:
   `GeneratedLayer.SIGNS_TEXT_ATLAS_BUDGET_PX` in the same diff. `text_coverage` detects a cell
   cropped off the lettering. A shader change owes a render and `grep -i "shader error"`; the
   shader is shared with the lamps.
+- **`back_to_back`, `stack_of`** (`P3-92`): TD files a double-sided sign as two features at one
+  point and one angle (18 of Wan Chai's 24 `TS324` poles). The second hangs on the first's back;
+  compare `plates_back_to_back`. Only a flagged face pairs: `TS115` twice on a pole still stacks.
+- **A cell is baked in two colours.** `TS322` / `TS323` (the minibus stand's pictogram) and
+  `TS3643` (the taxi pick-up plate) carry three and are not drawn; a plate without its pictogram
+  is the blank plate the lettering was added to end (`Q68`). Green is in `sign_sheets.INK` and `_plate_mask` for `TS324`.
 - The atlas ships as `signs_text.png`, named by `city.json`'s `signs_text_atlas`, never embedded in
   `signs.glb` (`Q70`): Godot extracts an embedded image to a file the manifest does not name, and
   `sync_generated.sh` deletes it. Any second image owes the same. `signs.json`'s `bytes` is the

@@ -45,6 +45,8 @@ SIGN_RECT_WIDE = "rect_wide"
 
 
 SIGN_RECT_INFO = "rect_info"
+# A stand plate (`P3-92`): TD's TAXI STAND cell is drawn 2 to 1.
+SIGN_RECT_STAND = "rect_stand"
 
 
 SIGN_BOARD_WIDE = "board_wide"
@@ -119,6 +121,7 @@ SIGN_DRAWINGS = (
     SIGN_RECT,
     SIGN_RECT_WIDE,
     SIGN_RECT_INFO,
+    SIGN_RECT_STAND,
     SIGN_BOARD_WIDE,
     SIGN_BOARD_TALL,
     SIGN_TRIANGLE_DOWN,
@@ -148,6 +151,7 @@ SIGN_PLATES = (
     SIGN_RECT,
     SIGN_RECT_WIDE,
     SIGN_RECT_INFO,
+    SIGN_RECT_STAND,
     SIGN_BOARD_WIDE,
     SIGN_BOARD_TALL,
     SIGN_TRIANGLE_DOWN,
@@ -228,6 +232,11 @@ class SignFace:
     # alone cannot express that, and drew all 84 of those NO ENTRY plates turned
     # to face the traffic they are not addressing.
     faces_against_traffic: bool = False
+    # Whether a second plate of this code on one pole is the first's reverse
+    # (`P3-92`). TD files a double-sided sign as two features at one point and
+    # one angle: 18 of Wan Chai's 24 `TS324` poles. Stacked, they read as two
+    # signs facing one way.
+    back_to_back: bool = False
 
     @property
     def lettered(self) -> bool:
@@ -302,6 +311,8 @@ class Signs(LayerSpec):
     rect_wide_height_m: float
     rect_info_width_m: float
     rect_info_height_m: float
+    rect_stand_width_m: float
+    rect_stand_height_m: float
     board_wide_width_m: float
     board_wide_height_m: float
     board_tall_width_m: float
@@ -379,6 +390,13 @@ _SIGN_ROLES = ("code", "bearing", "level", "group")
 
 
 _SIGN_POLE_ROLES = ("group", "level")
+
+
+def _flag(entry: dict[str, Any], key: str, where: str) -> bool:
+    value = entry.get(key, False)
+    if not isinstance(value, bool):
+        raise ValueError(f"{where}:{key} is {value!r}; it is a flag, true or false")
+    return value
 
 
 def _signs(body: Any, where: str) -> Signs | None:
@@ -507,6 +525,12 @@ def _signs(body: Any, where: str) -> Signs | None:
                 f"{spot}:faces_against_traffic is {against!r}; it is a flag, and the only "
                 f"thing it may say is that this face addresses traffic coming the other way"
             )
+        back_to_back = _flag(entry, "back_to_back", spot)
+        if mirror and back_to_back:
+            raise ValueError(
+                f"{spot} both mirrors and hangs back to back; the reverse of a mirrored "
+                f"board points the other way and nothing draws that"
+            )
         if mirror and against:
             # 🔴 **Latent until a face carries both, and then silent.** `_mirrors`
             # decides which hand the carriageway is on from `post.side` alone,
@@ -525,6 +549,7 @@ def _signs(body: Any, where: str) -> Signs | None:
             rank=SIGN_RANKS[rank],
             mirror_by_side=mirror,
             faces_against_traffic=against,
+            back_to_back=back_to_back,
         )
 
     lengths = {
@@ -539,6 +564,8 @@ def _signs(body: Any, where: str) -> Signs | None:
             "rect_wide_height_m",
             "rect_info_width_m",
             "rect_info_height_m",
+            "rect_stand_width_m",
+            "rect_stand_height_m",
             "board_wide_width_m",
             "board_wide_height_m",
             "board_tall_width_m",
@@ -609,6 +636,8 @@ def _signs(body: Any, where: str) -> Signs | None:
         rect_wide_height_m=lengths["rect_wide_height_m"],
         rect_info_width_m=lengths["rect_info_width_m"],
         rect_info_height_m=lengths["rect_info_height_m"],
+        rect_stand_width_m=lengths["rect_stand_width_m"],
+        rect_stand_height_m=lengths["rect_stand_height_m"],
         board_wide_width_m=lengths["board_wide_width_m"],
         board_wide_height_m=lengths["board_wide_height_m"],
         board_tall_width_m=lengths["board_tall_width_m"],

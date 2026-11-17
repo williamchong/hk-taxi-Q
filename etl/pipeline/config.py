@@ -270,6 +270,7 @@ from pipeline.config_blocks.signs import (  # noqa: F401
     SIGN_RANKS,
     SIGN_RECT,
     SIGN_RECT_INFO,
+    SIGN_RECT_STAND,
     SIGN_RECT_WIDE,
     SIGN_SLASH,
     SIGN_TEE,
