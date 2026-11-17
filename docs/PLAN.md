@@ -239,7 +239,7 @@ Built, something owed (🟡). Each is checked by its verify tool; the row names 
 | `P3-88` | The tram's doors and lamps (`Q234`) | A moving tram seen from the taxi |
 | `P3-89` | Stop and stand paint — `pipeline/stopmarks.py`: `RM1048` / `RM1049` boxes, `RM1045` (`Q242`) | The user's look and drive; the handset's frame time |
 | `P3-93` | Stop furniture — `pipeline/stops.py`: a flag at each bus, minibus and taxi point, a shelter at each tram stop (`P3-94`, `P3-95`; `Q242`) | The user's look at the sizes and liveries, which are first guesses; a tram drawn at a shelter |
-| `P3-96` | The stop layers' cost (`Q242`: 3 + 6 draws, 2.30 MB of PCK, desktop frame time unmoved) | The handset's frame time |
+| `P3-96` | The stop layers' cost (`Q242`: 3 + 6 draws, 2.30 MB of PCK, desktop frame time unmoved, iPhone Air at its 120 fps cap either way) | A moving drive on the handset; the A13 floor and Android |
 | `P3-92` | Stand signs — `TS324` TAXI STAND from the sheet's cell, double-sided (`Q242`) | The user's look; the minibus and pick-up plates need a third baked colour |
 | `P3-91` | Stop legends — BUS STOP 巴士站 and the taxi drop-off / pick-up lettering, strokes and point-filed (`Q242`; `P3-90` was its spike) | The user's pick of `legend_stroke_m` |
 
