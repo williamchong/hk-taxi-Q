@@ -1531,11 +1531,12 @@ class TestPlayerDetail:
             assert sign * first.positions[:, 0].mean() > 0.0, end
             assert first.normals[0][2] * sign < 0.0, f"the {end} plate's text faces into the car"
 
-    def test_the_seam_is_on_the_deck_between_the_lamps(self, detail: list[MeshData]) -> None:
+    def test_the_seam_is_on_the_deck_above_the_lamps(self, detail: list[MeshData]) -> None:
         shape = Proportions()
         seam = np.concatenate([p.positions for p in detail if p.name.startswith("boot_seam")])
-        inner = shape.tail_lamp_x_m - shape.tail_lamp_half_width_m
-        assert np.abs(seam[:, 0]).max() <= inner + shape.shut_line_half_width_m + 1e-9
+        assert np.abs(seam[:, 0]).max() <= shape.boot_seam_x_m + shape.shut_line_half_width_m + 1e-9
+        # The lid's seam comes down inside the cluster's outer edge.
+        assert shape.boot_seam_x_m < shape.tail_lamp_x_m + shape.tail_lamp_half_width_m
         assert seam[:, 2].min() > shape.cabin_rear_z_m
         assert seam[:, 2].max() < shape.rear_z_m + shape.shut_line_proud_m + 1e-9
         assert seam[:, 1].max() == pytest.approx(shape.belt_y_m + shape.shut_line_proud_m)

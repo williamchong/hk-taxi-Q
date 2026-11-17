@@ -3356,3 +3356,15 @@ share `twilight.tres`, a rose horizon; a shift never sees the 06:15 dawn.
   (`_drive`'s top-up), so its path is steeper and it is drawn so; `Car.lanes_moved` carries every
   lane it crossed in the tick to `_steer`. One that crosses while standing still is not turned.
 - A sharper turn is a shorter `lane_change_m` (25 m), which moves every seeded drive: not done.
+
+## `Q245` — The taxi's tail clusters run in to the plate, its grille is mostly chrome, and its front amber is the slim corner lens
+
+**Status.** 🟡 Built 2026-11-18 (`P3-82`) on the user's "build the geometry pass"; amends `Q190`'s rear and nose. Owed: his look, a handset frame.
+
+- Laid beside the real car (Commons: KX3816, VK5888, VV9455), the Tomica Limited Vintage Neo 1:64 and the Tiny 1:18, the taxi's visible gaps were geometry, not relief: a sampled normal map was planned first and not built.
+- `tools/make_vehicle.py` `Proportions`: `tail_lamp_half_width_m` 0.10 → 0.22 at `tail_lamp_x_m` 0.44 (corner to 2.5 cm off the plate frame); `grille_bars` 4 → 6 on `grille_half_width_m` 0.385; `headlamp_half_width_m` 0.17 (was a literal 0.15); the front amber 0.13 → 0.09 m wide (`front_indicator_*`).
+- The lens order stays `Q190`'s red over amber over white, and `headlamp_x_m` stays 0.58 under `taxi.tscn`'s spots.
+- `boot_seam_x_m` 0.46 is its own dial: the seam was read off the lamps' inner edge and would have followed them in.
+- Refused: the boot lid's share of each cluster as separate lenses. 2,226 triangles against the 2,200 ceiling; one lens a side is 2,154 (was 2,130).
+- Not seen: the Tiny City 1:64 `Q190` was built from. If it carries the corner cluster, the old pair of values is the way back.
+- The roster taxi follows (`Q200`): `parked.glb` rebuilt.

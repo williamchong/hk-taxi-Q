@@ -95,7 +95,8 @@ Phase 3 — `B2` and the road
 - `P3-69` 🟡 Day to night — owed: the handset's frame time.
 - `P3-70` 🟡 Light tail — owed: the look pick from `build/driver/tail_sheet/sheet.png`.
 - `P3-82` 🟡 Taxi at a die-cast's detail — owed: the headlamp spots sit 16 cm above the moved
-  lenses.
+  lenses. Tail clusters, grille and front lamps redrawn against photographs and two die-casts
+  (`Q245`, 2,154 triangles) — owed: the user's look.
 - `P3-83` 🟡 Posts collide — owed: `phys` on the throttle route.
 - `P3-84` 🟡 Detail lines on vehicles — owed: the weight pick (1.2 / 2 / 3 cm), a night frame.
 - `P3-85` 🟡 Roster at die-cast detail — owed: the box lorry's share of moving traffic (parked only).

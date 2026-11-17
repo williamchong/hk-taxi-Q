@@ -470,9 +470,10 @@ class Proportions:
     glyph_space: float = 0.45
     glyph_proud_m: float = 0.003
     # The boot lid's seam on the deck: across behind the backlight, and back
-    # down each side to the tail in line with the tail lamps' inner edges. As
+    # down each side to the tail, `boot_seam_x_m` out from the centre line. As
     # wide and as proud as a door shut line.
     boot_seam_setback_m: float = 0.06
+    boot_seam_x_m: float = 0.46
     # ⚠️ Both plate heights, and the badge below, are chosen to sit *above* the
     # sill tuck at `sill_y_m + bevel_m`. That is where the body stops sloping
     # gently and folds in hard, and `_seated_depth` answers a fixture spanning
@@ -577,16 +578,23 @@ class Proportions:
     headlamp_x_m: float = 0.58
     headlamp_y_m: float = 0.03
     headlamp_half_height_m: float = 0.075
+    # The main lens runs most of the way to the corner and the amber is the
+    # slim lens outboard of it, as both die-casts and the photographs have it.
+    headlamp_half_width_m: float = 0.17
+    front_indicator_x_m: float = 0.82
+    front_indicator_half_width_m: float = 0.045
     grille_y_m: float = 0.03
     grille_half_height_m: float = 0.085
-    grille_half_width_m: float = 0.40
-    grille_bars: int = 4
+    grille_half_width_m: float = 0.385
+    # Enough bars that the chrome outweighs the dark field between them.
+    grille_bars: int = 6
     foglamp_y_m: float = -0.28
     foglamp_half_height_m: float = 0.02
-    # Rear: tall clusters at the corners, red over amber over white, with a
-    # chrome garnish between them and the plate in a chrome frame above it.
-    tail_lamp_half_width_m: float = 0.10
-    tail_lamp_x_m: float = 0.56
+    # Rear: clusters from the corners across the boot lid nearly to the plate,
+    # red over amber over white, with a chrome garnish between them and the
+    # plate in a chrome frame (`Q245`).
+    tail_lamp_half_width_m: float = 0.22
+    tail_lamp_x_m: float = 0.44
     garnish_m: float = 0.05
     # Door mirrors on a stalk at the front of the front door's window.
     mirror_reach_m: float = 0.09
@@ -1278,7 +1286,7 @@ def _front_end(shape: Proportions) -> list[MeshData]:
             _flush_fixture(
                 shape,
                 centre=(side * shape.headlamp_x_m, hy),
-                half=(0.15 + 0.018, hh + 0.018),
+                half=(shape.headlamp_half_width_m + 0.018, hh + 0.018),
                 colour=SILVER,
                 rear=False,
                 name=f"bezel_{tag}",
@@ -1288,7 +1296,7 @@ def _front_end(shape: Proportions) -> list[MeshData]:
             _flush_fixture(
                 shape,
                 centre=(side * shape.headlamp_x_m, hy),
-                half=(0.15, hh),
+                half=(shape.headlamp_half_width_m, hh),
                 colour=LAMP,
                 rear=False,
                 name=f"headlamp_{tag}",
@@ -1298,8 +1306,8 @@ def _front_end(shape: Proportions) -> list[MeshData]:
         parts.append(
             _flush_fixture(
                 shape,
-                centre=(side * 0.80, hy),
-                half=(0.065, hh),
+                centre=(side * shape.front_indicator_x_m, hy),
+                half=(shape.front_indicator_half_width_m, hh),
                 colour=AMBER,
                 rear=False,
                 name=f"indicator_{tag}",
@@ -1921,7 +1929,7 @@ def _boot_seam(shape: Proportions) -> list[MeshData]:
     """The boot lid's seam: across the deck behind the backlight, back down
     each side to the tail, and over the shoulder to the top of the lamps."""
     half, proud = shape.shut_line_half_width_m, shape.shut_line_proud_m
-    x = shape.tail_lamp_x_m - shape.tail_lamp_half_width_m
+    x = shape.boot_seam_x_m
     deck_y = shape.belt_y_m
     shoulder_y = shape.tail_lamp_y_m[1] + 0.005
     z0 = shape.cabin_rear_z_m + shape.boot_seam_setback_m
