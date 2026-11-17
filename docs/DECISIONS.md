@@ -3335,3 +3335,21 @@ share `twilight.tres`, a rose horizon; a shift never sees the 06:15 dawn.
   `spin_enter_deg = 92`.
 - Still withdrawn: curvature detection, a SLIDE / SPIN option. Cost: the wheel eases from 0.28 to
   0.21 of lock between three and four o'clock on the way into a spin.
+
+## `Q244` — A traffic car is drawn turned the way it moves across the lanes
+
+**Status.** Built 2026-11-18 on the user's ask ("turn when changing lanes, instead of just sliding into it"). Desk-checked; the user's drive owed.
+
+- `Car.steer` is the angle the car's path makes with its road — the lanes it crossed this step over
+  the metres it travelled — eased over `lane_steer_m` (3 m) of travel and back to 0 once the lane
+  is held. `TrafficSystem.drawn_pose` turns the body, the instance and the beam by it.
+- Reason: `_pose_on_edge` faced a car down its road while `_change_lane` moved it sideways.
+- Drawn only: `car.pose` and every rule that reads a heading are untouched, so `verify_traffic` is
+  byte-identical on both regions but for the new `lane:` lines. A knock folds the steer into the
+  pose the car slides from.
+- Deciding number: 6.2° drawn of the path's 6.0° (Wan Chai), 6.5° of 6.6° (Causeway Bay) on the
+  staged road. Mutations caught: the sign, a steer that never straightens, half the angle.
+- A car pulling out from behind a parked vehicle crosses at the turning pace whatever it drove
+  (`_drive`'s top-up), so its path is steeper and it is drawn so; `Car.lanes_moved` carries every
+  lane it crossed in the tick to `_steer`. One that crosses while standing still is not turned.
+- A sharper turn is a shorter `lane_change_m` (25 m), which moves every seeded drive: not done.

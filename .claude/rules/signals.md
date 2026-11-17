@@ -97,7 +97,9 @@ By `verify_traffic` line:
   (`_past_stopping`) and carries BOTH turns in `_turn_path`. Over the centre line only on a
   give-way, which the line stages (`_oncoming_clear`, `_coming_over`).
 - `lane:` — `lane_at` and `Hit.lane_centre` share `RoadGraph._lane_centre` (`_bent_dir` rounds an
-  interior vertex).
+  interior vertex). A lane change is DRAWN turned (`Q244`, `Car.steer`, `drawn_pose`): the body,
+  the instance and the beam take it, `car.pose` and every rule keep the road's heading, so the
+  seeded drives do not move. Do not fold the steer into `pose`.
 - `graph:` — a turn runs mouth to mouth (`trim_m`); a stub is crossed, never driven.
 - `queue:` — the lane is the turn's (left nearside, right offside); a lane change needs room to
   stop from the closing speed (`_lane_blocked`, `_moving_onto`); a car ahead on its own edge is as

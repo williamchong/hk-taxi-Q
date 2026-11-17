@@ -68,6 +68,9 @@ const HOURS: int = 24
 ## How far along its edge a car takes to move from one lane to the next, in
 ## metres.
 @export var lane_change_m: float
+## How far a car travels for its drawn heading to follow its path across the
+## lanes, and to straighten after, in metres (`Q244`).
+@export var lane_steer_m: float
 ## How far past the mouth a car's tail runs before the indicator of the turn it
 ## finished goes off, in metres.
 @export var wink_hold_m: float

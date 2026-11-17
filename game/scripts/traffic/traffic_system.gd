@@ -110,6 +110,9 @@ const NEAR_CELL_M: float = 64.0
 const ADVANCE_STEPS: int = 16
 ## Lanes apart under which two cars share one, in lane widths.
 const SAME_LANE: float = 0.75
+## Within this of the angle it is easing to, a car's drawn steer snaps there: an
+## ease that never arrives would rewrite a straight car's pose every tick.
+const STEER_SETTLED_RAD: float = 1e-4
 ## Moves a car blocked out of its turn's lane tries before it turns from where
 ## it is.
 const REPLAN_TRIES: int = 6
@@ -270,6 +273,13 @@ class Car:
 	var p1: Vector3
 	var p2: Vector3
 	var pose: Transform3D
+	## How far the car is drawn turned off its road's heading while it moves
+	## across the lanes, in radians about up (`Q244`). Drawn only: `pose` keeps
+	## the road's heading, which is what every rule reads.
+	var steer: float = 0.0
+	## The lanes it has moved across since its steer was last read, toward the
+	## offside positive: `_change_lane` adds to it, `_steer` takes it.
+	var lanes_moved: float = 0.0
 	## The pose its body and its instance were last written at: a car standing
 	## at a light is not written again.
 	var posed_at: Transform3D
@@ -669,6 +679,7 @@ static func usable(table: TrafficProfile) -> bool:
 		"follow_heading_deg": table.follow_heading_deg,
 		"turn_span_m": table.turn_span_m,
 		"lane_change_m": table.lane_change_m,
+		"lane_steer_m": table.lane_steer_m,
 		"straight_deg": table.straight_deg,
 		"pass_look_m": table.pass_look_m,
 		"side_clear_m": table.side_clear_m,
@@ -1126,10 +1137,11 @@ func step(delta: float) -> void:
 			var fresh: bool = car.slot < 0
 			if fresh:
 				_take_slot(car)
-			if fresh or car.pose != car.posed_at:
-				car.posed_at = car.pose
-				car.body.global_transform = car.pose
-				_batches[car.kind].set_instance_transform(car.slot, car.pose)
+			var drawn: Transform3D = drawn_pose(car)
+			if fresh or drawn != car.posed_at:
+				car.posed_at = drawn
+				car.body.global_transform = drawn
+				_batches[car.kind].set_instance_transform(car.slot, drawn)
 			# Standing for a passenger, it shows its brake lamps from the first tick:
 			# one placed mid-dwell has not braked yet.
 			_write_lamps(
@@ -1138,8 +1150,7 @@ func step(delta: float) -> void:
 			)
 			if beams != null:
 				beams.add(
-					car.pose.translated_local(TrafficBeams.nose_of(_extents[car.kind])),
-					car.half_width
+					drawn.translated_local(TrafficBeams.nose_of(_extents[car.kind])), car.half_width
 				)
 	if beams != null:
 		beams.end()
@@ -1410,6 +1421,8 @@ func _place(car: Car, edge: int, along: bool, s: float, lane: float, cruise_shar
 	car.joined_until_m = 0.0
 	car.crossed.clear()
 	car.lane = lane
+	car.steer = 0.0
+	car.lanes_moved = 0.0
 	car.held_side = 0
 	car.fade = 1.0
 	car.leaving = false
@@ -1711,6 +1724,7 @@ func _change_lane(car: Car, metres: float) -> void:
 		return
 	var toward: float = move_toward(car.lane, goal, metres / profile.lane_change_m)
 	if not _lane_blocked(car, toward):
+		car.lanes_moved += toward - car.lane
 		car.lane = toward
 		return
 	if goal != car.lane_out:
@@ -2088,6 +2102,9 @@ func take_push(body: Object, impulse: Vector3, at: Vector3) -> void:
 ## Off its lane at the speed it was driving: from here `_slide` moves it.
 func _knock(car: Car) -> void:
 	car.knocked = true
+	# Hit part way across the lanes, it slides from the heading it was drawn at.
+	car.pose = drawn_pose(car)
+	car.steer = 0.0
 	var forward: Vector3 = -car.pose.basis.z
 	car.slide = Vector3(forward.x, 0.0, forward.z) * car.speed
 	car.speed = 0.0
@@ -2809,6 +2826,47 @@ func _advance(car: Car, metres: float) -> void:
 		_start_turn(car)
 	if car.live:
 		car.pose = _pose_on_turn(car) if car.turning else _pose_on_edge(car)
+		_steer(car, metres)
+
+
+## Turn the car's drawn heading toward the way it moved this tick (`Q244`): the
+## lanes it crossed in `metres` along, the angle its path makes with the road —
+## steeper for a car pulling out from behind a parked one, which crosses at the
+## turning pace whatever it drove. The heading follows the path over
+## `lane_steer_m` of travel, as a car's body lags its front wheels, and
+## straightens the same way once the lane is held. A car that did not move
+## along keeps the angle it has.
+func _steer(car: Car, metres: float) -> void:
+	var lanes: float = car.lanes_moved
+	car.lanes_moved = 0.0
+	if metres <= 0.0:
+		return
+	var goal: float = 0.0
+	if not car.turning and not is_zero_approx(lanes):
+		# On its edge the pose stands at its own lane: one `lane_at` gives the step.
+		var lane_step: Vector3 = (
+			graph.lane_at(
+				car.edge, _edge_m(car.s, car.length_m, car.along), car.along, car.lane + 1.0
+			)
+			- car.pose.origin
+		)
+		var forward: Vector3 = -car.pose.basis.z
+		var path := Vector3(
+			forward.x * metres + lane_step.x * lanes, 0.0, forward.z * metres + lane_step.z * lanes
+		)
+		goal = Vector3(forward.x, 0.0, forward.z).signed_angle_to(path, Vector3.UP)
+	if car.steer == goal:
+		return
+	car.steer = lerpf(car.steer, goal, 1.0 - exp(-metres / profile.lane_steer_m))
+	if absf(car.steer - goal) < STEER_SETTLED_RAD:
+		car.steer = goal
+
+
+## Where `car` is drawn and its body stands: its pose, turned by its steer.
+static func drawn_pose(car: Car) -> Transform3D:
+	if car.steer == 0.0:
+		return car.pose
+	return Transform3D(Basis(Vector3.UP, car.steer) * car.pose.basis, car.pose.origin)
 
 
 func _start_turn(car: Car) -> void:
@@ -2992,7 +3050,7 @@ func _drop_slot(car: Car) -> void:
 ## Write `car`'s pose and datum into the instance it is drawn from.
 func _write_instance(car: Car) -> void:
 	var batch: MultiMesh = _batches[car.kind]
-	batch.set_instance_transform(car.slot, car.pose)
+	batch.set_instance_transform(car.slot, drawn_pose(car))
 	batch.set_instance_custom_data(car.slot, _datum(car))
 
 

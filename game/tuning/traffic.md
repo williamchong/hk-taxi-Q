@@ -54,6 +54,10 @@ resident.
   (`trim_m`); this serves a node whose ribbon met no cap.
 - `lane_change_m = 25.0`: travel to move one lane over. A car moves toward its turn's lane only
   while the lane beside is clear; one that never got across turns from where it is.
+- `lane_steer_m = 3.0`: travel over which a car's drawn heading follows its path across the lanes,
+  and straightens after — about a wheelbase, as a body lags its front wheels (`Q244`). Drawn
+  only: the pose every rule reads keeps the road's heading. The angle is not tuned here; it is the
+  path's, `atan(lane width / lane_change_m)`, 6–7° on the staged roads.
 - `wink_hold_m = 5.0`: how far the tail runs past the mouth before a finished turn's indicator
   goes off. At the join, it stopped while the car still sat across the junction.
 - `straight_deg = 30.0`: under this a move is straight on and keeps its lane. Over it a left turn

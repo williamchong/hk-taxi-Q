@@ -120,6 +120,11 @@ const LOOK_GAP_M: float = 0.3
 const LOOK_PART_LANE: float = 0.7
 const LOOK_ROOM_M: float = 3.0
 const LOOK_STEP: float = 0.02
+## The steer's staging (`_check_steer`): where the car starts across, one tick's
+## travel, and how near its path's angle its drawn turn must come.
+const STEER_FROM_M: float = 10.0
+const STEER_STEP_M: float = 0.25
+const STEER_WITHIN_DEG: float = 0.5
 ## The camera's height over the fleet's centre, in the camera's checks (`Q214`)
 ## and the thinned drive (`Q219`).
 const VIEW_EYE_M: float = 3.0
@@ -1118,6 +1123,64 @@ func _check_lane_looks(
 		"queue",
 		"a car part way across follows the one in the lane it moves onto, and one keeping its lane does not"
 	)
+	_check_steer(system, ahead, behind)
+
+
+## A car moving across the lanes is drawn turned the way it moves (`Q244`, the
+## user's drive 2026-11-18: cars slid sideways into the next lane) — by the
+## angle its path makes with the road, its pose still the road's — and straight
+## again once it holds its lane. Alone on the knock's road, lane 1 to lane 0.
+func _check_steer(
+	system: TrafficSystem, ahead: TrafficSystem.Car, behind: TrafficSystem.Car
+) -> void:
+	ahead.live = false
+	_stage(system, behind, ahead.edge, ahead.along, STEER_FROM_M)
+	behind.lane = 1.0
+	behind.lane_out = 0.0
+	behind.pose = system._pose_on_edge(behind)
+	# The lanes taper along a road, so the path's angle is read where the car is.
+	var path_deg: float = 0.0
+	var drawn_deg: float = 0.0
+	var leant: bool = true
+	var kept: bool = true
+	var metres: float = 0.0
+	while behind.lane > 0.0 and metres < system.profile.lane_change_m * 2.0:
+		system._advance(behind, STEER_STEP_M)
+		metres += STEER_STEP_M
+		if behind.lane <= 0.0:
+			break
+		var at_m: float = TrafficScript._edge_m(behind.s, behind.length_m, behind.along)
+		var nearside: Vector3 = (
+			system.graph.lane_at(behind.edge, at_m, behind.along, 0.0)
+			- system.graph.lane_at(behind.edge, at_m, behind.along, 1.0)
+		)
+		var drawn: Transform3D = TrafficSystem.drawn_pose(behind)
+		leant = leant and (-drawn.basis.z).dot(nearside) > 0.0
+		kept = kept and behind.pose.basis.is_equal_approx(system._pose_on_edge(behind).basis)
+		path_deg = rad_to_deg(atan(nearside.length() / system.profile.lane_change_m))
+		drawn_deg = rad_to_deg(absf(behind.steer))
+	_expect(
+		behind.lane == 0.0 and leant and kept and absf(drawn_deg - path_deg) < STEER_WITHIN_DEG,
+		"lane",
+		(
+			"a car moving a lane over is drawn turned toward it by its path's angle (%.1f of %.1f deg)"
+			% [drawn_deg, path_deg]
+		)
+	)
+	for _step: int in int(system.profile.lane_steer_m * 12.0 / STEER_STEP_M):
+		system._advance(behind, STEER_STEP_M)
+	_expect(
+		behind.steer == 0.0 and TrafficSystem.drawn_pose(behind) == behind.pose,
+		"lane",
+		"and is drawn straight once it holds its lane"
+	)
+	print(
+		(
+			"  lane:     a lane change is drawn turned %.1f deg, the path's %.1f"
+			% [drawn_deg, path_deg]
+		)
+	)
+	ahead.live = true
 
 
 static func _stage(
@@ -1128,6 +1191,8 @@ static func _stage(
 	car.along = along
 	car.s = s
 	car.lane = 0.0
+	car.steer = 0.0
+	car.lanes_moved = 0.0
 	car.turning = false
 	car.held = TrafficSystem.Held.NONE
 	car.over_centre = false
