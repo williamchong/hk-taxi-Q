@@ -58,6 +58,7 @@ from pipeline import (
     roads,
     signals,
     signs,
+    stopmarks,
     surface,
     tramlines,
     tramway,
@@ -126,6 +127,8 @@ STAGES: dict[str, Callable[[list[str]], int]] = {
     # After `surface`, for `roadsurface.json` — each stripe vertex takes the drawn
     # road's own height (`DrawnSurface`), as a box's does. Before `export`.
     "crossings": crossings.main,
+    # After `surface`, on `crossings`' terms. Before `export`.
+    "stopmarks": stopmarks.main,
     # After `roads` for the level-0 centrelines — the height under each vertex
     # and the host edge each bar is drawn **across** — and after `surface` for
     # `roadsurface.json`'s drawn half-width. ⚠️ **The second one is a dependency
@@ -224,6 +227,7 @@ NEEDS: dict[str, tuple[str, ...]] = {
     "arrows": ("surface",),
     "boxjunctions": ("surface",),
     "crossings": ("surface",),
+    "stopmarks": ("surface",),
     "roadmarks": ("surface",),
     "railings": ("surface",),
     "signs": ("surface",),
@@ -244,6 +248,7 @@ NEEDS: dict[str, tuple[str, ...]] = {
         "arrows",
         "boxjunctions",
         "crossings",
+        "stopmarks",
         "roadmarks",
         "railings",
         "signs",

@@ -261,6 +261,14 @@ func _check_documents(manifest: Manifest) -> PackedStringArray:
 				GeneratedLayer.path(GeneratedLayer.CROSSINGS)
 			)
 		)
+	if not manifest.stopmarks_path.is_empty():
+		problems.append_array(
+			_check_document(
+				"stop and stand markings",
+				manifest.stopmarks_path,
+				GeneratedLayer.path(GeneratedLayer.STOPMARKS)
+			)
+		)
 	# Guarded on the same terms once more, and this is the guard that matters
 	# most: `verify_signs.gd` treats an absent asset as a pass *and* a null
 	# `signs` key is an ordinary answer for a region whose signs are all

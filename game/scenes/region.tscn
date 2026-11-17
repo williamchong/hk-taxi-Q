@@ -27,6 +27,10 @@ layer = "boxjunctions"
 script = ExtResource("1_layer")
 layer = "crossings"
 
+[node name="StopMarks" type="Node3D" parent="." unique_id=1188053472]
+script = ExtResource("1_layer")
+layer = "stopmarks"
+
 [node name="RoadMarks" type="Node3D" parent="." unique_id=1452468125]
 script = ExtResource("1_layer")
 layer = "roadmarks"

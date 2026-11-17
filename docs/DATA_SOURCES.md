@@ -255,14 +255,15 @@ source. Motorcycle bays are ~1 m apart, car bays ~5 m.
 | Layer | What it is, and traps |
 |---|---|
 | `DTAD_RD_MARK_LINE` | `RM1108`/`RM1109` edge of carriageway (width survey); `RM1011`/`RM1012`/`RM1013` stop and give-way lines; `RM1001` double lines (`Q118`). Nearest-edge join is wrong for transverse marks on 43% of the layer — a stop line lies nearest the *major* road — so `roadmarks.py` hosts by transversality (`Q69`). Features and parts differ 2.5× |
-| `DTAD_RD_MARK_LINE_C` | Via `road_marks.more_layers` (`Q132`): `RM1101`/`RM1102` lane lines, `RM1103` centre, `RM1104`/`RM1105` warning, `RM1002`/`RM1003` broken doubles, `ZIGZAGL`/`ZIGZAGR`. `RULEID` 2 / 3 on `RM1002` / `RM1003` makes left/right the digitised direction's. A lane count off line spacing over-counts on 51 of 75 edges (`Q127`) |
-| `DTAD_RD_MARK_SYM_PT` | Turn arrows (`pipeline/arrows.py`, `Q59`): `REFNAME` `RM1017`–`RM1029`, all the 4000 mm variant. **`ANGLE` is mathematical**: heading = `(90 − ANGLE) mod 360`. Not arrows: `RM1116`–`RM1119` warning arrows, `RM1135`/`RM1136` 望右/望左. Read by two stages (`arrows.py`, `carriageway.py`) that cluster independently |
+| `DTAD_RD_MARK_LINE_C` | `RM1048` bus stop boundary and `RM1049` stand boundary (`stopmarks.py`; 44 of 113 `RM1049` are filed twice, vertex for vertex). Via `road_marks.more_layers` (`Q132`): `RM1101`/`RM1102` lane lines, `RM1103` centre, `RM1104`/`RM1105` warning, `RM1002`/`RM1003` broken doubles, `ZIGZAGL`/`ZIGZAGR`. `RULEID` 2 / 3 on `RM1002` / `RM1003` makes left/right the digitised direction's. A lane count off line spacing over-counts on 51 of 75 edges (`Q127`) |
+| `DTAD_RD_MARK_SYM_PT` | Legends filed as a point and an angle, never also as strokes (`stopmarks.py`): `1047`'s heading reads with the traffic, `1175` / `1176`'s a quarter turn off it. Turn arrows (`pipeline/arrows.py`, `Q59`): `REFNAME` `RM1017`–`RM1029`, all the 4000 mm variant. **`ANGLE` is mathematical**: heading = `(90 − ANGLE) mod 360`. Not arrows: `RM1116`–`RM1119` warning arrows, `RM1135`/`RM1136` 望右/望左. Read by two stages (`arrows.py`, `carriageway.py`) that cluster independently |
 | `DTAD_CROSSING_LINE` | Crossing stripes, each its own rectangle (`pipeline/crossings.py`), short side p50 0.600 m. `LINETYPE` does not give colour (`SOLID` / `Solid` / null / `RM1076` carry the same stripe) |
 | `DTAD_YL_BOX_POLY` | Yellow box junctions (`pipeline/boxjunctions.py`). `ANGLE1`/`ANGLE2` published on 4 of 20 in Wan Chai; the stage derives the rest and grades against those four |
 | `DTAD_TS_ABV_PT`, `DTAD_TS_POLE_PT` | Traffic signs (`pipeline/signs.py`). `ABV_PT` is a label placement, not the sign: none sits on a pole. **`GG_NAME` is the only join** (92.6% resolve to one pole). `ANGLE` is symbol rotation, not a facing; facing is derived from host edge, kerb side and drive-on-left. No dimension is published: plate size, mount height and pole diameter are authored. `SIGNID` resolves into the `Index Plan/(TS …).pdf` sheets, checked by `tools/sign_face_survey.py` (`Q67`) |
 | `DTAD_RAILING_LINE` | Railings, bollards, barriers (`pipeline/railings.py`, `Q61`). `LINETYPE` classes: railings `CRAIL1` `CRAIL2` `HCAIL2` `RAIL1` `RAILING1`; bollards `bollard0..3`; barriers `CBARRIER` `CRASHGATE`. Unclassed: `SOLID`, `AMT*`, `EAG 3`, `MSB 5`. The weakest claim in the config (`Q60`); every dimension is authored |
 | `DTAD_TRAFFIC_LIGHT_PT` | Signal posts (`pipeline/signals.py`, `Q76`, `Q173`). Some are not heads (bollards, `PBUTT`, `WIGWAG`). `ANGLE` is not a facing; no `GG_NAME` |
 | `DTAD_RST_ZONE_LINE` | Kerbside yellow lines, `RM1040` / `RM1041`. Read only by `tools/kerbside_source_audit.py`: `TIME_ZONE` is null on every feature. `RM1040` sits on `NSR TIME_ZONE = 1` for 99.95% of its length |
+| `DTAD_RD_MARK_SYM_LINE` | Legends as the strokes of a stick font, in place and to size (`pipeline/stopmarks.py`, `Q242`): `REFNAME` `1047` BUS STOP 巴士站 (letters 1600, characters 2700), `1175` / `1176` taxi drop-off / pick-up (800 / 1350). The bare number, no `RM`. Also `1049` stand outlines and `1051` parking bays, unread |
 | `DTAD_RD_MARK_ANNO` | Road text (`CENTRAL`, `九龍`) as rotated rectangles, some with `<FNT …>` markup. Not in use (`P3-21`) |
 | `DTAD_TW_STRIP_LINE` | **Not tramway** — tactile warning strips (`REFNAME = TACW`) |
 
@@ -271,7 +272,8 @@ source. Motorcycle bays are ~1 m apart, car bays ~5 m.
 and their dimensions are `road_marks.marks` in `hong_kong.yaml`.
 
 - `LINES SPACING` is the clear gap, not a centre-to-centre pitch.
-- Colour is read off the description column: `RM1040`–`49` are yellow.
+- Colour is read off the description column: `RM1040`–`RM1045` are yellow, `RM1046`–`RM1048`
+  white, `RM1049` alternates the two.
 - `RM1013` give-way is a double broken line, not triangles. `RM1072`/`RM1073` zig-zags are the
   evidence a crossing is a zebra. `RM1076` signal-crossing stripes are surveyed 0.6 m wide.
 - Arrows publish a length and no shape (`Q93`); the glyph is measured off the pictograms, which

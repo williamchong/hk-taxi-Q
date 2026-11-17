@@ -81,6 +81,7 @@ from pipeline.config import Config, load_config  # noqa: E402
 from pipeline.crossings import CROSSINGS_MANIFEST_NAME  # noqa: E402
 from pipeline.documents import read_document  # noqa: E402
 from pipeline.roadmarks import ROADMARKS_MANIFEST_NAME  # noqa: E402
+from pipeline.stopmarks import STOPMARKS_MANIFEST_NAME  # noqa: E402
 from pipeline.surface import SURFACE_MANIFEST_NAME, SURFACE_MANIFEST_SCHEMA  # noqa: E402
 
 # The shipped `streaming.tres` pair. Restated rather than parsed out of the
@@ -184,6 +185,7 @@ PAINT_MANIFESTS = (
     ROADMARKS_MANIFEST_NAME,
     BOXJUNCTIONS_MANIFEST_NAME,
     CROSSINGS_MANIFEST_NAME,
+    STOPMARKS_MANIFEST_NAME,
     ARROWS_MANIFEST_NAME,
 )
 

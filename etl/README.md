@@ -84,7 +84,7 @@ run calls the same entry point. In run order:
 | `fence` | Where a barrier stands on an edge the car cannot pass |
 | `fares` | Taxi stands, pick-up points and street hails → `fares.json`, snapped to the graph |
 | `tramway` | The tram rails as drawn geometry |
-| `arrows`, `boxjunctions`, `crossings`, `roadmarks` | Published road paint, each its own mesh |
+| `arrows`, `boxjunctions`, `crossings`, `stopmarks`, `roadmarks` | Published road paint, each its own mesh |
 | `railings`, `signs`, `lamps`, `trees` | Published street furniture, each its own mesh or placement list |
 | `signals` | The signalled junctions and their stages |
 | `tramlines` | The tramway as lines a tram can run |

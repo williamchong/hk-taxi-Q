@@ -154,7 +154,8 @@ lamps.
   `draw_bus_lane` are 0.0 (`Q132`, `Q125`, `Q192`): TD's surveyed lines are drawn as geometry by
   `roadmarks.py`, and where TD surveys none, none is drawn. Ribbon markings fade 6 m from a node.
 - **Surveyed paint** is lifted geometry, one mesh each, no collider: arrows, box junctions, stop
-  lines, crossings, road marks. Road text is held on scope (`Q65`, `Q101`).
+  lines, crossings, road marks, and the stop and stand boxes with their legends (`Q242`). Other
+  road text is held on scope (`Q65`, `Q101`).
 - **Kerbs:** low and mountable, 0.15 m riser and 0.5 m lip; the ground tucks under the lip.
 - **Tramway:** its own mesh at iB1000's rail positions, `steel_rail`, `tuning/tramway.tres`. It
   reads by `rail_roughness` against the road's. `rail_metallic` stays 0.0 — the only environment

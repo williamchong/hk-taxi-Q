@@ -40,6 +40,10 @@ const SHADERS: Dictionary = {
 	# their own. `verify_crossings.gd` holds the pair per kind.
 	"crossings_signal": "res://tuning/boxjunctions.tres",
 	"crossings_zebra": "res://tuning/roadmarks.tres",
+	# `P3-89`. Stop and stand paint, in the same two paints on the same terms.
+	# `verify_stopmarks.gd` holds the pair per kind.
+	"stopmarks_white": "res://tuning/roadmarks.tres",
+	"stopmarks_yellow": "res://tuning/boxjunctions.tres",
 	# The published stop and give-way lines (`P3-23`). One entry for all three
 	# codes, because all three are the same white paint — what tells a give-way
 	# line from a stop line is the geometry `pipeline/roadmarks.py` built, not a

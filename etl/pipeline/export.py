@@ -70,6 +70,7 @@ from pipeline.roadmarks import ROADMARKS_MANIFEST_NAME, ROADMARKS_MANIFEST_SCHEM
 from pipeline.roads import ROADGRAPH_NAME, ROADGRAPH_SCHEMA
 from pipeline.signals import SIGNALS_MANIFEST_NAME, SIGNALS_MANIFEST_SCHEMA
 from pipeline.signs import SIGNS_MANIFEST_NAME, SIGNS_MANIFEST_SCHEMA
+from pipeline.stopmarks import STOPMARKS_MANIFEST_NAME, STOPMARKS_MANIFEST_SCHEMA
 from pipeline.surface import SURFACE_MANIFEST_NAME, SURFACE_MANIFEST_SCHEMA
 from pipeline.tramlines import TRAMLINES_MANIFEST_NAME, TRAMLINES_MANIFEST_SCHEMA
 from pipeline.tramway import TRAMWAY_MANIFEST_NAME, TRAMWAY_MANIFEST_SCHEMA
@@ -298,7 +299,10 @@ CITY_NAME = "city.json"
 # 46 since `Q195`: a building tile's `COLOR_0.a` carries its podium line
 # (`buildings.podium_code`), 255 where it has none. A v45 bundle is 255
 # everywhere, and a v46 reader would draw it as a city with no podium at all.
-CITY_SCHEMA = 46
+# 47 since `P3-89` (`Q242`): the manifest names `stopmarks.glb`, TD's surveyed
+# bus stop, stand and tram stop paint — a new shipped asset, on `crossings`'
+# precedent. A v46 reader does not know the key and ships a region without it.
+CITY_SCHEMA = 47
 
 # The hero-building placement document (`P3-6`), written by this stage from the
 # city config — ~2 entries derived from `landmarks:` plus one CRS conversion,
@@ -340,6 +344,7 @@ OPTIONAL_ASSET_KEYS = (
     "arrows_placements",
     "boxjunctions",
     "crossings",
+    "stopmarks",
     "lamps",
     "lamps_placements",
     "railings",
@@ -392,6 +397,7 @@ INPUTS: tuple[Input, ...] = (
     Input(ARROWS_MANIFEST_NAME, ARROWS_MANIFEST_SCHEMA, "arrows"),
     Input(BOXJUNCTIONS_MANIFEST_NAME, BOXJUNCTIONS_MANIFEST_SCHEMA, "boxjunctions"),
     Input(CROSSINGS_MANIFEST_NAME, CROSSINGS_MANIFEST_SCHEMA, "crossings"),
+    Input(STOPMARKS_MANIFEST_NAME, STOPMARKS_MANIFEST_SCHEMA, "stopmarks"),
     Input(LAMPS_MANIFEST_NAME, LAMPS_MANIFEST_SCHEMA, "lamps"),
     Input(RAILINGS_MANIFEST_NAME, RAILINGS_MANIFEST_SCHEMA, "railings"),
     Input(SIGNS_MANIFEST_NAME, SIGNS_MANIFEST_SCHEMA, "signs"),
@@ -478,6 +484,7 @@ def build_region(
     arrows = documents[ARROWS_MANIFEST_NAME]
     boxjunctions = documents[BOXJUNCTIONS_MANIFEST_NAME]
     crossings = documents[CROSSINGS_MANIFEST_NAME]
+    stopmarks = documents[STOPMARKS_MANIFEST_NAME]
     lamps = documents[LAMPS_MANIFEST_NAME]
     railings = documents[RAILINGS_MANIFEST_NAME]
     signs = documents[SIGNS_MANIFEST_NAME]
@@ -598,6 +605,8 @@ def build_region(
         "boxjunctions": boxjunctions["asset"],
         # `null` where the city drew no crossing stripes, on the same terms.
         "crossings": crossings["asset"],
+        # `null` where the city drew no stop or stand paint, on the same terms.
+        "stopmarks": stopmarks["asset"],
         "lamps": lamps["asset"],
         # Where the lamp library stands (`P5-3`), on `signs_placements`' terms.
         "lamps_placements": lamps["placements_document"],

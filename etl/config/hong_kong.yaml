@@ -2927,6 +2927,100 @@ road_marks:
       chevron_width_m: 0.9
       chevron_turn_deg: 20.0
 
+# Bus stop, stand and tram stop paint, drawn by pipeline/stopmarks.py as
+# stopmarks.glb (`P3-89`, `P3-91`, `Q242`). Lifts `Q65`'s refusal of road
+# lettering and of stand markings on the user's call, 2026-11-17.
+#
+# Dimensions off TD's index plans, read at 300-400 dpi:
+#
+#   CT174/51-5(1)F
+#   1045 (TC 516)  TRAM STOP LINE - YELLOW      LINE WIDTH = 300, CONTINUOUS
+#   1047 (TC 517)  BUS STOP - WHITE             LETTER HEIGHT = 1600,
+#                                               CHARACTER HEIGHT = 2700
+#   1048 (TC 517)  BUS STOP BOUNDARY MARKING    LINE WIDTH = 100
+#                  - WHITE                      MODULE: 1000 MARK, 1000 GAP
+#   1049 (PS 4)    PLB STAND, TAXI STAND &      LINE WIDTH = 100
+#                  SCHEDULE SERVICE VEHICLE     MODULE: 1000 YELLOW, 1000 WHITE
+#                  STAND - ALTERNATE WHITE & YELLOW
+#   CT174/51-5(2)G
+#   1175           TAXI DROP OFF ONLY - WHITE   LETTERS HEIGHT = 800,
+#   1176           TAXI PICK UP / DROP OFF      CHARACTERS HEIGHT = 1350
+#                  ONLY - WHITE
+#
+# A legend is filed as the strokes of a stick font, in place and to size, so
+# its extent and height are the survey's and no typeface is authored.
+stop_marks:
+  source: traffic_aids_drawings_gdb
+
+  # 🔴 AUTHORED, the one dimension here that is: TD publishes a letter height
+  # and no stroke width.
+  legend_stroke_m: 0.12
+
+  # Between the box junctions' 0.012 and the arrows' 0.015.
+  lift_m: 0.013
+  # The feature's middle to the nearest level-0 centreline, as `crossings`.
+  max_offset_m: 12.0
+  cell_m: 300.0
+
+  marks:
+    - id: bus_stop_box
+      layer: DTAD_RD_MARK_LINE_C
+      fields: {code: LINETYPE, level: ELEVATION}
+      codes: [RM1048]
+      line_width_m: 0.1
+      module: [[white, 1.0], [none, 1.0]]
+
+    - id: stand_box
+      layer: DTAD_RD_MARK_LINE_C
+      fields: {code: LINETYPE, level: ELEVATION}
+      codes: [RM1049]
+      line_width_m: 0.1
+      module: [[yellow, 1.0], [white, 1.0]]
+
+    - id: tram_stop_line
+      layer: DTAD_RD_MARK_LINE
+      fields: {code: LINETYPE, level: ELEVATION}
+      codes: [RM1045]
+      line_width_m: 0.3
+      paint: yellow
+
+    # `REFNAME` here is the bare number, with no `RM`.
+    - id: bus_stop_legend
+      layer: DTAD_RD_MARK_SYM_LINE
+      fields: {code: REFNAME, level: ELEVATION}
+      codes: ["1047"]
+      legend: true
+      paint: white
+      # The same legend filed as a point and an angle: stood with the region's
+      # own stroke legend as its glyph. `1047 (n*` / `(w*` are other sizes and
+      # are refused by code.
+      symbols:
+        layer: DTAD_RD_MARK_SYM_PT
+        fields: {code: REFNAME, bearing: ANGLE, level: ELEVATION}
+        turn_deg: 0.0
+
+    - id: taxi_drop_off_legend
+      layer: DTAD_RD_MARK_SYM_LINE
+      fields: {code: REFNAME, level: ELEVATION}
+      codes: ["1175"]
+      legend: true
+      paint: white
+      symbols:
+        layer: DTAD_RD_MARK_SYM_PT
+        fields: {code: REFNAME, bearing: ANGLE, level: ELEVATION}
+        turn_deg: -90.0
+
+    - id: taxi_pick_up_legend
+      layer: DTAD_RD_MARK_SYM_LINE
+      fields: {code: REFNAME, level: ELEVATION}
+      codes: ["1176"]
+      legend: true
+      paint: white
+      symbols:
+        layer: DTAD_RD_MARK_SYM_PT
+        fields: {code: REFNAME, bearing: ANGLE, level: ELEVATION}
+        turn_deg: -90.0
+
 # Pedestrian railings, drawn as their own geometry (P3-19, Q60).
 #
 # ⚠️ THIS IS THE ONE BLOCK IN THIS FILE WHOSE VOCABULARY THE PUBLISHER DOES NOT

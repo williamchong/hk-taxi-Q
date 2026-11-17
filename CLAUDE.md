@@ -168,6 +168,7 @@ checklist goes in a rule file, never back here: `check.sh` refuses a root `CLAUD
 | `roadmarks` | `pipeline/roadmarks.py`, the `road_marks` block (`more_layers`, `marks:`, `broken_line`, `divides_flows`, `axis` — `oblique` included — `chevron_width_m` / `chevron_turn_deg`, `opposed_join_mark`), `draw_lane_lines` / `draw_centre_line` / `draw_pair_join`, `marking_paint.gdshader` |
 | `carve` | `pipeline/carve.py`, the `carve` block, which edges are carved |
 | `crossings` | `pipeline/crossings.py`, the `crossings` block (`line_types`, `zebra`, `lift_m`, `max_stripe_width_m`), which paint a crossing takes |
+| `stopmarks` | `pipeline/stopmarks.py`, the `stop_marks` block (`marks:`, `legend_stroke_m`, `symbols`, `turn_deg`), the stop and stand paint's glyphs |
 | `boxjunctions` | `pipeline/boxjunctions.py`, the `boxjunctions` block, the drawn ribbon's extent, any painted layer's height or `lift_m`, `DrawnSurface` |
 | `hud` | `hud.gd`, `hud_layout.tres`, `hud_style.tres`, `wrong_way_monitor.gd`, `wrong_way.tres`, `street_plate.json`, the bundled font, any new region's street names, the start menu (`start_menu.gd`, `menu.tres`, `menu_text.json`, `settings.gd`, `main.gd`'s park / resume) |
 | `lamps` | `pipeline/lamps.py`, the `lamps` block |

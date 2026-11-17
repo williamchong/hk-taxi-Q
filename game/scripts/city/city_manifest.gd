@@ -245,7 +245,10 @@ const NOT_MEASURED: float = -1.0
 ##
 ## 46 since `Q195`: a building tile's `COLOR_0.a` carries its podium line, the
 ## cornice `city_facade_clean` draws; 255 where it has none.
-const SCHEMA_VERSION: int = 46
+##
+## 47 since `P3-89` (`Q242`): the manifest names `stopmarks.glb`, TD's surveyed
+## bus stop, stand and tram stop paint — a new shipped asset.
+const SCHEMA_VERSION: int = 47
 
 
 ## One entry of `tiles` — a square of the city, at every tier the ETL built.
@@ -389,6 +392,10 @@ var boxjunctions_path: String
 ## Optional on the same terms as `boxjunctions_path`: drawn from TD's published
 ## `DTAD_CROSSING_LINE`, named from what the stage drew and never from a constant.
 var crossings_path: String
+
+## The bus stop, stand and tram stop paint (`P3-89`), or **empty** where the
+## region ships none. Optional on `crossings_path`'s terms.
+var stopmarks_path: String
 
 ## The pedestrian railings mesh (`P3-19`), or **empty** where the region ships
 ## none.
@@ -667,6 +674,7 @@ static func load_manifest(region: String = "") -> CityManifest:
 	manifest.arrows_path = _resolve(document.get("arrows"), manifest.directory)
 	manifest.boxjunctions_path = _resolve(document.get("boxjunctions"), manifest.directory)
 	manifest.crossings_path = _resolve(document.get("crossings"), manifest.directory)
+	manifest.stopmarks_path = _resolve(document.get("stopmarks"), manifest.directory)
 	manifest.lamps_path = _resolve(document.get("lamps"), manifest.directory)
 	manifest.railings_path = _resolve(document.get("railings"), manifest.directory)
 	manifest.signs_path = _resolve(document.get("signs"), manifest.directory)
@@ -804,6 +812,7 @@ func shipped() -> PackedStringArray:
 		arrows_placements_path,
 		boxjunctions_path,
 		crossings_path,
+		stopmarks_path,
 		lamps_path,
 		lamps_placements_path,
 		railings_path,

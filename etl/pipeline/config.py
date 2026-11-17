@@ -288,6 +288,11 @@ from pipeline.config_blocks.sources import (
     _paged_source,
     _tiled_source,
 )
+from pipeline.config_blocks.stopmarks import (  # noqa: F401
+    StopMark,
+    StopMarks,
+    _stop_marks,
+)
 from pipeline.config_blocks.tramway import (  # noqa: F401
     _TRAMWAY_ROLES,
     TramLines,
@@ -440,6 +445,9 @@ class Config:
     # (`P3-35g2`). Optional on the same terms; the fallback it does not offer is
     # a crossing at every signalised junction, which nothing here can name.
     crossings: Crossings | None = None
+    # Published bus stop, stand and tram stop paint, drawn by
+    # `pipeline/stopmarks.py` (`P3-89`). Optional on the same terms.
+    stop_marks: StopMarks | None = None
     # Published pedestrian railings, drawn by `pipeline/railings.py` (`P3-19`).
     # Optional on the same terms as the three blocks above: a city whose estate
     # publishes no railing layer ships none rather than running a fence down
@@ -835,6 +843,7 @@ def load_config(path: Path | None = None) -> Config:
         basemap=_basemap(document.get("basemap"), f"{path}:basemap", table),
         boxjunctions=_boxjunctions(document.get("boxjunctions"), f"{path}:boxjunctions"),
         crossings=_crossings(document.get("crossings"), f"{path}:crossings"),
+        stop_marks=_stop_marks(document.get("stop_marks"), f"{path}:stop_marks"),
         railings=_railings(document.get("railings"), f"{path}:railings"),
         road_marks=_road_marks(document.get("road_marks"), f"{path}:road_marks"),
         parked=_parked(document.get("parked"), f"{path}:parked"),

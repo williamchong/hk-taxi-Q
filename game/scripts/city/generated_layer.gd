@@ -87,6 +87,7 @@ const TRAMWAY: String = "tramway"
 const ARROWS: String = "arrows"
 const BOXJUNCTIONS: String = "boxjunctions"
 const CROSSINGS: String = "crossings"
+const STOPMARKS: String = "stopmarks"
 const ROADMARKS: String = "roadmarks"
 const RAILINGS: String = "railings"
 const LAMPS: String = "lamps"
@@ -151,6 +152,17 @@ const LAYERS: Dictionary[String, Dictionary] = {
 		"module": "crossings",
 		"absence":
 		"A city whose sources publish no crossing lines ships none, and that is not a failure.",
+		"placements": "",
+		"casts_shadow": false,
+		"shadow_meshes": [],
+	},
+	STOPMARKS:
+	{
+		"file": "stopmarks.glb",
+		"noun": "stop and stand markings",
+		"module": "stopmarks",
+		"absence":
+		"A city whose sources publish no stop markings ships none, and that is not a failure.",
 		"placements": "",
 		"casts_shadow": false,
 		"shadow_meshes": [],

@@ -3270,3 +3270,24 @@ share `twilight.tres`, a rose horizon; a shift never sees the 06:15 dawn.
 - On a two-way edge dead-ended ahead (`RoadRouter.moves_from`) the car is turned round.
 - Radius stays `RoadGraph.NEAREST_REACH_M` 60 m: 99 of 6,933 lane samples fall to the start line,
   and 100 / 150 / 250 m still leave 71 / 63 / 62.
+
+## `Q242` — Stops and stands are drawn from TD's own paint, legends included
+
+**Status.** Built 2026-11-17 on the user's instruction ("add bus stop, mini bus stop, taxi on/off area and tram station according to data"); lifts `Q65`'s refusal of road lettering and stand markings for these codes. The user's look and drive owed.
+
+- `pipeline/stopmarks.py` → `stopmarks.glb` (`CITY_SCHEMA` 47), two paints on the road marks' and
+  box junctions' `.tres`. Wan Chai draws 188 markings (23 bus stop boxes, 48 stand boxes, 105 BUS
+  STOP legends, 12 taxi legends), 37,524 triangles, 2.05 MB; Causeway Bay 44, 7,654, 0.42 MB.
+- A legend needs no typeface: `DTAD_RD_MARK_SYM_LINE` files it as stick-font strokes in place and
+  to size (BUS STOP 巴士站 is 11.6 x 2.5 m, the sheet's 1600 / 2700 / 1000). `P3-21`'s no-go was
+  `DTAD_RD_MARK_ANNO`'s rectangles and stands. Authored: the stroke's width, 0.12 m.
+- A legend filed as a point (33 in the two regions) is stood with the region's stroke legends as
+  its glyph: their vertex-wise median, each laid onto it. Fit p50 3.6 mm over 89 legends, turn p50
+  0.64 deg. The point is taken for the legend's middle — unpublished, and nothing calibrates it:
+  0 of 1,205 `1047` points citywide lie inside a stroke legend.
+- Refused and counted: 44 `RM1049` filed twice; 22 features wholly past the drawn kerb (the stand
+  boxes' 0.1–0.8 m returns, the one `RM1045` tram stop line on the reserve); point codes `1047
+  (n*` / `(w*`, `1048`, `1149`.
+- Cost from the start line at 3 s: 119 draws against 116 with `--hide-layers=stopmarks`, `prims`
+  741,629 against 738,923. The handset's frame time is owed.
+- Off switch: delete the `stop_marks:` block.

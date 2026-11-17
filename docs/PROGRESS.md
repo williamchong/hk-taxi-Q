@@ -99,6 +99,8 @@ Phase 3 — `B2` and the road
 - `P3-84` 🟡 Detail lines on vehicles — owed: the weight pick (1.2 / 2 / 3 cm), a night frame.
 - `P3-85` 🟡 Roster at die-cast detail — owed: the box lorry's share of moving traffic (parked only).
 - `P3-87` 🟡 Pressed panels. `P3-88` 🟡 Tram doors and lamps.
+- `P3-89` 🟡 Stop and stand paint, `P3-91` 🟡 its legends (`Q242`) — owed: the user's look, the
+  handset.
 - 🚫 `P3-7a` (withdrawn, `Q102`), `P3-17` (returned as `P3-3e`, `Q173`). ❌ `P3-21` (`Q65`).
 
 Phase 3 — `B1`, `B3`, `B4`
