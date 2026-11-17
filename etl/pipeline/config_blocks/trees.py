@@ -63,11 +63,11 @@ class TreeKind:
 class Trees:
     """The published trees, stood by `pipeline/trees.py` (`P3-77`, `Q171`).
 
-    🔴 **Only where one is surveyed.** No fill and no rhythm: the LCSD layer
-    excludes the major parks and nothing publishes the roadside trees, so a
-    region draws exactly what the two inventories hold and nothing between.
+    🔴 **Only where one is surveyed.** No fill and no rhythm: nothing publishes
+    the roadside trees, so a region draws exactly what the inventories hold
+    and nothing between.
 
-    ⚠️ **Every size is authored.** Neither publisher gives a height or a crown;
+    ⚠️ **Every size is authored.** No publisher gives a height or a crown;
     HyD's `DBH` is the one measurement, and `height_per_dbh_m` turning it into
     a height is an authored ratio.
     """

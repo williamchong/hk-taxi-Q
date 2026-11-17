@@ -47,13 +47,17 @@ def _tree(publisher: str, ident: str, x: float, z: float, **kwargs: Any) -> Tree
 # --------------------------------------------------------------------------
 
 
-def test_shipped_block_reads_both_publishers_in_precedence_order(hong_kong) -> None:
+def test_shipped_block_reads_every_publisher_in_precedence_order(hong_kong) -> None:
     spec = hong_kong.trees
     assert spec is not None
-    # LCSD first: it names the species, HyD names none.
-    assert [publisher.id for publisher in spec.publishers] == ["lcsd", "hyd"]
-    assert spec.publishers[0].has_species and not spec.publishers[0].has_dbh
-    assert spec.publishers[1].has_dbh and not spec.publishers[1].has_species
+    # LCSD's two first: they name the species, HyD names none.
+    assert [publisher.id for publisher in spec.publishers] == ["lcsd", "lcsd_parks", "hyd"]
+    for named in spec.publishers[:2]:
+        assert named.has_species and not named.has_dbh
+    assert spec.publishers[2].has_dbh and not spec.publishers[2].has_species
+    # Victoria Park's two genera the venue layer never named.
+    assert spec.kind_of("Elaeis guineensis") == "palm"
+    assert spec.kind_of("Taxodium distichum") == "conifer"
     assert spec.default_kind in spec.kinds
 
 

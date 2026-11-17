@@ -14,8 +14,10 @@ paths:
   compare the three partitions, `drawn_by_kind`, `sized_by_dbh` / `sized_by_kind`, `height_m`,
   `min_kerb_clearance_m`, `facing_away`, plus `verify_trees`' trunks-in-bodies line. Frame:
   `--camera=960,40,200 --look=990,4,280`, day and `--time-of-day=1`.
-- Only where a publisher surveys one (user's call): LCSD leaves out the major parks and nothing
-  publishes roadside trees. Do not fill Victoria Park or Hennessy Road.
+- Only where a publisher surveys one (user's call): nothing publishes roadside trees. Do not fill
+  Hennessy Road. Victoria Park stands off LCSD's major-parks layer (`lcsd_parks`, 2026-11-18).
+- A tree whose ground the neighbour region draws is refused `no_ground`: 80 of Victoria Park's on
+  the Wan Chai / Causeway Bay seam.
 - `min_kerb_clearance_m` is the invariant — no trunk in the carriageway — measured from the stood
   point to the level-0 carriageway region. With the `in_carriageway` refusal off, Wan Chai stands
   35 more trees and the minimum falls to 0.0.

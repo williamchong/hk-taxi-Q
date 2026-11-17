@@ -297,7 +297,7 @@ Bundle, from `etl/out` (schemas: `city.json` 46, `roadgraph.json` 15, `roadsurfa
 | Tram lines | 60 directed tracks (4,393 m), 19 stops / 13 (1,371 m), 5 |
 | Signals | 73 junctions, 72 staged, 178 approaches, 514 head posts / 22, 21, 41, 89 |
 | Parked placed | 716 of 1,346 candidates / 340 of 705; no parked trams |
-| Trees drawn | 1,061 of 1,123 / 2,375 of 2,413 |
+| Trees drawn | 2,254 of 2,331 / 3,317 of 3,427 |
 | Bus route directions kept | 464 of 486 / 241 of 251 |
 | Fare nodes, street spots | 48, 221 / 7, 166 |
 | Harbour | 748,723 m² of sea / 177,055 m² |

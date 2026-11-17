@@ -422,9 +422,9 @@ its `HHMM`; a `frequencies` end is exclusive.
 
 ## Trees (`Q171`)
 
-Two point inventories, paged off the CSDI REST service like the pavement polygons
-(`MapServer/0/query`, `outSR=2326`). Only what they survey is drawn: no major-parks layer (Victoria
-Park) and no roadside inventory was found.
+Three point inventories, paged off the CSDI REST service like the pavement polygons
+(`MapServer/0/query`, `outSR=2326`). Only what they survey is drawn: no roadside inventory was
+found.
 
 - **HyD Tree** — `hyd_rcd_1632210213867_60179`, Highways Department, `csdi:VIS_INV_TREE`, native
   EPSG:2326. `paged_sources.tree_hyd` reads `TREE_ID,DBH`. `DBH` is trunk diameter in mm, turned
@@ -433,3 +433,6 @@ Park) and no roadside inventory was found.
 - **LCSD Trees (venues other than major parks)** — `lcsd_rcd_1760154188966_59086`, Leisure and
   Cultural Services Department. `paged_sources.tree_lcsd` reads `OBJECTID,Scientific_Name`; the
   genus picks the kind (`trees.genera`). This dataset is why LCSD is in the credits.
+- **LCSD Trees (Major Parks)** — `lcsd_rcd_1730101435734_98947`, the same department, found
+  2026-11-18. `paged_sources.tree_lcsd_parks` reads `OBJECTID,Scientific_Name`; 30,526 points,
+  stored in WGS84. Victoria Park is 2,230 of them across Wan Chai and Causeway Bay (74 genera).

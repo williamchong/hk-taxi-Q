@@ -629,14 +629,23 @@ paged_sources:
     page_size: 3000
     max_pages: 200
     filename: VIS_INV_TREE.geojson
-  # ⚠️ "Other than Major Parks": Victoria Park's trees are in no published
-  # layer, and the park stays bare (`Q171`). `OBJECTID` is asked for because
-  # it is the only identity a tree has here; the jitter is seeded on it.
+  # ⚠️ "Other than Major Parks": Victoria Park's trees are `tree_lcsd_parks`
+  # below. `OBJECTID` is asked for because it is the only identity a tree has
+  # here; the jitter is seeded on it.
   tree_lcsd:
     url: "https://portal.csdi.gov.hk/server/rest/services/common/lcsd_rcd_1760154188966_59086/MapServer/0/query?where=1%3D1&outFields=OBJECTID%2CScientific_Name&returnGeometry=true&outSR=2326&geometryPrecision=2&orderByFields=OBJECTID&resultOffset={offset}&resultRecordCount={count}&f=geojson"
     page_size: 3000
     max_pages: 60
     filename: LCSD_TREES.geojson
+  # LCSD's other tree layer, Trees (Major Parks): 30,526 points (11 pages),
+  # read 2026-11-18, 2,230 of them Victoria Park's across the two regions. The
+  # venue layer's columns, and `OBJECTID` the identity for the same reason.
+  # ⚠️ The layer is stored in WGS84; `outSR=2326` is what lands it in the grid.
+  tree_lcsd_parks:
+    url: "https://portal.csdi.gov.hk/server/rest/services/common/lcsd_rcd_1730101435734_98947/MapServer/0/query?where=1%3D1&outFields=OBJECTID%2CScientific_Name&returnGeometry=true&outSR=2326&geometryPrecision=2&orderByFields=OBJECTID&resultOffset={offset}&resultRecordCount={count}&f=geojson"
+    page_size: 3000
+    max_pages: 30
+    filename: Trees_Major_Parks.geojson
 
 tiled_sources:
   buildings:
@@ -3510,20 +3519,27 @@ lamps:
   # (measured 2026-11-11). Just over `column_radius_m`, so the foot is whole.
   deck_outset_m: 0.1
 
-# The trees (`P3-77`, `Q171`): two published per-tree inventories, each a point
-# and an identity, stood as a library of four kinds by `pipeline/trees.py`.
-# 🔴 **Only where one is surveyed** (the user's call): no fill, so Victoria
-# Park (excluded from LCSD's layer) and the streets (no roadside inventory is
-# published) stay bare. ⚠️ **Neither publisher gives a height or a crown**:
+# The trees (`P3-77`, `Q171`): three published per-tree inventories, each a
+# point and an identity, stood as a library of four kinds by
+# `pipeline/trees.py`. 🔴 **Only where one is surveyed** (the user's call): no
+# fill, so the streets (no roadside inventory is published) stay bare. Victoria
+# Park stands since 2026-11-18, off LCSD's major-parks layer.
+# ⚠️ **No publisher gives a height or a crown**:
 # every size below is authored, and a HyD tree's height off its `DBH` is an
 # authored ratio, not an allometry anyone measured here.
 trees:
   # In precedence order: a tree both publish within `merge_m` keeps the first
-  # one's record. LCSD first, because it names the species.
+  # one's record. LCSD's two first, because they name the species.
   publishers:
     - id: lcsd
       source: tree_lcsd
       layer: LCSD_TREES
+      fields:
+        id: OBJECTID
+        species: Scientific_Name
+    - id: lcsd_parks
+      source: tree_lcsd_parks
+      layer: Trees_Major_Parks
       fields:
         id: OBJECTID
         species: Scientific_Name
@@ -3536,13 +3552,14 @@ trees:
 
   # A species' kind by its genus, the first word of the scientific name. Every
   # genus not listed — and every HyD tree, which names none — is
-  # `default_kind`. Read off the 93 genera LCSD publishes in the two regions,
-  # 2026-10-27.
+  # `default_kind`. Read off the 93 genera LCSD's venue layer publishes in the
+  # two regions, 2026-10-27, and Victoria Park's 74, 2026-11-18 (`Elaeis` and
+  # `Taxodium` are the park's).
   default_kind: broadleaf
   genera:
-    palm: [Archontophoenix, Phoenix, Roystonea, Wodyetia, Hyophorbe, Caryota, Ravenea, Syagrus, Neodypsis, Areca, Dypsis, Cocos]
+    palm: [Archontophoenix, Phoenix, Roystonea, Wodyetia, Hyophorbe, Caryota, Ravenea, Syagrus, Neodypsis, Areca, Dypsis, Cocos, Elaeis]
     fan_palm: [Livistona, Washingtonia, Trachycarpus, Ravenala, Bismarckia]
-    conifer: [Juniperus, Araucaria, Podocarpus, Casuarina, Nageia, Platycladus, Pinus, Cupressus]
+    conifer: [Juniperus, Araucaria, Podocarpus, Casuarina, Nageia, Platycladus, Pinus, Cupressus, Taxodium]
 
   # The library: one mesh per kind, drawn at `height_m` and stood scaled to
   # each tree's height. `form` picks the drawing — a faceted crown on a trunk,

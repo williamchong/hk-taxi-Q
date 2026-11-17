@@ -1,10 +1,10 @@
 """Published trees, stood as a library of kinds (`P3-77`, `Q171`).
 
-Two inventories publish a tree as a point and an identity — HyD's Tree layer
-(with a trunk diameter) and LCSD's venue trees (with a species) — and this stage
-stands each on the ground the bundle draws, as one of four library meshes
-scaled to its height. 🔴 **Only where one is surveyed**: nothing fills the
-parks LCSD's layer leaves out (Victoria Park) or the streets nobody inventories.
+Three inventories publish a tree as a point and an identity — HyD's Tree layer
+(with a trunk diameter) and LCSD's two, venues and major parks (with a species)
+— and this stage stands each on the ground the bundle draws, as one of four
+library meshes scaled to its height. 🔴 **Only where one is surveyed**: nothing
+fills the streets nobody inventories.
 
 Three refusals, each counted, none of them a push — a published tree moved is a
 tree that is not where it was surveyed:

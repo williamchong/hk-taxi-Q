@@ -2512,7 +2512,8 @@ See `game/tuning/day_to_night.md`, `.claude/rules/facade.md`.
 **Status.** Built (`P3-77`) on the user's calls. Reverses `Q144`'s "trees are not built". Checklist in `.claude/rules/trees.md`.
 
 - Sources (CSDI, paged from the REST service in EPSG:2326): HyD Tree (`VIS_INV_TREE`, `hyd_rcd_1632210213867_60179`: `TREE_ID`, `DBH`, no species in region) and LCSD Trees in venues other than major parks (`lcsd_rcd_1760154188966_59086`: species, no size). Neither publishes a height or crown. DEVB, DSD, CEDD and HA layers were not fetched.
-- Where nothing is surveyed, nothing stands: Victoria Park (a major park) and Hennessy Road (no roadside inventory) are bare. A fill would be `Q144`'s invention and is a separate call.
+- Where nothing is surveyed, nothing stands: Hennessy Road (no roadside inventory) is bare. A fill would be `Q144`'s invention and is a separate call.
+- Victoria Park stands since 2026-11-18: LCSD's Trees (Major Parks) (`lcsd_rcd_1730101435734_98947`) is a third publisher, `lcsd_parks`. 2,230 read, 2,135 stood (Wan Chai 1,061 → 2,254 trees, Causeway Bay 2,375 → 3,317); 80 of the 95 refused are `no_ground` on the seam, where the neighbour region draws the ground. `min_kerb_clearance_m` unmoved at 0.36 / 0.50 m.
 - The library is the ETL's (`pipeline/trees.py`, `trees:` block): `broadleaf`, `palm`, `fan_palm`, `conifer`, by genus. A tree is a crash: a trunk `CylinderShape3D` each, in one `StaticBody3D` per kind and prop cell (Jolt's `max_bodies` is 10,240 and the railings hold 7,693).
 - Every size is an estimate: HyD height = `DBH` × `height_per_dbh_m`, clamped (an authored ratio; no Hong Kong allometric curve was found); LCSD by its kind's height range.
 - Refused and counted, never pushed: `in_carriageway` (the level-0 region plus `kerb_clear_m`), `no_ground`, `under_structure`.
