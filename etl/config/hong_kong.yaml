@@ -3044,6 +3044,46 @@ stop_marks:
         fields: {code: REFNAME, bearing: ANGLE, level: ELEVATION}
         turn_deg: -90.0
 
+# Authored furniture at published stops (`P3-93`-`P3-95`, `Q242`): a flag on a
+# pole where a bus or a green minibus stops and at TD's taxi pick-up / drop-off
+# points, a shelter beside the track at a tram stop. `pipeline/stops.py`.
+#
+# WHERE is the bundle's own: `bus_routes.json`'s stop points, `fares.json`'s
+# `pudo` nodes, `tram_lines.json`'s stops. A taxi STAND takes no flag - TD's
+# `TS324` plate stands there.
+#
+# WHAT is authored, every number here, and the user's to move: nothing
+# publishes a flag's size or a shelter's (0 of iB1000's open-sided blocks lie
+# within 6 m of a stop). The liveries are the operators' broad colours - a red
+# bus flag, a green minibus one, a taxi-red point - and no logo or wording.
+# Colours are names in `signs.colours`, the one livery table.
+# Off switch: delete the block.
+stops:
+  # Past the drawn kerb, the lamps' own 0.45; a pole is pushed out to it and
+  # never pulled in, and refused past `max_shift_m`.
+  outset_m: 0.45
+  max_shift_m: 6.0
+  # Stops of one kind this close share a pole: two operators' flags a pace
+  # apart are one here.
+  merge_m: 4.0
+  pole_radius_m: 0.04
+  pole_colour: grey
+  plate_thickness_m: 0.04
+  flags:
+    bus_stop:     {width_m: 0.50, height_m: 0.80, mount_m: 2.50, colour: red, band: white}
+    minibus_stop: {width_m: 0.45, height_m: 0.60, mount_m: 2.40, colour: green, band: white}
+    taxi_point:   {width_m: 0.45, height_m: 0.45, mount_m: 2.30, colour: white, band: red}
+  tram:
+    # From the track's centreline to the shelter's, on the left of travel. A
+    # tram is 1.98 m wide, so 1.9 m leaves the roof 0.2 m off its side.
+    offset_m: 1.9
+    length_m: 8.0
+    width_m: 1.4
+    height_m: 2.7
+    roof_m: 0.12
+    colour: green
+    roof: green
+
 # Pedestrian railings, drawn as their own geometry (P3-19, Q60).
 #
 # ⚠️ THIS IS THE ONE BLOCK IN THIS FILE WHOSE VOCABULARY THE PUBLISHER DOES NOT

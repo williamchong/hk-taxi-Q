@@ -55,6 +55,7 @@ from pipeline.roads import ROADGRAPH_NAME, ROADGRAPH_SCHEMA
 from pipeline.signals import SIGNALS_MANIFEST_NAME, SIGNALS_MANIFEST_SCHEMA
 from pipeline.signs import SIGNS_MANIFEST_NAME, SIGNS_MANIFEST_SCHEMA
 from pipeline.stopmarks import STOPMARKS_MANIFEST_NAME, STOPMARKS_MANIFEST_SCHEMA
+from pipeline.stops import STOPS_MANIFEST_NAME, STOPS_MANIFEST_SCHEMA
 from pipeline.surface import SURFACE_DIR, SURFACE_MANIFEST_NAME, SURFACE_MANIFEST_SCHEMA
 from pipeline.tramlines import TRAMLINES_MANIFEST_NAME, TRAMLINES_MANIFEST_SCHEMA
 from pipeline.tramway import TRAMWAY_MANIFEST_NAME, TRAMWAY_MANIFEST_SCHEMA
@@ -333,6 +334,14 @@ class _Region:
                 "features": 0,
                 "drawn": 0,
             },
+            # And no `stops:` block (`P3-94`).
+            STOPS_MANIFEST_NAME: {
+                "schema_version": STOPS_MANIFEST_SCHEMA,
+                "city_id": city.id,
+                "region_id": REGION,
+                "asset": None,
+                "placements_document": None,
+            },
             # Same shape and same reason a fourth time: `testville` declares no
             # `road_marks:` block, so the stage found nothing and says so.
             ROADMARKS_MANIFEST_NAME: {
@@ -564,6 +573,20 @@ class TestAssembly:
         region.build()
         assert region.manifest()["stopmarks"] == "stopmarks.glb"
         assert "stopmarks.glb" in shipped(region.manifest())
+
+    def test_stood_stop_furniture_is_shipped_with_its_placements(self, region) -> None:
+        """The optional-key contract for `P3-94`'s library and its document."""
+        region.build()
+        assert region.manifest()["stops"] is None
+        assert region.manifest()["stops_placements"] is None
+
+        region.documents[STOPS_MANIFEST_NAME].update(
+            asset="stops.glb", placements_document="stops_placements.json"
+        )
+        (region.out_dir / "stops.glb").write_bytes(b"glb")
+        (region.out_dir / "stops_placements.json").write_text("{}", encoding="utf-8")
+        region.build()
+        assert {"stops.glb", "stops_placements.json"} <= set(shipped(region.manifest()))
 
     def test_the_sign_atlas_is_shipped_independently_of_the_sign_mesh(self, region) -> None:
         """🔴 **The regression the sweep bug was** (`Q70`).
@@ -1119,6 +1142,7 @@ class TestOrchestrator:
             "tramlines",
             "busroutes",
             "parked",
+            "stops",
             "export",
         ]
 
@@ -1164,6 +1188,7 @@ class TestOrchestrator:
             "tramlines",
             "busroutes",
             "parked",
+            "stops",
             "export",
         ]
 

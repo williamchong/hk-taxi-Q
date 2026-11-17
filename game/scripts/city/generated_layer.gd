@@ -90,6 +90,7 @@ const ARROWS: String = "arrows"
 const BOXJUNCTIONS: String = "boxjunctions"
 const CROSSINGS: String = "crossings"
 const STOPMARKS: String = "stopmarks"
+const STOPS: String = "stops"
 const ROADMARKS: String = "roadmarks"
 const RAILINGS: String = "railings"
 const LAMPS: String = "lamps"
@@ -215,6 +216,19 @@ const LAYERS: Dictionary[String, Dictionary] = {
 		"placements": "signs_placements.json",
 		"casts_shadow": true,
 		"shadow_meshes": ["pole"],
+	},
+	# Authored flags and shelters at published stops (`P3-94`, `Q242`), a
+	# library on the signs' terms. Only the shelter casts: its roof is shade, and a
+	# flag's shadow cost a draw a mesh a cascade for a sliver (12 draws against 6).
+	STOPS:
+	{
+		"file": "stops.glb",
+		"noun": "stop furniture",
+		"module": "stops",
+		"absence": "A city that declares no `stops:` block ships none, and that is not a failure.",
+		"placements": "stops_placements.json",
+		"casts_shadow": true,
+		"shadow_meshes": ["tram_shelter"],
 	},
 	# The harbour (2026-09-25, the user's call): the basemap's sea, flat at sea
 	# level. `casts_shadow` false for the paint's reason — a plane at the bottom

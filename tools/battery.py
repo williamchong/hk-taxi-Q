@@ -332,6 +332,27 @@ TRIGGERS: dict[str, Trigger] = {
             Tool("paint_clearance.py", (*_GENERATED, "--layer", "stopmarks")),
         ),
     ),
+    "stops": Trigger(
+        "`pipeline/stops.py`, the `stops` config block, or where a stop's furniture stands",
+        (
+            Report(
+                "stops.json",
+                (
+                    "read",
+                    "merged",
+                    "stood",
+                    "refused",
+                    "posts_kept_as_surveyed",
+                    "shift_m",
+                    "facing_away",
+                    "placements",
+                    "library_triangles",
+                    "triangles",
+                    "bytes",
+                ),
+            ),
+        ),
+    ),
     "roadmarks": Trigger(
         "`pipeline/roadmarks.py`, the `road_marks` config block, or any stop / give-way",
         (

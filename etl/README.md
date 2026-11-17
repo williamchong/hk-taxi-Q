@@ -86,6 +86,7 @@ run calls the same entry point. In run order:
 | `tramway` | The tram rails as drawn geometry |
 | `arrows`, `boxjunctions`, `crossings`, `stopmarks`, `roadmarks` | Published road paint, each its own mesh |
 | `railings`, `signs`, `lamps`, `trees` | Published street furniture, each its own mesh or placement list |
+| `stops` | Authored flags and tram shelters at the stops the bundle already publishes |
 | `signals` | The signalled junctions and their stages |
 | `tramlines` | The tramway as lines a tram can run |
 | `busroutes` | The bus and green-minibus routes moving traffic keeps to |

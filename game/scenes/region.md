@@ -40,6 +40,9 @@ below.
 - `Signs` (`P3-16`): the published signs on the poles TD surveyed. `posts = true` (`Q191`): a
   cylinder up every `pole` placement, none under a face. Not in `prop_cells.tres`, so one body a
   region.
+- `Stops` (`P3-94`, `Q242`): the authored flags and tram shelters at published stops.
+  `posts = true`: a cylinder up every `pole` placement, none under a flag, and none under a
+  shelter — its feet are sunk so the lane beside the track stays open. Not in `prop_cells.tres`.
 - `Landmarks` (`landmarks.gd`, `P3-6`): the authored heroes from `landmarks.json`. Beside the
   tiles, not streamed: a hero is always resident.
 - `Fence` (`fence.gd`, `P3-29`): the barriers from `fence.json`. Not optional: `RoadGraph.fits_car`

@@ -3292,8 +3292,23 @@ share `twilight.tres`, a rose horizon; a shift never sees the 06:15 dawn.
 - Refused and counted: 44 `RM1049` filed twice; 22 features wholly past the drawn kerb (the stand
   boxes' 0.1–0.8 m returns, the one `RM1045` tram stop line on the reserve); point codes `1047
   (n*` / `(w*`, `1048`, `1149`.
-- Cost from the start line at 3 s: 119 draws against 116 with `--hide-layers=stopmarks`, `prims`
-  741,629 against 738,923. The handset's frame time is owed.
+- Stand signs (`P3-92`): `TS324` TAXI STAND 的士站 is drawn, white on green from the sheet's own
+  cell — 42 plates in Wan Chai, 3 in Causeway Bay, 18 poles double-sided (`back_to_back`). The
+  atlas is 768 x 256. Not drawn: `TS322` / `TS323` minibus stand and `TS3643` / `TS3649` taxi
+  pick-up plates — a cell bakes two colours and theirs carry three; `TS659` and `TS3649` are
+  blank on the sheet.
+- Furniture (`P3-93` to `P3-95`, `pipeline/stops.py`, `CITY_SCHEMA` 48): a flag on a pole at each
+  operator stop in `bus_routes.json` (Wan Chai 70 bus, 50 minibus; Causeway Bay 32, 15) and at
+  TD's taxi pick-up / drop-off points (14), a shelter on the track's left at each tram stop
+  (19, 5). Authored, since nothing publishes it: 0 of iB1000's open-sided blocks lie within 6 m of
+  a stop. 5,508 triangles and 12 KB a region's library.
+- Three calls taken without the user, each the user's to reverse: lettering and stand paint are back in
+  scope against `Q65`; a tram stop is a shelter with no island and no collider; a minibus flag
+  stands at every published stop, not only termini (the routes data carries them all). No look
+  sheet was shown — the sizes and liveries in `stops:` are first guesses.
+- Cost from the start line at 3 s (`P3-96`): `stopmarks` 3 draws, `stops` 6 (only the shelter
+  casts; 12 with every mesh casting). `prims` moves run to run by more than either layer. The
+  PCK and the handset's frame time are owed.
 - Off switch: delete the `stop_marks:` block.
 
 ## `Q243` — A thumb spins the wheel only once it is well down its side; until then the slide steers
