@@ -3176,7 +3176,13 @@ The showroom stand (`f_001`) is in HKCEC's shadow at the authored hour and in su
 
 Values only: `dawn.tres`, `dusk.tres` and the 06:15 and 18:00 `sun_colour` / `sky_light` in
 `day_to_night.tres`; no angle, `at` or energy moved. Not done: first light (05:30) and 19:00 still
-share `twilight.tres`; a shift never sees the 06:15 dawn.
+share `twilight.tres`, a rose horizon; a shift never sees the 06:15 dawn.
+
+- The 07:00 morning is cool too (2026-11-17, the user: "dawn is still yellow toned"):
+  `morning.tres`' horizon, ambient and fog and its keyframe's `sun_colour` / `sky_light`. The blue
+  held only at 06:15: the leg into a warm 07:00 left a frame's mean at R 67 / B 64 by 06:45 and
+  R 75 / B 62 at 07:00, the shift's opening hour; now R 56 / B 76 and R 60 / B 77. Strength again
+  the middle of three, not the user's pick.
 
 ## `Q236` — The phone's app draws the 3D scene at 0.75 of the window; a phone's browser does not
 

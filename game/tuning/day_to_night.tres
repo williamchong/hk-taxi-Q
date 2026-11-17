@@ -14,9 +14,9 @@
 script = ExtResource("1_v281m")
 environment = ExtResource("6_morn")
 sun_rotation_deg = Vector3(-16.6, 34.9, 0)
-sun_colour = Color(1, 0.8, 0.58, 1)
+sun_colour = Color(0.92, 0.95, 1, 1)
 sun_energy = 0.7
-sky_light = Color(1, 0.88, 0.76, 1)
+sky_light = Color(0.88, 0.94, 1, 1)
 
 [sub_resource type="Resource" id="Resource_noon"]
 script = ExtResource("1_v281m")

@@ -188,7 +188,7 @@ change. Closed questions are not listed here: see the headings in `DECISIONS.md`
 
 ### Picks owed by the user on built work
 
-- `Q154` spark colours and tiers · `Q196` ink weight · `Q235` dawn / dusk strength · `Q213`
+- `Q154` spark colours and tiers · `Q196` ink weight · `Q235` dawn / dusk / morning strength · `Q213`
   headlamp beam loudness · `Q229` whether RESET CAR costs anything · `Q208` a slang rank ladder ·
   `Q234` glazed or open upper tram leaves · `Q220` steering curve 2.0 against 1.5.
 - `Q237` leaves the signal heads untested against junction asphalt. `Q226` is unseen in a browser.

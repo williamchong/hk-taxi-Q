@@ -29,7 +29,7 @@ is the look at `day_at`, read off the scene. A rig nobody moves is resting and w
 
 | `at` | Look | Key light | `sky_light` | `night_lights` |
 |---|---|---|---|---|
-| 0.00 (07:00) | `morning.tres` | 16.6° up in the SSE, `(1, 0.8, 0.58)`, 0.70 | `(1, 0.88, 0.76)` | 0 |
+| 0.00 (07:00) | `morning.tres` | 16.6° up in the SSE, `(0.92, 0.95, 1)`, 0.70 | `(0.88, 0.94, 1)` | 0 |
 | 0.174 (09:26) | the rig scene, in no keyframe | 48° up in the SSE, `(1, 0.98, 0.95)`, 0.90 | white | 0 |
 | 0.36 (12:00) | `noon.tres` | 80° up, due south, `(1, 1, 0.98)`, 2.20 | white | 0 |
 | 0.57 (15:00) | `clean_daylight.tres` | 47.2° up in the WSW, the day's colour, 0.90 | white | 0 |
