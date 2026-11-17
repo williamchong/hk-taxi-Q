@@ -27,10 +27,18 @@ render_mode unshaded, blend_mix, depth_draw_never, depth_test_disabled, cull_dis
 		fog_disabled, shadows_disabled;
 
 uniform sampler2D depth_texture : hint_depth_texture, filter_nearest, repeat_disable;
+// ⚠️ The line is one ink colour since `Q248`'s amendment, so the frame is not
+// read: declaring a `hint_screen_texture` costs a full-frame colour copy
+// whether or not a branch reaches it. `SURFACE_INK` is `Q158`'s first line,
+// each edge in its nearer surface's own hue, and brings the copy back.
+//#define SURFACE_INK
+#ifdef SURFACE_INK
 uniform sampler2D screen_texture : hint_screen_texture, filter_nearest, repeat_disable;
+#endif
 
 group_uniforms ink;
 uniform vec3 ink_colour : source_color = vec3(0.08, 0.08, 0.1);
+#ifdef SURFACE_INK
 // How much of the line is the surface's own colour, darkened, rather than
 // `ink_colour`: 0 is flat ink, 1 is each building outlined in its own hue
 // (the user's ask, 2026-10-07). The colour is read from the NEARER side of
@@ -41,6 +49,7 @@ uniform float ink_from_surface : hint_range(0.0, 1.0) = 1.0;
 // stop down, about 15 `L*` darker on a mid-tone wall, hue kept. A sunlit face
 // above 1.0 in the HDR buffer gives a line brighter than the same face in shade.
 uniform float surface_darkness : hint_range(0.0, 1.0) = 0.5;
+#endif
 // 1.0 draws the ink opaque; under it the line is a darkening.
 uniform float ink_strength : hint_range(0.0, 1.0) = 1.0;
 // How far apart the samples sit. The line is about twice this wide, because
@@ -135,8 +144,8 @@ void fragment() {
 
 	float inv_centre = slope * centre + offset;
 	float laplacian = slope * (left + right + down + up - 4.0 * centre);
-	// The nearest of the five has the largest inverse depth, under either Z;
-	// its UV is where the surface colour is read.
+	// The nearest of the five has the largest inverse depth, under either Z:
+	// the line fades by its distance, and `SURFACE_INK` reads its colour.
 	float inv_nearest = inv_centre;
 	vec2 near_uv = SCREEN_UV;
 	keep_nearer(slope * left + offset, SCREEN_UV - vec2(step_uv.x, 0.0), inv_nearest, near_uv);
@@ -150,18 +159,18 @@ void fragment() {
 	float reach = mix(1.0, night_reach, night_lights);
 	edge *= 1.0 - smoothstep(fade_start_m * reach, fade_end_m * reach, nearest);
 
-	// Most of the frame is no edge: skip its colour fetch and its blend.
-	// `textureLod` because derivatives are undefined past a divergent branch.
+	// Most of the frame is no edge: skip its blend.
 	if (edge <= 0.0) {
 		discard;
 	}
+	vec3 ink = ink_colour;
+#ifdef SURFACE_INK
+	// `textureLod` because derivatives are undefined past a divergent branch.
 	vec3 surface = textureLod(screen_texture, near_uv, 0.0).rgb * surface_darkness;
+	ink = mix(ink_colour, surface, ink_from_surface);
+#endif
 	// Squared, so the line holds its ink through dusk and turns late: at the
 	// dusk keyframe's 0.25 it is a sixteenth of the way to the glow, not a quarter.
-	ALBEDO = mix(
-		mix(ink_colour, surface, ink_from_surface),
-		night_colour * night_glow,
-		night_lights * night_lights
-	);
+	ALBEDO = mix(ink, night_colour * night_glow, night_lights * night_lights);
 	ALPHA = edge * ink_strength * (1.0 - speed_fade * outline_speed);
 }

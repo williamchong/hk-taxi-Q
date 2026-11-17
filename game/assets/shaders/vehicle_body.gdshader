@@ -330,7 +330,7 @@ group_uniforms ink;
 const float INK_SPAN_M = 16.0;
 uniform float ink_width_m : hint_range(0.0, 0.1) = 0.02;
 uniform float ink_max_px : hint_range(0.0, 8.0) = 4.0;
-// The line is the surface's own colour scaled by this, as the city's is.
+// The line is the surface's own colour scaled by this; 0 is black.
 uniform float ink_darkness : hint_range(0.0, 1.0) = 0.35;
 // What the player's full speed takes off it: the same share `cel_outline.tres`
 // takes off the city's line, restated here because that is another material.

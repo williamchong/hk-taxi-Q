@@ -5,11 +5,11 @@ Rationale for `game/tuning/cel_outline.tres` (`Q119`).
 The ink line round the city (`P3-64`, `Q158`), drawn by `cel_outline.gdshader` on the `CelOutline`
 quad in both rig scenes. The shader's header says how it works and why it reads depth alone.
 
-- `ink_from_surface` 0.0: the line is `ink_colour`, near black, the user's pick on 2026-11-18 from a
-  sheet of seven so the city sits in the vehicles' comic line (`Q248`). It also draws the black
-  line round every vehicle, which is why they carry no outline pass of their own. Before it, 1.0
-  with `surface_darkness` 0.5 (each edge its nearer surface's colour, halved in linear light);
-  `surface_darkness` is a no-op at 0.
+- `ink_colour` near black: the user's pick on 2026-11-18 from a sheet of seven so the city sits in
+  the vehicles' comic line (`Q248`). It also draws the black line round every vehicle, which is why
+  they carry no outline pass of their own. Before it, each edge was its nearer surface's colour,
+  halved in linear light: `ink_from_surface` 1.0 and `surface_darkness` 0.5, which exist only under
+  the shader's `SURFACE_INK` define because reading the frame costs a full-frame colour copy.
 - `ink_strength` 1.0: the hue already softens the line.
 - `line_width_px` 1.5 at rest (the shader's default is 1.0). The drawn line is about twice the
   sample step. 2.5 was on the same sheet and
@@ -33,6 +33,6 @@ Thin things ink solid: a pole narrower than about two line widths is outlined fr
 `edge_*` value changes that.
 
 Cost on the desktop: +1 draw call, +2 primitives. Owed to the `P3-9` handset round: the pass break.
-A depth-texture reader makes the Mobile renderer resolve the 4x MSAA depth mid-frame, and
-`hint_screen_texture` is a second full-frame copy. The retreats are `ink_from_surface` 0 or the
-quad's `visible` off.
+A depth-texture reader makes the Mobile renderer resolve the 4x MSAA depth mid-frame. The colour
+copy went with the own-hue ink (`SURFACE_INK` off). The retreat is the quad's `visible` off, and
+the vehicles then want `vehicle_outline.gdshader` back (`vehicle_body.md`).
