@@ -47,6 +47,7 @@ from make_vehicle import (
     CIRCUIT_REVERSE,
     CIRCUIT_ROOFSIGN,
     CIRCUIT_SIDELAMP,
+    CLEAR,
     DARK,
     DEEP_RED,
     FIXTURE_PROUD_M,
@@ -98,7 +99,7 @@ SHIPPED = ROOT / "game" / "assets" / "authored" / "vehicles"
 # `ART_DESIGN.md`'s ceiling for one vehicle is 2,000; the player's car has 2,200
 # since `Q202`, for the 174 its lettering and boot seam cost at a 6 m camera.
 TRIANGLE_CEILING = 2200
-PALETTE = (RED, SILVER, DARK, GLASS, LAMP, AMBER, BADGE_GREEN, DEEP_RED, GLINT)
+PALETTE = (RED, SILVER, DARK, GLASS, LAMP, AMBER, BADGE_GREEN, DEEP_RED, GLINT, CLEAR)
 # How far off the roof line counts as clear of it. Smaller than anything the
 # generator builds and larger than the loft's own float error.
 ROOF_EPS_M = 1e-4
@@ -1283,8 +1284,8 @@ class TestLampCircuits:
         the other white lens lives — would light the back of the car when the
         light drops. Both circuits span the centreline, because neither is split
         left from right: a one-sided white lamp is a blown bulb, not a signal."""
-        for circuit in (CIRCUIT_SIDELAMP, CIRCUIT_HEADLAMP):
-            self._assert_cluster(meshes[0], circuit, {LAMP}, front=True)
+        for circuit, lens in ((CIRCUIT_SIDELAMP, LAMP), (CIRCUIT_HEADLAMP, CLEAR)):
+            self._assert_cluster(meshes[0], circuit, {lens}, front=True)
 
     def test_the_roof_sign_is_the_only_thing_lit_above_the_roof(
         self, meshes: list[MeshData]

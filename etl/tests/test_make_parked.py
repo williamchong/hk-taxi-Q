@@ -183,6 +183,8 @@ class TestTheBudget:
             ceiling = 10 if mesh.name in ("taxi_nt", "taxi_lantau") else 8
             # The sky's streak in a window is one more.
             ceiling += mesh.name in GLINTED | TAXIS
+            # The taxi's head lamps are clear glass, not the lamp cream (`Q245`).
+            ceiling += mesh.name in TAXIS
             assert 3 <= len(colours) <= ceiling, f"{mesh.name} carries {len(colours)} colours"
 
     def test_every_part_goes_through_the_material_door(self, meshes: list[MeshData]) -> None:

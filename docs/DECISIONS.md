@@ -3369,4 +3369,5 @@ share `twilight.tres`, a rose horizon; a shift never sees the 06:15 dawn.
 - `boot_seam_x_m` 0.46 is its own dial: the seam was read off the lamps' inner edge and would have followed them in.
 - Refused: the boot lid's share of each cluster as separate lenses. 2,226 triangles against the 2,200 ceiling; one lens a side is 2,154 (was 2,130).
 - Not seen: the Tiny City 1:64 `Q190` was built from. If it carries the corner cluster, the old pair of values is the way back.
-- The roster taxi follows (`Q200`): `parked.glb` rebuilt.
+- The roster taxi follows (`Q200`): `parked.glb` rebuilt. Roster 11,650 → 11,722 triangles and the throttle route 727,638 → 728,814 primitives at 1 s, both measured before the picks below, which add 24 triangles a taxi.
+- The user's picks from a sheet of four (2026-11-18): the head lamp lens is `CLEAR`, a tenth colour, so the lit lamp burns white; the reversing lens is the inboard `reverse_lamp_width_m` 0.16 of the cluster's foot and the rest of that band is brake lens (2,178 triangles). Not taken: brighter hubs, a chrome strip under the clusters.

@@ -122,6 +122,10 @@ GLINT_FOOT = (0.55, 0.72)
 GLINT_LEAN = 0.3
 GLINT_PROUD_M = 0.006
 LAMP = (242, 236, 205)
+# ⚠️ A tenth, and the head lamps' alone: clear glass over a reflector, where
+# `LAMP`'s cream read as a painted block beside the chrome (`Q245`). The lit
+# lens takes its hue from here, so the lamp burns white and not warm.
+CLEAR = (222, 228, 230)
 # ⚠️ A sixth colour, where `ART_DESIGN.md` says 3-5 per vehicle. It buys the
 # indicator in the tail-lamp cluster, which is three lenses stacked — amber
 # over white over red — and that stack is a specific identifying feature of the
@@ -271,6 +275,8 @@ LAMP_CIRCUITS: dict[str, float] = {
     "taillamp_l_brake": CIRCUIT_BRAKE,
     "taillamp_r_brake": CIRCUIT_BRAKE,
     "taillamp_high_brake": CIRCUIT_BRAKE,
+    "taillamp_l_brake_low": CIRCUIT_BRAKE,
+    "taillamp_r_brake_low": CIRCUIT_BRAKE,
     "sign": CIRCUIT_ROOFSIGN,
     # The die-cast pass: each corner lens wraps onto the flank, and a repeater
     # sits on each front wing. They flash and burn with the lens they extend.
@@ -595,6 +601,9 @@ class Proportions:
     # plate in a chrome frame (`Q245`).
     tail_lamp_half_width_m: float = 0.22
     tail_lamp_x_m: float = 0.44
+    # The white reversing lens is the inboard end of the cluster's foot; the
+    # rest of that band is brake lens. Across the whole cluster it lit as a bar.
+    reverse_lamp_width_m: float = 0.16
     garnish_m: float = 0.05
     # Door mirrors on a stalk at the front of the front door's window.
     mirror_reach_m: float = 0.09
@@ -1297,7 +1306,7 @@ def _front_end(shape: Proportions) -> list[MeshData]:
                 shape,
                 centre=(side * shape.headlamp_x_m, hy),
                 half=(shape.headlamp_half_width_m, hh),
-                colour=LAMP,
+                colour=CLEAR,
                 rear=False,
                 name=f"headlamp_{tag}",
                 extra_m=0.006,
@@ -1373,16 +1382,21 @@ def _rear_end(shape: Proportions) -> list[MeshData]:
     lx, lw = shape.tail_lamp_x_m, shape.tail_lamp_half_width_m
     for tag, side in (("l", -1.0), ("r", 1.0)):
         for y0, y1, colour, circuit in lenses:
-            parts.append(
-                _flush_fixture(
-                    shape,
-                    centre=(side * lx, (y0 + y1) / 2.0),
-                    half=(lw, (y1 - y0) / 2.0),
-                    colour=colour,
-                    rear=True,
-                    name=f"taillamp_{tag}_{circuit}",
+            spans = [(lx - lw, lx + lw, colour, circuit)]
+            if circuit == "reverse":
+                split = lx - lw + shape.reverse_lamp_width_m
+                spans = [(lx - lw, split, colour, circuit), (split, lx + lw, RED, "brake_low")]
+            for xa, xb, lens, wired in spans:
+                parts.append(
+                    _flush_fixture(
+                        shape,
+                        centre=(side * (xa + xb) / 2.0, (y0 + y1) / 2.0),
+                        half=((xb - xa) / 2.0, (y1 - y0) / 2.0),
+                        colour=lens,
+                        rear=True,
+                        name=f"taillamp_{tag}_{wired}",
+                    )
                 )
-            )
     parts.append(
         _flush_fixture(
             shape,
