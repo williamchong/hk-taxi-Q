@@ -100,7 +100,7 @@ Phase 3 — `B2` and the road
 - `P3-85` 🟡 Roster at die-cast detail — owed: the box lorry's share of moving traffic (parked only).
 - `P3-87` 🟡 Pressed panels. `P3-88` 🟡 Tram doors and lamps.
 - `P3-93` 🟡 Stop furniture: flags and tram shelters (`Q242`) — owed: the user's look, no look
-  sheet was shown. `P3-96` 🟡 cost: draws measured, PCK and handset owed.
+  sheet was shown. `P3-96` 🟡 cost: 9 draws, 2.30 MB of PCK, desktop frame time unmoved; the handset is owed.
 - `P3-92` 🟡 `TS324` taxi stand signs; minibus and pick-up plates not drawn (`Q242`).
 - `P3-89` 🟡 Stop and stand paint, `P3-91` 🟡 its legends (`Q242`) — owed: the user's look, the
   handset.

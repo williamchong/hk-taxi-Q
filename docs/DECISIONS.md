@@ -3308,7 +3308,10 @@ share `twilight.tres`, a rose horizon; a shift never sees the 06:15 dawn.
   sheet was shown — the sizes and liveries in `stops:` are first guesses.
 - Cost from the start line at 3 s (`P3-96`): `stopmarks` 3 draws, `stops` 6 (only the shelter
   casts; 12 with every mesh casting). `prims` moves run to run by more than either layer. The
-  PCK and the handset's frame time are owed.
+  Both layers, both regions: 2.30 MB of a 101.1 MB PCK (`Web Demo` preset, 101,148,268 against
+  98,849,920 B). Desktop frame time over 17 s from the start line, three runs a side: p95 11.7 to
+  12.0 ms with the layers and 11.6 to 11.9 without — inside the noise. The handset's is owed.
+  Look sheet: `asset_viewer.tscn --asset=…/wan_chai/stops.glb --lineup=2.5`.
 - Off switch: delete the `stop_marks:` block.
 
 ## `Q243` — A thumb spins the wheel only once it is well down its side; until then the slide steers
