@@ -41,8 +41,8 @@ class TramShelter:
 
     `offset_m` is from the track's centreline to the shelter's, on the left of
     travel — the side a tram's doors open on. It must clear `trams.tres`'
-    body, and the shelter carries no collider: the game draws no island for it
-    to stand on, so traffic passes where it stands (`Q242`).
+    body. The two posts are solid and the roof is not (`Q242`, the user's
+    call): the game draws no island, so a post can stand in a lane.
     """
 
     offset_m: float

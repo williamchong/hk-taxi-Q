@@ -3302,14 +3302,14 @@ share `twilight.tres`, a rose horizon; a shift never sees the 06:15 dawn.
   carry three colours and could not be baked: wrong for the minibus pair, which carry two.
   Not drawn: `TS659` and `TS3649`, blank on the sheet.
 - Furniture (`P3-93` to `P3-95`, `pipeline/stops.py`, `CITY_SCHEMA` 48): a flag on a pole at each
-  operator stop in `bus_routes.json` (Wan Chai 70 bus, 50 minibus; Causeway Bay 32, 15) and at
-  TD's taxi pick-up / drop-off points (14), a shelter on the track's left at each tram stop
-  (19, 5). Authored, since nothing publishes it: 0 of iB1000's open-sided blocks lie within 6 m of
-  a stop. 5,508 triangles and 12 KB a region's library.
-- Three calls taken without the user, each the user's to reverse: lettering and stand paint are back in
-  scope against `Q65`; a tram stop is a shelter with no island and no collider; a minibus flag
-  stands at every published stop, not only termini (the routes data carries them all). No look
-  sheet was shown — the sizes and liveries in `stops:` are first guesses.
+  operator stop in `bus_routes.json` (Wan Chai 70 bus, 50 minibus; Causeway Bay 32, 15), a
+  shelter on the track's left at each tram stop (19, 5). Authored, since nothing publishes it: 0
+  of iB1000's open-sided blocks lie within 6 m of a stop. 5,004 triangles a region's library.
+- The user's picks, 2026-11-18: the flags stay at the first sizes (shown small, as built and
+  large); no taxi-point flag, since TD's `TS3643` and the lettering mark the point; a shelter's
+  two posts are solid and its roof is not, with no island. Two calls stand that he was not
+  asked: lettering and stand paint are back in scope against `Q65`, and a minibus flag stands at
+  every published stop, not only termini (the routes data carries them all).
 - Cost from the start line at 3 s (`P3-96`): `stopmarks` 3 draws, `stops` 6 (only the shelter
   casts; 12 with every mesh casting). `prims` moves run to run by more than either layer. The
   Both layers, both regions: 2.30 MB of a 101.1 MB PCK (`Web Demo` preset, 101,148,268 against

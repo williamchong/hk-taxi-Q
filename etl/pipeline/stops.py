@@ -14,11 +14,11 @@ draws the paint TD surveyed; this stands what nothing publishes.
   out to `outset_m` past it, never pulled in, refused past `max_shift_m` or
   where it would still stand on the asphalt.
 - **A shelter stands on the left of its track**, the side a tram's doors open
-  on, and carries no collider: the game draws no island under it, so the lane
-  beside the track runs where it stands.
+  on. Its roof hangs and its two posts are their own mesh, so the engine stands
+  a collider under each post and none under the roof (the user's call).
 - The library is `signs.glb`'s shape (`placements.Library`): a mesh a kind, a
   unit `pole` scaled to its height. `region.tscn` stands a collider on every
-  `pole` and on nothing else.
+  `pole` and every shelter post, the two meshes drawn standing on their origin.
 """
 
 from __future__ import annotations
@@ -69,10 +69,9 @@ STOPS_MANIFEST_SCHEMA = 1
 # the one `region.tscn`'s `posts` stands a collider on (`Q191`).
 POLE_MESH_NAME = "pole"
 TRAM_MESH_NAME = "tram_shelter"
-# How far a shelter's posts run into the ground. `PropBatch.post_of` stands a
-# collider under any library mesh whose foot is at its origin, and a shelter is
-# to have none: its feet are below it.
-_SHELTER_SUNK_M = 0.1
+# A shelter's post, its own mesh so the engine stands a collider under each
+# (`PropBatch.post_of`, the user's call 2026-11-18); the roof hangs and takes none.
+TRAM_POST_MESH_NAME = "tram_post"
 
 # Which of `bus_routes.json`'s route kinds stops at which flag.
 _ROUTE_KIND = {"bus": BUS, "minibus": MINIBUS}
@@ -126,7 +125,8 @@ class StopReport:
 
 def pole_points(routes: dict[str, Any], fares: dict[str, Any]) -> dict[str, list[np.ndarray]]:
     """Every published point a flag stands at, by kind, in a stable order: each
-    operator stop once however many routes call there, then TD's taxi points."""
+    operator stop once however many routes call there, then TD's taxi points
+    (read for a city that declares a `taxi_point` flag; Hong Kong's does not)."""
     stops: dict[str, dict[str, np.ndarray]] = {BUS: {}, MINIBUS: {}}
     for route in routes.get("routes", []):
         kind = _ROUTE_KIND.get(str(route["kind"]))
@@ -235,12 +235,17 @@ def _box(builder: ColouredBuilder, low: np.ndarray, high: np.ndarray, colour: Rg
             builder.polygon(face, normal, colour)
 
 
-def pole_mesh(spec: Stops, colours: dict[str, Rgb]) -> MeshData:
-    """A unit post on the origin: a stand scales it to its flag's height."""
+def _post_mesh(name: str, half_m: float, top_m: float, colour: Rgb) -> MeshData:
+    """A square post standing on its origin, which is what the engine stands a
+    collider under (`PropBatch.post_of`)."""
     builder = ColouredBuilder(SIGNS_MATERIAL)
-    r = spec.pole_radius_m
-    _box(builder, np.array([-r, 0.0, -r]), np.array([r, 1.0, r]), colours[spec.pole])
-    return _built(builder, POLE_MESH_NAME)
+    _box(builder, np.array([-half_m, 0.0, -half_m]), np.array([half_m, top_m, half_m]), colour)
+    return _built(builder, name)
+
+
+def pole_mesh(spec: Stops, colours: dict[str, Rgb]) -> MeshData:
+    """A unit post: a stand scales it to its flag's height."""
+    return _post_mesh(POLE_MESH_NAME, spec.pole_radius_m, 1.0, colours[spec.pole])
 
 
 def flag_mesh(spec: Stops, kind: str, flag: StopFlag, colours: dict[str, Rgb]) -> MeshData:
@@ -265,26 +270,43 @@ def flag_mesh(spec: Stops, kind: str, flag: StopFlag, colours: dict[str, Rgb]) -
     return _built(builder, kind)
 
 
-def shelter_mesh(spec: Stops, shelter: TramShelter, colours: dict[str, Rgb]) -> MeshData:
-    """A roof on two posts, its length along the library's north: a stand turns
-    it to the track's heading."""
+def shelter_mesh(shelter: TramShelter, colours: dict[str, Rgb]) -> MeshData:
+    """The roof, hung at its height, its length along the library's north: a
+    stand turns it to the track's heading."""
     builder = ColouredBuilder(SIGNS_MATERIAL)
-    r, half_l, half_w = spec.pole_radius_m * 1.5, 0.5 * shelter.length_m, 0.5 * shelter.width_m
-    under = shelter.height_m - shelter.roof_m
-    for z in (-half_l + 4.0 * r, half_l - 4.0 * r):
-        _box(
-            builder,
-            np.array([-r, -_SHELTER_SUNK_M, z - r]),
-            np.array([r, under, z + r]),
-            colours[shelter.colour],
-        )
+    half_l, half_w = 0.5 * shelter.length_m, 0.5 * shelter.width_m
     _box(
         builder,
-        np.array([-half_w, under, -half_l]),
+        np.array([-half_w, shelter.height_m - shelter.roof_m, -half_l]),
         np.array([half_w, shelter.height_m, half_l]),
         colours[shelter.roof],
     )
     return _built(builder, TRAM_MESH_NAME)
+
+
+def _shelter_post_m(spec: Stops) -> float:
+    """Half a shelter post's width: half as thick again as a flag's pole."""
+    return 1.5 * spec.pole_radius_m
+
+
+def shelter_post_mesh(spec: Stops, shelter: TramShelter, colours: dict[str, Rgb]) -> MeshData:
+    """One post, up to the roof's underside."""
+    return _post_mesh(
+        TRAM_POST_MESH_NAME,
+        _shelter_post_m(spec),
+        shelter.height_m - shelter.roof_m,
+        colours[shelter.colour],
+    )
+
+
+def shelter_posts(
+    spec: Stops, shelter: TramShelter, foot: np.ndarray, heading: float
+) -> list[np.ndarray]:
+    """The two posts' feet, `(x, y, z)`: under the roof's ends, along the track."""
+    along, _ = frame(heading)
+    reach = 0.5 * shelter.length_m - 4.0 * _shelter_post_m(spec)
+    step = np.array([along[0], 0.0, along[1]]) * reach
+    return [foot - step, foot + step]
 
 
 def _built(builder: ColouredBuilder, name: str) -> MeshData:
@@ -363,8 +385,11 @@ def build_region(city: Config, region_id: str, *, out_root: Path | None = None) 
         )
         for foot, heading in tram_stands(tracks, spec.tram, report):
             if TRAM_MESH_NAME not in meshes:
-                meshes[TRAM_MESH_NAME] = shelter_mesh(spec, spec.tram, colours)
+                meshes[TRAM_MESH_NAME] = shelter_mesh(spec.tram, colours)
+                meshes[TRAM_POST_MESH_NAME] = shelter_post_mesh(spec, spec.tram, colours)
             stands.append(placement(TRAM_MESH_NAME, foot, heading))
+            for post in shelter_posts(spec, spec.tram, foot, heading):
+                stands.append(placement(TRAM_POST_MESH_NAME, post, heading))
             report.stood[TRAM_MESH_NAME] = report.stood.get(TRAM_MESH_NAME, 0) + 1
 
     library = stand_library([meshes[name] for name in sorted(meshes)], stands)
@@ -373,8 +398,9 @@ def build_region(city: Config, region_id: str, *, out_root: Path | None = None) 
         library.publish(report)
         poles = sum(report.stood.get(kind, 0) for kind in POLE_KINDS)
         library.require_every_stand(
-            2 * poles + report.stood.get(TRAM_MESH_NAME, 0),
-            f"{poles} flags on their poles and {report.stood.get(TRAM_MESH_NAME, 0)} shelters",
+            2 * poles + 3 * report.stood.get(TRAM_MESH_NAME, 0),
+            f"{poles} flags on their poles and {report.stood.get(TRAM_MESH_NAME, 0)} shelters "
+            f"on two posts each",
         )
         report.bytes = library.write(out_dir, STOPS_NAME, STOPS_PLACEMENTS_NAME, city.id, region_id)
 

@@ -21,6 +21,8 @@ from pipeline.stops import (
     pole_mesh,
     pole_points,
     shelter_mesh,
+    shelter_post_mesh,
+    shelter_posts,
     tram_stands,
 )
 from tests.helpers import CITY_YAML
@@ -145,12 +147,22 @@ class TestTheShelter:
         assert report.refused == {TRAM_MESH_NAME: {"no_track": 1}}
 
     def test_its_length_runs_along_the_track(self, spec):
-        mesh = shelter_mesh(spec, spec.tram, COLOURS)
+        mesh = shelter_mesh(spec.tram, COLOURS)
         stood = placed_positions(mesh.positions, [0.0, 0.0, 0.0], 90.0)
         extent = stood.max(axis=0) - stood.min(axis=0)
-        assert extent == pytest.approx([8.0, 2.8, 1.4])
-        # Its feet are sunk, so the engine stands no post collider under it.
-        assert stood[:, 1].min() < 0.0
+        assert extent == pytest.approx([8.0, 0.12, 1.4])
+        # The roof hangs, so the engine stands no post collider under it.
+        assert stood[:, 1].min() == pytest.approx(2.58)
+
+    def test_its_two_posts_stand_under_the_roofs_ends_along_the_track(self, spec):
+        low, high = shelter_post_mesh(spec, spec.tram, COLOURS).aabb()
+        # Standing on its origin: the engine's post collider needs the foot at 0.
+        assert (low[1], high[1]) == pytest.approx((0.0, 2.58))
+        feet = shelter_posts(spec, spec.tram, np.array([10.0, 4.0, 20.0]), 90.0)
+        assert [tuple(foot) for foot in feet] == [
+            pytest.approx((6.24, 4.0, 20.0)),
+            pytest.approx((13.76, 4.0, 20.0)),
+        ]
 
 
 class TestTheLibrary:
@@ -158,11 +170,12 @@ class TestTheLibrary:
         meshes = [
             pole_mesh(spec, COLOURS),
             flag_mesh(spec, BUS, spec.flags[BUS], COLOURS),
-            shelter_mesh(spec, spec.tram, COLOURS),
+            shelter_mesh(spec.tram, COLOURS),
+            shelter_post_mesh(spec, spec.tram, COLOURS),
         ]
-        assert [facing_away(mesh) for mesh in meshes] == [0, 0, 0]
-        # Six faces a box: a pole is one, a flag two, a shelter three.
-        assert [mesh.triangle_count for mesh in meshes] == [12, 24, 36]
+        assert [facing_away(mesh) for mesh in meshes] == [0, 0, 0, 0]
+        # Six faces a box: a flag is two, the rest one each.
+        assert [mesh.triangle_count for mesh in meshes] == [12, 24, 12, 12]
 
     def test_the_pole_is_a_unit_a_stand_scales(self, spec):
         mesh = pole_mesh(spec, COLOURS)

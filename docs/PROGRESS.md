@@ -101,8 +101,8 @@ Phase 3 — `B2` and the road
 - `P3-84` 🟡 Detail lines on vehicles — owed: the weight pick (1.2 / 2 / 3 cm), a night frame.
 - `P3-85` 🟡 Roster at die-cast detail — owed: the box lorry's share of moving traffic (parked only).
 - `P3-87` 🟡 Pressed panels. `P3-88` 🟡 Tram doors and lamps.
-- `P3-93` 🟡 Stop furniture: flags and tram shelters (`Q242`) — owed: the user's look, no look
-  sheet was shown. `P3-96` 🟡 cost: 9 draws, 2.30 MB of PCK, desktop frame time unmoved, the iPhone Air at its 120 fps cap with and without.
+- `P3-93` 🟡 Stop furniture: flags at bus and minibus stops, tram shelters on solid posts
+  (`Q242`; sizes the user's pick) — owed: his drive into a pole and a shelter post. `P3-96` 🟡 cost: 9 draws, 2.30 MB of PCK, desktop frame time unmoved, the iPhone Air at its 120 fps cap with and without.
 - `P3-92` 🟡 Stand signs: `TS324` taxi stand, `TS322` / `TS323` minibus stand, `TS3643` pick-up
   (`Q242`) — owed: the user's look.
 - `P3-89` 🟡 Stop and stand paint, `P3-91` 🟡 its legends (`Q242`) — owed: the user's look, the

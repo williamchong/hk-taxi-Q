@@ -3100,7 +3100,8 @@ stops:
   flags:
     bus_stop:     {width_m: 0.50, height_m: 0.80, mount_m: 2.50, colour: red, band: white}
     minibus_stop: {width_m: 0.45, height_m: 0.60, mount_m: 2.40, colour: green, band: white}
-    taxi_point:   {width_m: 0.45, height_m: 0.45, mount_m: 2.30, colour: white, band: red}
+    # No `taxi_point` flag (the user's call, 2026-11-18): TD's own PICK UP &
+    # DROP OFF plate (`TS3643`) and the road lettering mark a taxi point.
   tram:
     # From the track's centreline to the shelter's, on the left of travel. A
     # tram is 1.98 m wide, so 1.9 m leaves the roof 0.2 m off its side.

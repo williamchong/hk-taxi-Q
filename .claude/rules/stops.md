@@ -19,7 +19,8 @@ and `signs.py` TD's own `TS324` taxi stand plate.
 - **Where is the bundle's, never a source's**: `bus_routes.json`'s stop points (once a `stop_id`),
   `fares.json`'s `pudo` nodes, `tram_lines.json`'s stops (once an id, on the first track). A
   change to `busroutes`, `fares` or `tramlines` moves this layer; the stage runs after all three.
-- **A taxi STAND takes no flag**: TD's `TS324` stands there. Do not add one beside it.
+- **No taxi flag** (the user's call, 2026-11-18): TD's `TS324` marks a stand and `TS3643` and
+  the lettering a pick-up point. `taxi_point` is still a kind the block may declare.
 - **What is authored**: every size, and the liveries by broad colour only — no operator's logo or
   wording. Colours are NAMES in `signs.colours`
   (`test_no_colour_escapes_the_materials_table`); a hex in the block fails that test.
@@ -27,9 +28,10 @@ and `signs.py` TD's own `TS324` taxi stand plate.
   it would still stand on the asphalt (`drawnroad.drawn_carriageway`, `Q237`). A widening moves
   every pole.
 - **Colliders** (`Q191`): `region.tscn`'s `posts` stands a cylinder under every library mesh whose
-  foot is at its origin. `pole` is the only one: a flag hangs, and the shelter's feet are sunk
-  `_SHELTER_SUNK_M` on purpose — the game draws no island, so the lane beside the track runs where
-  the shelter stands. `verify_stops.gd` fails a shelter that gains a post.
+  foot is at its origin: `pole` and `tram_post` (the user's call, 2026-11-18). A flag hangs, and
+  the shelter's roof (`tram_shelter`) hangs too — standing on its origin it would take a cylinder
+  its whole footprint. `verify_stops.gd` fails a roof that gains a post or a post that loses one.
+  The game draws no island, so a shelter post can stand in the lane beside the track.
 - **The shelter stands on the track's left**, `offset_m` from its centreline; a tram is 1.98 m
   wide. Moving `trams.tres`' body or `tramway.lines` owes a frame of a tram at a stop.
 - The material is the signs' (`SIGNS_MATERIAL`, `signs.tres`); `STOPS_MATERIAL` in

@@ -1,8 +1,8 @@
 extends SceneTree
 ## Checks `stops.glb` — the authored flags and shelters at published stops
 ## (`P3-94`, `Q242`) — as the engine loads it: a library on the signs' material,
-## stood by `stops_placements.json`, with a collider under each pole and under
-## nothing else.
+## stood by `stops_placements.json`, with a collider under each pole and each
+## shelter post, and none under a flag or a shelter's roof.
 ##
 ## Run through `tools/check.sh`; its exit code is the result.
 
@@ -18,9 +18,10 @@ const SURFACES_PER_MESH: int = 1
 ## `SHADERS` in `generated_scene_import.gd` maps it.
 const STOPS_MATERIAL: String = "res://tuning/signs.tres"
 
-## The shelter is the one mesh that must NOT stand on a post: traffic passes
-## where it stands. `stops.py` sinks its feet so `PropBatch.post_of` reads none.
+## The shelter's roof must NOT stand on a post — a cylinder its whole footprint,
+## across the lane beside the track. Its two posts are their own mesh and must.
 const UNPOSTED: String = "tram_shelter"
+const POSTED: String = "tram_post"
 
 const PropBatch = preload("res://scripts/city/prop_batch.gd")
 
@@ -51,6 +52,10 @@ func _check(scene_root: Node3D) -> PackedStringArray:
 				% UNPOSTED
 			)
 		)
+	if library.has(UNPOSTED) != library.has(POSTED):
+		problems.append("'%s' and '%s' ship together or not at all" % [UNPOSTED, POSTED])
+	if library.has(POSTED) and not PropBatch.post_of(library[POSTED]).has_volume():
+		problems.append("'%s' stands on no post, so a shelter is driven through" % POSTED)
 	problems.append_array(
 		GeneratedPlacements.check_join(
 			GeneratedLayer.placements_path(GeneratedLayer.STOPS),
