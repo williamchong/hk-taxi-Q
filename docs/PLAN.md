@@ -239,7 +239,7 @@ Built, something owed (🟡). Each is checked by its verify tool; the row names 
 | `P3-87` | Pressed panels on the vehicles (`Q232`) | The user's pick of the dials |
 | `P3-88` | The tram's doors and lamps (`Q234`) | A moving tram seen from the taxi |
 | `P3-89` | Stop and stand paint — `pipeline/stopmarks.py`: `RM1048` / `RM1049` boxes, `RM1045` (`Q242`) | The user's look and drive; the handset's frame time |
-| `P3-100` | The far shore — `pipeline/backdrop.py`: Kowloon's skyline from iB1000 roof levels as one capped silhouette mesh, its shore and the sea run on to it, drawn past the 400 m far plane by a depth squeeze (`Q249`) | The user's pick of the density; a night look; the handset and the web build; the PCK |
+| `P3-100` | The far shore — `pipeline/backdrop.py`: Kowloon's skyline from iB1000 roof levels as one capped silhouette mesh, its shore and the sea run on to it, drawn past the 400 m far plane by a depth squeeze (`Q249`) | The user's pick of the density and his call on the unlit night skyline; the handset; the web build in a browser |
 | `P3-99` | Glossy, inked vehicles — crowned panels, the painted sky on paint, black detail lines, and the city's screen line black round everything (`Q248`) | The handset's frame time; the web build |
 | `P3-98` | Roadside planters — `pipeline/planters.py`: HyD's planter walls at kerb height, a clumped shrub bed where a ring closes, the walls a collider (`Q247`; the look the user's pick of three) | The user's drive into one; the PCK and the draw |
 | `P3-93` | Stop furniture — `pipeline/stops.py`: a flag at each bus and minibus stop, a shelter on two solid posts at each tram stop (`P3-94`, `P3-95`; `Q242`; sizes the user's pick) | The user's drive into a pole and a shelter post; a tram drawn at a shelter |
