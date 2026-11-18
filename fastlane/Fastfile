@@ -3,7 +3,9 @@
 # either a .json file (key_id, issuer_id, key) named by
 # APP_STORE_CONNECT_API_KEY_PATH, or the .p8 Apple hands out, named by
 # APP_STORE_CONNECT_API_KEY_KEY_FILEPATH with APP_STORE_CONNECT_API_KEY_KEY_ID
-# and APP_STORE_CONNECT_API_KEY_ISSUER_ID. Either stays out of git.
+# and APP_STORE_CONNECT_API_KEY_ISSUER_ID. Either stays out of git; the
+# variables can live in fastlane/.env, which fastlane loads on start and git
+# ignores.
 #
 # App Store Connect takes the review notes only with a contact beside them,
 # and a name and a phone number do not belong in a public repository: the

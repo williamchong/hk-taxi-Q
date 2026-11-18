@@ -46,3 +46,4 @@ fastlane/report.xml
 fastlane/README.md
 fastlane/screenshots/
 *.p8
+fastlane/.env*
