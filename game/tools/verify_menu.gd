@@ -514,6 +514,8 @@ func _check_groups() -> void:
 	)
 	desk.queue_free()
 
+	# The response is a slid wheel's (`Q251`): CONTROLS offers it under SLIDE.
+	SettingsScript.set_wheel("slide")
 	var phone: StartMenuScript = await _menu_for(true, true, false)
 	_expect(
 		phone._shown_groups == [pages.SOUND, pages.CONTROLS, pages.DISPLAY, pages.LANGUAGE],
@@ -564,6 +566,17 @@ func _check_groups() -> void:
 		"groups",
 		"the rebuilt pages mark the picks"
 	)
+	# Tapping SPIN takes the response away, and SLIDE brings it back.
+	(controls.get_node("Wheels/Spin/Button") as Button).pressed.emit()
+	await process_frame
+	var spun_hides: bool = phone._pages[pages.CONTROLS].get_node_or_null("Steerings") == null
+	(phone._pages[pages.CONTROLS].get_node("Wheels/Slide/Button") as Button).pressed.emit()
+	await process_frame
+	_expect(
+		spun_hides and phone._pages[pages.CONTROLS].get_node_or_null("Steerings") != null,
+		"groups",
+		"SPIN hides STEERING RESPONSE, and SLIDE shows it again"
+	)
 	phone.queue_free()
 
 	var held: StartMenuScript = await _menu_for(true, true, true)
@@ -583,6 +596,7 @@ func _check_groups() -> void:
 		"groups",
 		"its CONTROLS has no sides, its DISPLAY no hour, and it built no LANGUAGE"
 	)
+	SettingsScript.set_wheel("")
 	_expect(
 		held._pages[pages.PAUSE].get_node_or_null("Options/Button") != null,
 		"groups",

@@ -554,20 +554,23 @@ func _display(column: VBoxContainer) -> void:
 
 ## The thumbs (`Q223`): how sharply the steering one answers, whether their
 ## controls follow them or stand still (`Q239`), and — on the boot menu alone,
-## since it is a new HUD — which side the steering one is on.
+## since it is a new HUD — which side the steering one is on. The response is
+## a slid wheel's alone: a spun one has its own `spin_curve` under any pick
+## (`Q251`), so it is not offered while SPIN is picked.
 func _controls(column: VBoxContainer) -> void:
-	var steerings: Array = []
-	for steering: String in ControlOptions.STEERINGS:
-		steerings.append(
-			[steering.capitalize(), "steering_" + steering, _pick_steering.bind(steering)]
+	if ControlOptions.wheel() == ControlOptions.SLIDE:
+		var steerings: Array = []
+		for steering: String in ControlOptions.STEERINGS:
+			steerings.append(
+				[steering.capitalize(), "steering_" + steering, _pick_steering.bind(steering)]
+			)
+		_choices(
+			column,
+			"Steerings",
+			"steering",
+			steerings,
+			ControlOptions.STEERINGS.find(ControlOptions.steering())
 		)
-	_choices(
-		column,
-		"Steerings",
-		"steering",
-		steerings,
-		ControlOptions.STEERINGS.find(ControlOptions.steering())
-	)
 	# Where the controls stand (`Q239`). The pause offers it too: the sticks
 	# draw where the router says a thumb's control is, so it needs no new HUD.
 	_choices(
