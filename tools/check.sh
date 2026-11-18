@@ -162,18 +162,24 @@ run_godot() {
 	judge_godot "$label" "$out" "$status"
 }
 
-# One pooled job: a verify tool for a region (`-` for none), its output to
-# $POOL/verify/<n>.out and its status beside it. Invoked by xargs with the
-# job's three fields as ARGUMENTS — never interpolated into a command string,
-# which is the form the warnings step's history refuses.
+# One pooled job: a verify tool for a region (`-` for none) and a part (`-` for
+# the whole tool), its output to $POOL/verify/<n>.out and its status beside it.
+# Invoked by xargs with the job's fields as ARGUMENTS — never interpolated into
+# a command string, which is the form the warnings step's history refuses.
 # shellcheck disable=SC2016
 VERIFY_JOB='
-	region_args=()
+	user_args=()
 	if [[ "$5" != "-" ]]; then
-		region_args=(-- "--region=$5")
+		user_args+=("--region=$5")
+	fi
+	if [[ "$6" != "-" ]]; then
+		user_args+=("--part=$6")
+	fi
+	if ((${#user_args[@]})); then
+		user_args=(-- "${user_args[@]}")
 	fi
 	"$0" --headless --path "$1" --script "res://tools/$4.gd" \
-		${region_args[@]+"${region_args[@]}"} >"$2/$3.out" 2>&1
+		${user_args[@]+"${user_args[@]}"} >"$2/$3.out" 2>&1
 	echo $? >"$2/$3.status"
 '
 
@@ -532,7 +538,17 @@ done
 #
 # 🔴 A job with no status file did not run, and that is a FAIL, never a skip:
 # the pool dying must not read as 37 tools with nothing to say.
+#
+# ⚠️ verify_traffic runs as one job per `--part=` and its parts go into the pool
+# FIRST. Whole, it was ~240 s a region against ~40 s for every other step put
+# together, so it alone set the run's length; its longest part, the routed drive,
+# is ~60 s. The parts are read out of the tool's own `PARTS`, so a part added
+# there is run here, and a list that reads empty is a FAIL rather than a tool
+# silently not run.
 CLOCKED_TOOLS=(verify_road_graph)
+SHARDED_TOOL=verify_traffic
+shard_parts="$(awk '/^const PARTS/{on=1} on{print} on&&/\]$/{exit}' "$ROOT/game/tools/$SHARDED_TOOL.gd" |
+	grep -o '"[a-z0-9_]*"' | tr -d '"')"
 if [[ "$VERIFY_GENERATED" != 0 ]]; then
 	regions="$(sed -n 's/^ *"regions": *\[\(.*\)\].*$/\1/p' "$ROOT/game/assets/generated/regions.json" 2>/dev/null |
 		tr ',' '\n' | tr -d ' "')"
@@ -543,32 +559,55 @@ if [[ "$VERIFY_GENERATED" != 0 ]]; then
 	# Once, not per region, and last: verify_join, the runtime merge of the first
 	# two listed regions against pipeline/join.py's (P5-9d). It passes with SKIP
 	# on one region.
+	if [[ -z "$shard_parts" ]]; then
+		echo "  FAIL  $SHARDED_TOOL — read no PARTS out of game/tools/$SHARDED_TOOL.gd," >&2
+		echo "        so its parts would not run. Restore the list or check.sh's reader." >&2
+		failed=1
+	fi
 	jobs="$(
 		while IFS= read -r region; do
 			for tool in "${VERIFY_TOOLS[@]}"; do
-				echo "$tool $region"
+				if [[ "$tool" == "$SHARDED_TOOL" ]]; then
+					while IFS= read -r part; do
+						if [[ -n "$part" ]]; then
+							echo "$tool $region $part"
+						fi
+					done <<<"$shard_parts"
+				else
+					echo "$tool $region -"
+				fi
 			done
 		done <<<"$regions"
-		echo "verify_join -"
+		echo "verify_join - -"
 	)"
 	mkdir "$POOL/verify"
 	numbered="$(grep -n . <<<"$jobs" | tr ':' ' ')"
 	clocked="$(printf ' %s \n' "${CLOCKED_TOOLS[@]}")"
-	while read -r n tool region; do
+	while read -r n tool region part; do
 		if grep -qF " $tool " <<<"$clocked"; then
-			bash -c "$VERIFY_JOB" "$GODOT" "$ROOT/game" "$POOL/verify" "$n" "$tool" "$region"
+			bash -c "$VERIFY_JOB" "$GODOT" "$ROOT/game" "$POOL/verify" "$n" "$tool" "$region" "$part"
 		fi
 	done <<<"$numbered"
-	while read -r n tool region; do
+	# The sharded tool's parts first, by PARTS' longest-first order across every
+	# region, the rest after, so a long job never starts last behind short ones.
+	{
+		while IFS= read -r part; do
+			grep -E "^[0-9]+ $SHARDED_TOOL [^ ]+ $part\$" <<<"$numbered"
+		done <<<"$shard_parts"
+		grep -vE "^[0-9]+ $SHARDED_TOOL " <<<"$numbered"
+	} | while read -r n tool region part; do
 		if ! grep -qF " $tool " <<<"$clocked"; then
-			printf '%s\0%s\0%s\0' "$n" "$tool" "$region"
+			printf '%s\0%s\0%s\0%s\0' "$n" "$tool" "$region" "$part"
 		fi
-	done <<<"$numbered" |
-		xargs -0 -n 3 -P "$CHECK_JOBS" bash -c "$VERIFY_JOB" "$GODOT" "$ROOT/game" "$POOL/verify"
-	while read -r n tool region; do
+	done |
+		xargs -0 -n 4 -P "$CHECK_JOBS" bash -c "$VERIFY_JOB" "$GODOT" "$ROOT/game" "$POOL/verify"
+	while read -r n tool region part; do
 		label="$tool"
 		if [[ "$region" != "-" ]]; then
 			label="$tool [$region]"
+		fi
+		if [[ "$part" != "-" ]]; then
+			label="$label $part"
 		fi
 		echo "==> $label"
 		if [[ ! -f "$POOL/verify/$n.status" ]]; then

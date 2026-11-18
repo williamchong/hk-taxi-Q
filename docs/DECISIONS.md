@@ -2340,6 +2340,12 @@ forces", so that another car is a spec sheet and not a re-tune.
   `CHECK_JOBS=1` is the serial form. One output file per job, a job with no status is a FAIL.
   `CLOCKED_TOOLS` (`verify_road_graph`) run first and alone: it reads the clock, and beside 35
   processes a maximum read 745 µs for 28.
+- `verify_traffic` runs as one pooled job per `--part=` (its `PARTS`: each seeded drive, the
+  census's hours, the staged checks), fed to the pool first and longest first across regions:
+  whole it was ~240 s a region and set the run alone; `check.sh` went 290–305 s → 127 s
+  (2026-11-18). Each part's lines are the whole run's, byte for byte, but for the `near:` group
+  line, which the whole run reached in drive 0 alone: its `queue_free`d systems stay in the group
+  because `_run` never yields.
 - `pytest -n auto` (`pytest-xdist`, a dev dependency, 52 s → 10 s) is opt-in, never `addopts`: CI
   stays serial, which is what shows a test leaning on another's leftovers.
 - `python -m pipeline --region <r> --jobs 4` (73 s → 30 s) starts a stage when the stages in `NEEDS`

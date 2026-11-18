@@ -75,6 +75,11 @@
 ##   pass every check above.
 ##
 ##     godot --headless --path game --script res://tools/verify_traffic.gd
+##
+## `-- --part=<part>` runs one of `PARTS` alone, so `check.sh` can run them side
+## by side: the whole tool was ~240 s a region, 80% of a `check.sh` run. Every
+## part builds its own fleets from its own seed, so a part's lines are the whole
+## run's, bar the `parked:` roster line each part repeats. No `--part=` runs all.
 extends "res://tools/verify_tool.gd"
 
 const TrafficScript = preload("res://scripts/traffic/traffic_system.gd")
@@ -82,6 +87,7 @@ const PlanScript = preload("res://scripts/traffic/signal_plan.gd")
 const FareSystemScript = preload("res://scripts/fares/fare_system.gd")
 const ParkedLayerScript = preload("res://scripts/city/parked_layer.gd")
 const GeneratedRegions = preload("res://scripts/city/generated_regions.gd")
+const CommandLine = preload("res://scripts/core/cmdline.gd")
 
 const TICK_S: float = 1.0 / 60.0
 const RUN_S: float = 90.0
@@ -142,6 +148,14 @@ const MINIBUS: String = "minibus"
 ## A dwelling vehicle's front this much past `dwell_reach_m` from its pole is not
 ## at its stop: a tick's travel at the turning pace.
 const DWELL_SLACK_M: float = 0.15
+## The slices `--part=` picks: each seeded drive by its index in `_run`'s loop,
+## the census's hours, and the other staged checks. Longest first, measured in
+## Wan Chai (s): drive4 58, hours 49, drive3 30, drive2 25, drive0 25, drive1 24,
+## drive5 18, checks 11 — `check.sh` feeds its pool in this order.
+const PARTS: Array[String] = [
+	"drive4", "hours", "drive3", "drive2", "drive0", "drive1", "drive5", "checks"
+]
+const PART_ARG: String = "--part="
 
 ## The camera the last drive runs under (`Q219`), or null.
 var _camera: Camera3D = null
@@ -153,7 +167,17 @@ func _init() -> void:
 
 
 func _run() -> void:
-	_check_rules()
+	var part: String = CommandLine.value(PART_ARG)
+	if part != "" and not PARTS.has(part):
+		_fail("part", "%s%s is none of %s" % [PART_ARG, part, ", ".join(PARTS)])
+		_finish("verify_traffic")
+		return
+	# A seed added to `SEEDS` adds a drive that no part would run under check.sh.
+	if PARTS.size() != 2 + SEEDS.size() + 3:
+		_fail("part", "PARTS names %d slices for %d drives" % [PARTS.size(), SEEDS.size() + 3])
+	var checks: bool = part == "" or part == "checks"
+	if checks:
+		_check_rules()
 	var table := load(TrafficProfile.PATH) as TrafficProfile
 	_expect(table != null, "table", "%s loads" % TrafficProfile.PATH)
 	if table == null:
@@ -164,19 +188,25 @@ func _run() -> void:
 		print("  no road graph resident; nothing to drive")
 		_finish("verify_traffic")
 		return
-	_check_lane(graph)
+	if checks:
+		_check_lane(graph)
 	var layers: Array[Node] = _stand_parked(graph)
-	_check_knock(graph, table, layers)
-	_check_licences(graph, table)
-	_check_hours(graph, table)
-	_check_spawn_pick(graph, table)
-	_check_view(graph, table)
+	if checks:
+		_check_knock(graph, table, layers)
+		_check_licences(graph, table)
+	if part == "" or part == "hours":
+		_check_hours(graph, table)
+	if checks:
+		_check_spawn_pick(graph, table)
+		_check_view(graph, table)
 	# The three fleets round the signals, then the first again on the back
 	# streets, where a car can only pass a parked one over the centre line.
 	# Last, the first fleet again under a camera (`Q219`): the cars far from it
 	# and out of its view read their rules every `thin_every`th tick, and are
 	# held to every gate the others are.
 	for run: int in SEEDS.size() + 3:
+		if part != "" and part != "drive%d" % run:
+			continue
 		var viewed: bool = run == SEEDS.size() + 2
 		var back_street: bool = run == SEEDS.size()
 		var routed: bool = run == SEEDS.size() + 1
