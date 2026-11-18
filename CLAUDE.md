@@ -184,7 +184,8 @@ checklist goes in a rule file, never back here: `check.sh` refuses a root `CLAUD
 | `signals` | `pipeline/signals.py`, the `signals` block, `surface.py`'s `junctions` key, `roadmarks.transverse_host`, `signal_controller.gd` / `signal_plan.gd`, `signal_plan.tres`, `verify_signals.gd`, the traffic (`traffic_system.gd`, `traffic.tres`, `verify_traffic.gd`) |
 | `audio` | `tools/make_vehicle_sounds.py`, `make_bgm.py` and the other sound scripts, the music (`music.tres`, `drive_music.gd`), `game/assets/authored/audio/`, `taxi_audio.gd` / `taxi_audio.tres`, the bus layout, any level or loop |
 | `backdrop` | `pipeline/backdrop.py`, the `backdrop` block (`bounds`, `triangle_cap`, `min_height_m`, `ground_close_m`, `bands`), `backdrop.tres`, `far_shore.gdshaderinc`, the drive camera's `far`, `verify_backdrop.gd` |
-| `basemap` | `pipeline/basemap.py`, the `basemap` block (`seal_m`, `water_level_m`, `seabed_m`, `water_material`, `park_material`), `buildings.sink_sea` and `paint_parks`, `water.tres`, the `Water` node |
+| `basemap` | `pipeline/basemap.py`, `pipeline/shore.py`, the `basemap` block (`seal_m`, `water_level_m`, `seabed_m`, `shoreline.hard_types`, `quay_material`, `land_*`, `water_material`, `park_material`), `shore.cut_sea` and `buildings.paint_parks`, `water.tres`, `harbour_land.tres`, the `Water` node |
+| `paths` | `pipeline/paths.py`, the `paths` block (`widths_m`, `lift_m`, `sag_m`, `max_grade_pct`, `kerb_clear_m`), `materials.path_edging`, `paths.tres`, `verify_paths.gd`, the ground or the carriageway region a line is cut by |
 
 ⚠️ **Three changes reach past their own rule.** A **widening** (`surface.floor_default_m`, any
 `roads.surface` width) moves the drawn kerb, so it owes `clearance`, `carriageway`, `railings`,

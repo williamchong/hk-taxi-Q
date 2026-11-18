@@ -50,6 +50,7 @@ from pipeline.fence import FENCE_NAME, FENCE_SCHEMA
 from pipeline.lamps import LAMPS_MANIFEST_NAME, LAMPS_MANIFEST_SCHEMA
 from pipeline.landmarks import ASSETS_NAME, ASSETS_SCHEMA
 from pipeline.parked import PARKED_MANIFEST_NAME, PARKED_MANIFEST_SCHEMA
+from pipeline.paths import PATHS_MANIFEST_NAME, PATHS_MANIFEST_SCHEMA
 from pipeline.planters import PLANTERS_MANIFEST_NAME, PLANTERS_MANIFEST_SCHEMA
 from pipeline.railings import RAILINGS_MANIFEST_NAME, RAILINGS_MANIFEST_SCHEMA
 from pipeline.roadmarks import ROADMARKS_MANIFEST_NAME, ROADMARKS_MANIFEST_SCHEMA
@@ -211,6 +212,7 @@ class _Region:
                 "parks": [],
                 "asset": None,
                 "water_level_m": 1.3,
+                "shoreline": {"hard": [], "soft": []},
             },
             FENCE_NAME: {
                 "schema_version": FENCE_SCHEMA,
@@ -347,6 +349,13 @@ class _Region:
             # And no `planters:` block (`P3-98`).
             PLANTERS_MANIFEST_NAME: {
                 "schema_version": PLANTERS_MANIFEST_SCHEMA,
+                "city_id": city.id,
+                "region_id": REGION,
+                "asset": None,
+            },
+            # And no `paths:` block (`P3-101`).
+            PATHS_MANIFEST_NAME: {
+                "schema_version": PATHS_MANIFEST_SCHEMA,
                 "city_id": city.id,
                 "region_id": REGION,
                 "asset": None,
@@ -600,6 +609,17 @@ class TestAssembly:
         region.build()
         assert region.manifest()["planters"] == "planters.glb"
         assert "planters.glb" in shipped(region.manifest())
+
+    def test_built_paths_are_shipped(self, region) -> None:
+        """The optional-key contract again, for `P3-101`'s `paths.glb`."""
+        region.build()
+        assert region.manifest()["paths"] is None
+
+        region.documents[PATHS_MANIFEST_NAME]["asset"] = "paths.glb"
+        (region.out_dir / "paths.glb").write_bytes(b"glb")
+        region.build()
+        assert region.manifest()["paths"] == "paths.glb"
+        assert "paths.glb" in shipped(region.manifest())
 
     def test_a_built_far_shore_is_shipped(self, region) -> None:
         """The optional-key contract again, for `P3-100`'s `backdrop.glb`."""
@@ -1182,6 +1202,7 @@ class TestOrchestrator:
             "parked",
             "stops",
             "planters",
+            "paths",
             "backdrop",
             "export",
         ]
@@ -1230,6 +1251,7 @@ class TestOrchestrator:
             "parked",
             "stops",
             "planters",
+            "paths",
             "backdrop",
             "export",
         ]

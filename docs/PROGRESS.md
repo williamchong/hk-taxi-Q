@@ -104,6 +104,11 @@ Phase 3 — `B2` and the road
 - `P3-100` 🟡 The far shore (`Q249`): 278 Kowloon blocks down to 56.0 m in 5,626 triangles and 2
   draws, +130 KB of PCK, the camera's `far` still 400 m — density 5,000 and the dark night
   skyline the user's picks — owed: the handset's frame time.
+- `P3-101` 🟡 The waterfront (`Q250`): iB1000 pedestrian lines as ribbons on the ground (20.6 km
+  in Wan Chai, 38.9 km in Causeway Bay; +3,576 primitives and +4 draws on the throttle route), the
+  ground cut to a vertical quay along 2,776 m of published sea wall and breakwater, and the land
+  beside the harbour drawn where no tile is (24.7 ha) — owed: the user's pick of the line tone
+  (`build/driver/tone_sheets/`), the handset.
 - `P3-99` 🟡 Glossy, inked vehicles (`Q248`): red `C*` 68.7 → 64.7 in sun. The city's line is black and
   draws the vehicles' outline too, their own pass off (`prims` 988,372 → 709,510 at the start
   line) — owed: the handset, the web build.
@@ -275,9 +280,9 @@ Budget
 | FPS on device floor | 60 | — (`P0-3b`); iPhone Air ~96 fps under `--max-fps 120` (`Q222`) |
 | Video memory, iPhone Air | — | 235.9 MB at 0.75 scale, MSAA 2x (`Q236`) |
 | Draw calls | < 150 | throttle route 116–122 with traffic, HUD off (`Q214`); `P2-6` measures properly |
-| Resident triangles, worst camera | < 300k | 128% / 82%; with paint 161% / 91%; buildings alone 110% / 73% (`tools/resident_budget.py`, 2026-11-17). `mong_kok` 184%, `sha_tin` 47% (2026-09) |
+| Resident triangles, worst camera | < 300k | 128% / 82%; with paint 178% / 108% (the pedestrian lines are 5 and 14 points of it, `Q250`); buildings alone 110% / 73% (`tools/resident_budget.py`, 2026-11-18). `mong_kok` 184%, `sha_tin` 47% (2026-09) |
 | Texture memory | < 128 MB | one 1536 x 256 atlas, 119,611 B (`signs_text.png`) |
-| Bundle size (PCK) | < 200 MB | web 98,750,864 B (`build/web/index.pck`, 2026-11-17); iOS app 116,032,712 B (`build/ios/app`, 2026-11-17). Re-export before quoting |
+| Bundle size (PCK) | < 200 MB | web 107,482,328 B (`build/web/index.pck`, 2026-11-18, a clean worktree); iOS app 116,032,712 B (`build/ios/app`, 2026-11-17). Re-export before quoting |
 | First load, web, cold shader cache | — | 14.0–14.8 s boot, then the cover ~6 s (`Q184`) |
 | First frame, iOS fresh install | — | ~12 s with baked shaders; relaunch ~4 s (`Q207`) |
 | Traffic tick, 60 cars | — | 1.67 ms bench, 2.59 ms p50 in game (`Q219`) |

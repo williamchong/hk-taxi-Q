@@ -386,6 +386,30 @@ TRIGGERS: dict[str, Trigger] = {
             ),
         ),
     ),
+    "paths": Trigger(
+        "`pipeline/paths.py`, the `paths` config block, or what a line is cut by",
+        (
+            Report(
+                "paths.json",
+                (
+                    "read",
+                    "read_m",
+                    "on_road_m",
+                    "in_sea_m",
+                    "no_ground_m",
+                    "too_steep_m",
+                    "too_short_m",
+                    "drawn_m",
+                    "ribbons",
+                    "stations",
+                    "stations_kept",
+                    "cells",
+                    "triangles",
+                    "bytes",
+                ),
+            ),
+        ),
+    ),
     "stops": Trigger(
         "`pipeline/stops.py`, the `stops` config block, or where a stop's furniture stands",
         (

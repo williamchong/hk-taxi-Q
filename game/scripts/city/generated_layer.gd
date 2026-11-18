@@ -103,6 +103,7 @@ const SIGNS: String = "signs"
 const WATER: String = "water"
 const TREES: String = "trees"
 const PLANTERS: String = "planters"
+const PATHS: String = "paths"
 const BACKDROP: String = "backdrop"
 
 ## One row per layer. `file` is the asset in a region's bundle directory; `noun` and
@@ -274,6 +275,19 @@ const LAYERS: Dictionary[String, Dictionary] = {
 		"absence": "A region HyD draws no planter wall in ships none, and that is not a failure.",
 		"placements": "",
 		"casts_shadow": true,
+		"shadow_meshes": [],
+	},
+	# The pedestrian lines (`P3-101`, `Q250`): the topographic map's pavement
+	# margins and footpaths, a ribbon on the ground a plan cell. No body, and no
+	# shadow for the paint's reason: it lies on what it would fall on.
+	PATHS:
+	{
+		"file": "paths.glb",
+		"noun": "pedestrian lines",
+		"module": "paths",
+		"absence": "A city that declares no `paths:` block ships none, and that is not a failure.",
+		"placements": "",
+		"casts_shadow": false,
 		"shadow_meshes": [],
 	},
 	# The far shore (`P3-100`, `Q249`): the skyline across the harbour and the

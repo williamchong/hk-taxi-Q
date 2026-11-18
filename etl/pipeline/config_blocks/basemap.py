@@ -47,6 +47,10 @@ class Basemap:
     shoreline: SourceLayer
     # `shoreline`'s type codes that bound the sea.
     shoreline_types: frozenset[str]
+    # Those of them that are built: the ground stops at such a line in a
+    # vertical face (`pipeline/shore.py`, `P3-101`). Every other type is a
+    # natural shore and slopes.
+    hard_shoreline_types: frozenset[str]
     parks: SourceLayer
     # `parks`' codes that are open space.
     park_codes: frozenset[str]
@@ -82,6 +86,16 @@ class Basemap:
     # the minimap's green on the ground, no mesh of its own. Every open-space
     # code, the paved ones included, on the user's call.
     park_material: Material
+    # The face a built shoreline is cut to, sea wall and breakwater alike.
+    quay_material: Material
+    # The land in the frame that no region's tiles draw (`P3-101`): a
+    # breakwater, the far side of a typhoon shelter. Drawn flat at
+    # `land_level_m` in `land_material`, walled in `quay_material` down to
+    # `seabed_m` along the sea, and only within `land_within_m` of the sea —
+    # the frame also reaches the hillside, which a flat slab is not.
+    land_level_m: float
+    land_within_m: float
+    land_material: Material
 
     @property
     def tiled(self) -> bool:
@@ -125,12 +139,26 @@ def _basemap(body: Any, where: str, table: _MaterialTable) -> Basemap | None:
             f"{where}:seabed_m is {seabed_m} m, not under water_level_m {water_level_m} m — "
             "the ground sunk under the sea would stand above the water drawn over it"
         )
+    types = _codes(shoreline, "types", f"{where}:shoreline")
+    hard = _codes(shoreline, "hard_types", f"{where}:shoreline")
+    if not hard <= types:
+        raise ValueError(
+            f"{where}:shoreline:hard_types names {sorted(hard - types)}, which `types` does not: "
+            "a line that does not bound the sea cannot be its wall"
+        )
+    land_level_m = float(_require(body, "land_level_m", where))
+    if land_level_m <= water_level_m:
+        raise ValueError(
+            f"{where}:land_level_m is {land_level_m} m, not over water_level_m {water_level_m} m — "
+            "the land outside the tiles would be drawn under the sea"
+        )
     return Basemap(
         source=str(_require(body, "source", where)),
         member=_tile_member(body, where),
         reach_m=_positive(body, "reach_m", where),
         shoreline=_source_layer(shoreline, f"{where}:shoreline", _SHORELINE_ROLES),
-        shoreline_types=_codes(shoreline, "types", f"{where}:shoreline"),
+        shoreline_types=types,
+        hard_shoreline_types=hard,
         parks=_source_layer(parks, f"{where}:parks", _PARK_ROLES),
         park_codes=_codes(parks, "codes", f"{where}:parks"),
         buildings=_source_layer(_require(body, "buildings", where), f"{where}:buildings", ()),
@@ -144,5 +172,13 @@ def _basemap(body: Any, where: str, table: _MaterialTable) -> Basemap | None:
         ),
         park_material=table.get(
             str(_require(body, "park_material", where)), f"{where}:park_material"
+        ),
+        quay_material=table.get(
+            str(_require(body, "quay_material", where)), f"{where}:quay_material"
+        ),
+        land_level_m=land_level_m,
+        land_within_m=_positive(body, "land_within_m", where),
+        land_material=table.get(
+            str(_require(body, "land_material", where)), f"{where}:land_material"
         ),
     )

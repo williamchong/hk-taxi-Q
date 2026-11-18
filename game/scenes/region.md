@@ -47,6 +47,8 @@ below.
   mesh. The one layer here whose `.glb` brings its own body: `planters_collision-colonly`, the
   walls alone, so a car hits a planter and passes through nothing but the hedge above it. No
   export flag: the collider is the asset's, not the placer's.
+- `Paths` (`P3-101`, `Q250`): the topographic map's pavement margins and footpaths as ribbons on
+  the ground, a mesh a 300 m cell. No body and no shadow, on the road paint's terms.
 - `Stops` (`P3-94`, `Q242`): the authored flags and tram shelters at published stops.
   `posts = true`: a cylinder up every `pole` and every shelter post (`tram_post`), none under a
   flag or a shelter's roof. Not in `prop_cells.tres`.

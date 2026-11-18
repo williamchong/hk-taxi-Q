@@ -50,7 +50,6 @@ from pipeline.buildings import (
     podium_blocks,
     podium_code,
     podium_lines,
-    sink_sea,
 )
 from pipeline.config import (
     BuildingStyle,
@@ -810,6 +809,7 @@ class TestBuildRegion:
         out: str = "out",
         water: list[list[float]] | None = None,
         parks: list[list[float]] | None = None,
+        shoreline: dict[str, list[list[float]]] | None = None,
     ):
         """One end-to-end run. `fixtures` overrides the default set, `hong_kong`
         takes any city so a test can vary the config, and `out` separates two
@@ -817,7 +817,7 @@ class TestBuildRegion:
         GLBs under the same tmp_path. `water` and `parks` are the basemap's sea
         and open space, none by default: the stage reads that document before
         it tiles."""
-        write_basemap(tmp_path / out, hong_kong, "wan_chai", water, parks)
+        write_basemap(tmp_path / out, hong_kong, "wan_chai", water, parks, shoreline=shoreline)
         return build_region(
             hong_kong,
             "wan_chai",
@@ -1409,19 +1409,37 @@ class TestBuildRegion:
         self, hong_kong, sources, tmp_path
     ) -> None:
         """The world's water (2026-09-25): the basemap's sea is read before the
-        tiles are cut, and every ground vertex inside it lands at `seabed_m` —
-        under the water plane, where the sheets' own terrain (1.1-4.2 m over
-        the harbour) would show through it. The building stands where it was."""
+        tiles are cut, and the ground inside it lands at `seabed_m` — under the
+        water plane, where the sheets' own terrain (1.1-4.2 m over the harbour)
+        would show through it. The building stands where it was.
+
+        And since `P3-101` the ground is cut along the sea's edge: a built
+        shoreline is a face, counted by its length."""
         # Two triangles covering the ground patch's eastern half (x >= 75).
         sea = [[75.0, 0.0, 200.0, 0.0, 200.0, 200.0], [75.0, 0.0, 200.0, 200.0, 75.0, 200.0]]
-        report = self.build(hong_kong, sources, tmp_path, self.ground(), water=sea)
+        wall = {"hard": [[75.0, -10.0, 75.0, 210.0]], "soft": []}
+        report = self.build(hong_kong, sources, tmp_path, self.ground(), water=sea, shoreline=wall)
         assert report.sunk > 0
+        assert report.quay_triangles > 0
+        assert 0.0 < report.quay_m == pytest.approx(report.shore_m)
 
         manifest = json.loads((tmp_path / "out" / "wan_chai" / BUILDINGS_MANIFEST_NAME).read_text())
         assert manifest["ground_sunk_vertices"] == report.sunk
+        assert manifest["ground_quay_m"] == pytest.approx(report.quay_m, abs=0.1)
+        assert manifest["ground_quay_triangles"] == report.quay_triangles
         low, high = self.tile(report, "t_00_00").aabb
         assert low[1] == pytest.approx(hong_kong.basemap.seabed_m, abs=0.01)
         assert high[1] > hong_kong.basemap.water_level_m
+
+        # The sheet's row holds what the cut made of it: the seabed is under the
+        # source's own box, and `verify_tiles.gd` holds every vertex to its row.
+        path = tmp_path / "out" / "wan_chai" / self.tile(report, "t_00_00").lods[0].path
+        for mesh in read_render(path):
+            rows = mesh.extras["objects"]
+            for position, ordinal in zip(mesh.positions, mesh.uv2[:, 1], strict=True):
+                box_low, box_high = rows[round(float(ordinal))]["aabb"]
+                assert (position >= np.array(box_low) - 1e-3).all()
+                assert (position <= np.array(box_high) + 1e-3).all()
 
     def test_the_ground_in_a_park_is_painted_grass(self, hong_kong, sources, tmp_path) -> None:
         """The parks in the world (2026-09-25): the basemap's open space is read
@@ -1780,28 +1798,6 @@ class TestPaintParks:
             colour=(129, 123, 111, 255),
         )
         same, count = paint_parks(mesh, Plan(), (65, 98, 39))
-        assert count == 0 and same is mesh
-
-
-class TestSinkSea:
-    """`sink_sea`: vertices in the sea drop, the rest stay, and nothing is cut."""
-
-    def test_only_the_vertices_in_the_sea_move(self) -> None:
-        from shapely.geometry import box as plan_box
-
-        mesh = soup(
-            [[(0.0, 4.0, 0.0), (10.0, 4.0, 0.0), (0.0, 4.0, 10.0)]], name="ground", colour=None
-        )
-        sunk, count = sink_sea(mesh, plan_box(-1.0, -1.0, 5.0, 5.0), -3.0)
-        assert count == 1
-        assert sunk.positions[:, 1].tolist() == [-3.0, 4.0, 4.0]
-        assert sunk.triangle_count == mesh.triangle_count
-
-    def test_no_sea_is_the_same_mesh(self) -> None:
-        from shapely.geometry import Polygon as Plan
-
-        mesh = soup([[(0.0, 4.0, 0.0), (10.0, 4.0, 0.0), (0.0, 4.0, 10.0)]], name="g", colour=None)
-        same, count = sink_sea(mesh, Plan(), -3.0)
         assert count == 0 and same is mesh
 
 

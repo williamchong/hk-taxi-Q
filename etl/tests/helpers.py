@@ -526,11 +526,13 @@ def write_basemap(
     water: list[list[float]] | None = None,
     parks: list[list[float]] | None = None,
     podiums: dict[str, dict] | None = None,
+    shoreline: dict[str, list[list[float]]] | None = None,
 ) -> Path:
     """The basemap stage's document, as `buildings.build_region` expects to find
     it (2026-09-25): the sink under the sea reads it, so a test that builds tiles
     writes one first. `water` is the sea's triangles in game plan metres and
-    `parks` the open space's, none by default.
+    `parks` the open space's, none by default; `shoreline` is the published
+    lines the quay is read from, `{"hard": [...], "soft": [...]}`.
 
     Also the podiums stage's, where the city declares `podiums:` — the other
     document the buildings stage reads before it tiles (`Q195`). `podiums` is
@@ -552,6 +554,7 @@ def write_basemap(
             "parks": parks or [],
             "asset": None,
             "water_level_m": None if city.basemap is None else city.basemap.water_level_m,
+            "shoreline": shoreline or {"hard": [], "soft": []},
             "report": {},
         },
     )

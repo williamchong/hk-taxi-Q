@@ -108,6 +108,14 @@ const SHADERS: Dictionary = {
 	# `etl/pipeline/planters.py`, on the trees' terms and with their quiet
 	# fallback, so `verify_planters.gd` checks the dispatch by `resource_path`.
 	"planters": "res://tuning/planters.tres",
+	# The pedestrian lines (`P3-101`): `PATHS_MATERIAL` in `etl/pipeline/paths.py`,
+	# on the planters' terms and with their quiet fallback, so `verify_paths.gd`
+	# checks the dispatch by `resource_path`.
+	"paths": "res://tuning/paths.tres",
+	# The land no region's tiles draw (`P3-101`): `LAND_MATERIAL` in
+	# `etl/pipeline/basemap.py`, the second mesh in `water.glb`. ⚠️ Its own row,
+	# never the water's: that material is `water.gdshader`, and land on it waves.
+	"harbour_land": "res://tuning/harbour_land.tres",
 	# The far shore (`P3-100`): `BACKDROP_MATERIAL` in `etl/pipeline/backdrop.py`.
 	# Its own shader, because it draws past the far plane
 	# (`far_shore.gdshaderinc`); a mesh that missed the dispatch is culled there

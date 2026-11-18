@@ -548,11 +548,10 @@ class TestBuildingStyle:
                 "class_collision_cell_m",
             ):
                 doc["buildings"][table].pop(terrain, None)
-            # ⚠️ The extra line *is* `_check_every_material_is_used` working. The
-            # ground was the only thing referencing `concrete_paving`, so dropping
-            # class strands the material — and a stranded material is a colour
-            # still being exposure-checked as though it ships.
-            doc["materials"].pop("concrete_paving")
+            # `concrete_paving` stays declared: until `P3-101` the ground was its
+            # only reference and dropping the class stranded it
+            # (`_check_every_material_is_used`); the basemap's `land_material`
+            # wears it now.
 
         city = load_config(rewrite(stop_tiling_it))
         assert city.buildings.terrain_class not in city.buildings.classes
@@ -2915,6 +2914,19 @@ class TestBasemapBlock:
 
         with pytest.raises(ValueError, match="not under water_level_m"):
             load_config(rewrite(raised))
+
+    def test_a_built_shoreline_is_one_that_bounds_the_sea(self, hong_kong, rewrite) -> None:
+        """The quay (`P3-101`): which published types are cut to a face is a
+        subset of those the sea is cut from, and the face has a material."""
+        basemap = hong_kong.basemap
+        assert basemap.hard_shoreline_types < basemap.shoreline_types
+        assert basemap.quay_material is hong_kong.materials["concrete_sooty"]
+
+        def stray(doc: dict[str, Any]) -> None:
+            doc["basemap"]["shoreline"]["hard_types"] = ["SWA", "PIER"]
+
+        with pytest.raises(ValueError, match="hard_types names"):
+            load_config(rewrite(stray))
 
     def test_an_undeclared_water_material_is_refused(self, rewrite) -> None:
         def stray(doc: dict[str, Any]) -> None:

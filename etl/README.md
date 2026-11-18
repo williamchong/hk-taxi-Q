@@ -88,6 +88,7 @@ run calls the same entry point. In run order:
 | `railings`, `signs`, `lamps`, `trees` | Published street furniture, each its own mesh or placement list |
 | `stops` | Authored flags and tram shelters at the stops the bundle already publishes |
 | `planters` | HyD's roadside planter walls, and a shrub bed where a ring of them closes |
+| `paths` | The topographic map's pavement margins and footpaths, laid on the ground as ribbons |
 | `backdrop` | The far shore: the skyline across the harbour, its ground and the sea that reaches it |
 | `signals` | The signalled junctions and their stages |
 | `tramlines` | The tramway as lines a tram can run |

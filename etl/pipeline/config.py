@@ -164,6 +164,7 @@ from pipeline.config_blocks.parked import (  # noqa: F401
     Vehicle,
     _parked,
 )
+from pipeline.config_blocks.paths import Paths, _paths
 from pipeline.config_blocks.planters import Planters, _planters
 from pipeline.config_blocks.railings import (  # noqa: F401
     _RAILING_ROLES,
@@ -483,6 +484,10 @@ class Config:
     # HyD's roadside planters, built by `pipeline/planters.py` (`P3-98`,
     # `Q247`). Optional on the same terms: absent, the region ships none.
     planters: Planters | None = None
+    # The topographic map's pedestrian lines, laid on the ground by
+    # `pipeline/paths.py` (`P3-101`, `Q250`). Optional on the same terms:
+    # absent, the region ships none.
+    paths: Paths | None = None
     # The signalled junctions and their authored stages, by
     # `pipeline/signals.py` (`P3-3a`, `Q173`). Optional: absent, the region
     # ships no signal plan and no car stops for a light.
@@ -877,6 +882,7 @@ def load_config(path: Path | None = None) -> Config:
         parked=_parked(document.get("parked"), f"{path}:parked"),
         trees=_trees(document.get("trees"), f"{path}:trees", table),
         planters=_planters(document.get("planters"), f"{path}:planters", table),
+        paths=_paths(document.get("paths"), f"{path}:paths", table),
         signals=_signals(document.get("signals"), f"{path}:signals"),
         bus_routes=_bus_routes(document.get("bus_routes"), f"{path}:bus_routes"),
         census_stations=_census_stations(document.get("traffic_census"), f"{path}:traffic_census"),
@@ -922,6 +928,8 @@ def load_config(path: Path | None = None) -> Config:
             _check_source_exists(city, publisher.source, f"{path}:trees.publishers[{index}].source")
     if city.planters is not None:
         _check_source_exists(city, city.planters.source, f"{path}:planters.source")
+    if city.paths is not None:
+        _check_tiled_source_exists(city, city.paths.source, f"{path}:paths.source")
     if city.bus_routes is not None:
         for index, route_set in enumerate(city.bus_routes.sets):
             _check_source_exists(city, route_set.source, f"{path}:bus_routes.sets[{index}].source")

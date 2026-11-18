@@ -17,7 +17,11 @@ const FILE: String = "basemap.json"
 ## 2 since the world's water (2026-09-25): the document names `asset` — the
 ## sea as `water.glb`, null where the frame holds none — and `water_level_m`,
 ## the height the plane is drawn at, which `verify_water.gd` holds the mesh to.
-const SCHEMA_VERSION: int = 2
+##
+## 3 since `P3-101` (`Q250`): `shoreline`, the published lines split into the
+## built and the natural, which the tile stage cuts the quay from. Nothing here
+## reads it; the number moves with the document.
+const SCHEMA_VERSION: int = 3
 
 
 ## Where a region's copy is; `GeneratedRegions.selected()` for "".

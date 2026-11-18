@@ -404,6 +404,16 @@ materials:
     source: "cast concrete planter wall, clean end of 20-30%"
     bounds: [20, 30]
 
+  # The pedestrian lines (`P3-101`, `Q250`): a pavement's margin is its edging
+  # unit, and what is drawn is that unit's top. The clean end of concrete so a
+  # line reads on `concrete_paving` (20.0%) as well as on `park_grass`: at
+  # `concrete_kerb`'s 25.0% the trial's lines were lost on paving from the air.
+  path_edging:
+    colour: "#a59f96"
+    reflectance: 35.0
+    source: "new grey-cement concrete, 35-40%; weathers to 20-30%"
+    bounds: [30, 40]
+
 # Road Network v2 carries no Z ordinate. Its ELEVATION attribute is an ordinal
 # grade-separation level — the GIS equivalent of OSM's `layer` tag — so deck
 # heights are ours to author.
@@ -3412,6 +3422,10 @@ basemap:
     # The published domain: `SWA` Sea Wall, `HWM` High Water Mark, `BRE`
     # Breakwater — the three that bound the harbour.
     types: [SWA, HWM, BRE]
+    # The two that are built (`P3-101`, `Q250`): the ground stops at a sea wall
+    # or a breakwater in a vertical face down to `seabed_m`. A high-water mark
+    # is a natural shore and slopes from the line.
+    hard_types: [SWA, BRE]
   parks:
     layer: Site
     fields:
@@ -3450,6 +3464,20 @@ basemap:
   # every ground vertex inside the document's `parks` in this colour, beside the
   # sink under the sea. No mesh of its own — the ground already is one.
   park_material: park_grass
+  # The face a built shoreline is cut to (`P3-101`): the wall's own colour,
+  # since the paving it stands under is a top and this is a side.
+  quay_material: concrete_sooty
+  # The land in the frame that no region's tiles draw (`P3-101`): breakwaters
+  # and the far side of a typhoon shelter, which stood as bare background
+  # across the water. A flat slab, walled like a quay on every sea edge — the
+  # sheets' terrain is not read out there, so nothing slopes.
+  # 2.6 is the median top of Wan Chai's own cut quay (2.62 m over 1,126 faces,
+  # 2.05-3.4 m at the quartiles), so the slab meets the region near its level.
+  land_level_m: 2.6
+  # ⚠️ Authored: the frame reaches 320 m past the region on every side, the
+  # hillside included, and only the land that bounds the drawn water is wanted.
+  land_within_m: 250.0
+  land_material: concrete_paving
 
 # The far shore (`P3-100`, `Q249`): Kowloon across Victoria Harbour, seen from
 # the Wan Chai waterfront and never driven. `pipeline/backdrop.py` extrudes the
@@ -3700,6 +3728,50 @@ trees:
   # a deck — stands over its foot between this height and its own top: a tree
   # inside a block, or in a podium garden the street below cannot hold.
   overhead_clear_m: 2.5
+
+# The topographic map's pedestrian lines (`P3-101`, `Q250`), laid on the
+# ground by `pipeline/paths.py`.
+#
+# **Where is read, how wide is authored.** A line is drawn where
+# `CartoPedLine` draws one and nowhere else; a line has no width, so
+# `widths_m` gives each drawn code its ribbon.
+paths:
+  source: topography
+  member: "{tile}/{tile}.gdb"
+  layer: CartoPedLine
+  fields:
+    type: PEDESTRIANTYPE
+  # The published domain (`dPedestrianLineType`, the iB1000 data dictionary),
+  # and what each drawn code is here:
+  #   `PA`  "Pavement margin (including bicycle track margin)" — an edge.
+  #   `FPW` "Footpath > 1.5m wide" — an edge too: its lines run in pairs, the
+  #         nearest other one 1.85 m off at the median (Causeway Bay).
+  #   `FP`  "Footpath 0.5-1.5m wide" — a centreline (nearest other line 21 m
+  #         off), so it is drawn as the path: 1.0 m, the middle of its class.
+  # ⚠️ Not drawn: `PAU` (a margin under an elevated structure, not looked at),
+  # `STP` steps, `CWY` covered walkways, `FBR` / `FBU` footbridges and `SWY`
+  # subways — none of them lies on the ground the tiles draw.
+  widths_m:
+    PA: 0.3
+    FPW: 0.3
+    FP: 1.0
+  material: path_edging
+  # Over the ground, and over `sag_m`: the ground between two kept stations
+  # leaves the straight ribbon by less than `sag_m`, so it stays under it.
+  lift_m: 0.06
+  sag_m: 0.03
+  # The level-0 carriageway is measured from the road margin, HyD and TD, not
+  # from this layer; where a pavement margin runs onto it the road wins.
+  kerb_clear_m: 0.5
+  step_m: 1.0
+  min_length_m: 1.0
+  # 1 in 1. Past it the ground is a retaining wall or a cliff the terrain's
+  # 4 m cell has smeared into a slope, and a ribbon laid on it stands on edge:
+  # Causeway Bay's hillside drew 60 triangles steeper than 60 degrees without
+  # it. ⚠️ Authored: steps (`STP`) are what the publisher draws there instead.
+  max_grade_pct: 100.0
+  # `road_marks.cell_m`'s reasoning (`P3-42`, `Q135`).
+  cell_m: 300.0
 
 # HyD's roadside planters (`P3-98`, `Q247`), built by `pipeline/planters.py`.
 #

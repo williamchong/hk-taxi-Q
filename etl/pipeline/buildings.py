@@ -90,6 +90,7 @@ from pipeline.gltf import (
     write_glb,
 )
 from pipeline.mesh import EmptyMeshError, collapse, merge, select_triangles, weld
+from pipeline.shore import Shore, ShoreReport, cut_sea, shoreline_of_bundle
 
 log = logging.getLogger(__name__)
 
@@ -330,10 +331,16 @@ class BuildReport:
     replaced: int = 0
     # Game-space AABB union per replaced stem, for the manifest's `excluded`.
     excluded: dict[str, Bounds] = field(default_factory=dict)
-    # Ground vertices sunk to the seabed under the basemap's sea (2026-09-25).
-    # Zero with a `basemap:` block declared and sea in the frame is the
-    # stage-order failure: `basemap` runs first, and this read its document.
+    # Ground vertices at the seabed under the basemap's sea (2026-09-25), on
+    # the finest tier. Zero with a `basemap:` block declared and sea in the
+    # frame is the stage-order failure: `basemap` runs first, and this read its
+    # document.
     sunk: int = 0
+    # The sea's edge over the region's ground, how much of it is cut to a
+    # vertical face, and that face's triangles (`P3-101`), on the finest tier.
+    shore_m: float = 0.0
+    quay_m: float = 0.0
+    quay_triangles: int = 0
     # Ground vertices painted `basemap.park_material` inside the basemap's
     # parks (2026-09-25) — zero with parks in the frame is the same failure.
     greened: int = 0
@@ -448,6 +455,27 @@ def _object_row(object_id: str, class_id: str, bounds: Bounds) -> dict[str, Any]
     """
     low, high = bounds
     return {"id": object_id, "class": class_id, "aabb": [round_position(low), round_position(high)]}
+
+
+def _hold(objects: list[dict[str, Any]], mesh: MeshData) -> None:
+    """Grow each row's box to hold the vertices of `mesh` that carry it.
+
+    For the ground the sea's edge was cut into (`P3-101`): a row's box is its
+    source sheet's, and the cut puts vertices outside it — the seabed is under
+    every sheet's terrain, and a point cut into a triangle that spans two
+    sheets carries the row of its nearest corner, which can stand a triangle's
+    length off. Measured on Wan Chai: 8 vertices 13 m east of their sheet.
+    """
+    if mesh.uv2 is None:
+        return
+    ordinals = np.rint(mesh.uv2[:, 1]).astype(np.int64)
+    for ordinal in np.unique(ordinals):
+        own = mesh.positions[ordinals == ordinal]
+        low, high = objects[ordinal]["aabb"]
+        objects[ordinal]["aabb"] = [
+            round_position(tuple(np.minimum(low, own.min(axis=0)).tolist())),
+            round_position(tuple(np.maximum(high, own.max(axis=0)).tolist())),
+        ]
 
 
 def _register(objects: list[dict[str, Any]], object_id: str, class_id: str, bounds: Bounds) -> int:
@@ -1121,37 +1149,11 @@ def ground_of_bundle(out_dir: Path, region_id: str) -> tuple[BaseGeometry, BaseG
 
 
 def _in_plan(mesh: MeshData, area: BaseGeometry) -> np.ndarray:
-    """Which of `mesh`'s vertices lie in `area` in plan — the selection
-    `sink_sea` and `paint_parks` share. All false for an empty area."""
+    """Which of `mesh`'s vertices lie in `area` in plan — `paint_parks`'
+    selection. All false for an empty area."""
     if area.is_empty or len(mesh.positions) == 0:
         return np.zeros(len(mesh.positions), dtype=bool)
     return shapely.contains_xy(area, mesh.positions[:, 0], mesh.positions[:, 2])
-
-
-def sink_sea(mesh: MeshData, sea: BaseGeometry, seabed_m: float) -> tuple[MeshData, int]:
-    """`mesh` with every vertex whose plan position lies in `sea` dropped to
-    `seabed_m`, and how many were (2026-09-25, the user's call).
-
-    🔴 **The sheets' terrain over the harbour is not flat** — 1.1-4.2 m over Wan
-    Chai's sea against 2.7-4.9 m on the land within 12 m of the shore, both
-    measured on the shipped tiles — so no water plane laid over the ground as
-    published meets the shoreline: at 3.0 m 9.6% of the sea shows grey through
-    it, at 3.5 m it floods ~40% of the shore band. Sinking the ground under the
-    published sea is what lets `water.glb` sit at sea level. Vertices move, not
-    triangles: one that straddles the shoreline keeps its land corners and
-    slopes down over its own width, which is the sea wall the low-poly look
-    affords. Before `collapse`, so the cluster means average sunk with sunk.
-
-    ⚠️ **Not a hole.** The sunk ground still collides: a car that leaves the
-    quay lands on it, under the water, rather than falling through the world.
-    """
-    inside = _in_plan(mesh, sea)
-    count = int(inside.sum())
-    if count == 0:
-        return mesh, 0
-    positions = mesh.positions.copy()
-    positions[inside, 1] = seabed_m
-    return replace(mesh, positions=positions), count
 
 
 def paint_parks(
@@ -1160,7 +1162,7 @@ def paint_parks(
     """`mesh` with every vertex whose plan position lies in `parks` coloured
     `colour`, and how many were (2026-09-25, the user's call).
 
-    The minimap's green on the ground: `sink_sea`'s terms, a vertex moved into
+    The minimap's green on the ground: a vertex moved into
     another material rather than a mesh of its own, so the parks cost no draw
     call and cannot z-fight the ground they lie on. Before `collapse`, which
     keeps one representative's colour per cluster rather than an average, so
@@ -1241,14 +1243,21 @@ def build_region(
     lines = podium_lines(place.out_dir, region_id, city.podiums)
     bands = facade_bands(style, hue, root=sources_root)
     tier_bands: dict[int, tuple[np.ndarray, np.ndarray]] = {}
-    # The sea the ground drops under (`sink_sea`) and the parks it is painted
-    # green in (`paint_parks`), read from the basemap stage's document; a city
-    # with no `basemap:` block sinks and paints nothing.
+    # The sea the ground is cut along (`shore.cut_sea`) and the parks it is
+    # painted green in (`paint_parks`), read from the basemap stage's document;
+    # a city with no `basemap:` block cuts and paints nothing.
+    shore: Shore | None = None
     if city.basemap is None:
-        sea, parks, seabed_m, grass = Polygon(), Polygon(), 0.0, (0, 0, 0)
+        parks, grass = Polygon(), (0, 0, 0)
     else:
         sea, parks = ground_of_bundle(place.out_dir, region_id)
-        seabed_m, grass = city.basemap.seabed_m, city.basemap.park_material.colour
+        grass = city.basemap.park_material.colour
+        shore = Shore(
+            sea,
+            *shoreline_of_bundle(place.out_dir, region_id),
+            city.basemap.seabed_m,
+            city.basemap.quay_material.colour,
+        )
 
     report = BuildReport()
     # Stems a landmark replaces (`P3-6`), across the whole city config: a stem
@@ -1287,8 +1296,6 @@ def build_region(
                 if inside is None:
                     report.clipped += 1
                     continue
-                inside, sunk = sink_sea(inside, sea, seabed_m)
-                report.sunk += sunk
                 # A sheet's ground is one object, keyed by its own name: `stem`
                 # is a building's variant suffix and means nothing on terrain.
                 ordinal = _register(objects, inside.name, class_id, inside.aabb())
@@ -1367,7 +1374,20 @@ def build_region(
 
     # `_tile_ground` empties the list as it merges, so nothing here holds the
     # region's ground twice.
-    tiers = _tile_ground(ground, place.grid, style)
+    cuts: list[ShoreReport] = []
+
+    def cut(decimated: MeshData) -> MeshData:
+        assert shore is not None
+        made, counted = cut_sea(decimated, shore)
+        cuts.append(counted)
+        _hold(objects, made)
+        return made
+
+    tiers = _tile_ground(ground, place.grid, style, None if shore is None else cut)
+    if cuts:
+        # The finest cell's: `_tile_ground` cuts the cells in ascending order.
+        report.sunk, report.quay_m = cuts[0].sunk, cuts[0].quay_m
+        report.shore_m, report.quay_triangles = cuts[0].edge_m, cuts[0].wall_triangles
 
     if not buckets and not tiers:
         raise ValueError(
@@ -1409,7 +1429,10 @@ def build_region(
 
 
 def _tile_ground(
-    meshes: list[MeshData], grid: Grid, style: BuildingStyle
+    meshes: list[MeshData],
+    grid: Grid,
+    style: BuildingStyle,
+    cut: Callable[[MeshData], MeshData] | None = None,
 ) -> dict[tuple[int, int], dict[float, MeshData]]:
     """The region's ground, decimated **once per cell size** and then cut into tiles.
 
@@ -1449,6 +1472,11 @@ def _tile_ground(
     measured at 102.7 MB of source and 113.0 MB of merge live at once. The
     caller has already clipped each mesh to the region — see `build_region`, and
     `_within_region` for why that is a memory measure rather than tidiness.
+
+    `cut` is applied to each decimated whole before it is tiled (`P3-101`):
+    the sea's edge, `shore.cut_sea`. After the collapse for this function's own
+    reason — a cut made first would be averaged away by the cluster means — and
+    before `assign`, so a wall is a triangle of the one surface like any other.
     """
     if not meshes:
         return {}
@@ -1470,6 +1498,8 @@ def _tile_ground(
             # on any real region, and `config.py` refuses a cell table that is
             # not ascending, so no coarser cell can survive what this one did not.
             break
+        if cut is not None:
+            decimated = cut(decimated)
         for tile, piece in assign(decimated, grid):
             by_cell.setdefault(tile, {})[cell_m] = piece
     return by_cell
@@ -1956,9 +1986,15 @@ def _write_manifest(
             # Per replaced stem, the game-space AABB union of the meshes this
             # stage dropped for it (`P3-6`). Sorted so a rerun is byte-stable.
             "excluded": {key: report.excluded[key] for key in sorted(report.excluded)},
-            # Ground vertices dropped to `basemap.seabed_m` under the sea
-            # (`sink_sea`), before decimation. Zero where the frame holds no sea.
+            # Ground vertices at `basemap.seabed_m` under the sea, on the
+            # finest tier (`shore.cut_sea`). Zero where the frame holds no sea.
             "ground_sunk_vertices": report.sunk,
+            # The sea's edge over the ground, the length of it cut to a vertical
+            # face — a published sea wall or breakwater — and that face's
+            # triangles (`P3-101`).
+            "ground_shore_m": round(report.shore_m, 1),
+            "ground_quay_m": round(report.quay_m, 1),
+            "ground_quay_triangles": report.quay_triangles,
             # Ground vertices painted `basemap.park_material` inside the parks
             # (`paint_parks`), before decimation. Zero where the frame holds none.
             "ground_park_vertices": report.greened,

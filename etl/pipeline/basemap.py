@@ -35,7 +35,7 @@ from __future__ import annotations
 
 import argparse
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 
 import numpy as np
@@ -50,7 +50,7 @@ from pipeline.documents import write_document
 from pipeline.fetch import source_reads
 from pipeline.geometry import wound_up
 from pipeline.gltf import MeshData, write_glb
-from pipeline.mesh import select_triangles
+from pipeline.mesh import merge, select_triangles
 from pipeline.meshbuild import MIN_TWICE_AREA_M2
 
 log = logging.getLogger(__name__)
@@ -61,7 +61,12 @@ BASEMAP_NAME = "basemap.json"
 # water plane, or null where the frame holds no sea — and `water_level_m`, the
 # height it is drawn at, which `verify_water.gd` holds the mesh to. A v1 reader
 # ships a region without the plane.
-BASEMAP_SCHEMA = 2
+#
+# 3 since `P3-101` (`Q250`): `shoreline`, the published lines the sea was cut
+# from, split into the built (`hard`) and the natural (`soft`). The tile stage
+# cuts the ground along the sea's edge and reads from these which stretch is a
+# wall; a v2 reader would slope every shore.
+BASEMAP_SCHEMA = 3
 
 # The water plane, in the region's bundle. ⚠️ **No `-col` suffix**: water is not
 # a floor. The car that leaves the quay lands on the sunk ground under it.
@@ -70,6 +75,13 @@ WATER_NAME = "water.glb"
 # `tools/generated_scene_import.gd` maps this string onto `tuning/water.tres`,
 # and `verify_water.gd` checks that it did.
 WATER_MATERIAL = "sea_water"
+# The land no region's tiles draw (`P3-101`), a second mesh in `WATER_NAME`:
+# `tuning/harbour_land.tres` by the same channel.
+LAND_MESH_NAME = "harbour_land"
+LAND_MATERIAL = "harbour_land"
+# An edge of the land whose middle is this close to the sea is the sea's edge.
+# The two are cut from one outline, so the distance is rounding.
+_ON_SEA_M = 1e-3
 
 
 @dataclass
@@ -87,6 +99,16 @@ class BasemapReport:
     water_asset: str = ""
     # The plane's height, `basemap.water_level_m`; None with no block.
     water_level_m: float | None = None
+    # The published shoreline as plan polylines, built (`hard`) and natural
+    # (`soft`).
+    shoreline: dict[str, list[list[float]]] = field(
+        default_factory=lambda: {"hard": [], "soft": []}
+    )
+    # The land no region's tiles draw, and the length of the face under its
+    # sea edge.
+    land_m2: float = 0.0
+    land_quay_m: float = 0.0
+    land_triangles: int = 0
 
 
 def frame_of(city: Config, region_id: str, reach_m: float) -> Polygon:
@@ -129,16 +151,41 @@ def _layers(
     ]
 
 
-def read_shoreline(layers: list[gdb.Layer], spec: Basemap) -> list[LineString]:
-    """The shoreline lines whose published type bounds the sea."""
+def read_shoreline(
+    layers: list[gdb.Layer], spec: Basemap, types: frozenset[str] | None = None
+) -> list[LineString]:
+    """The shoreline lines whose published type bounds the sea, or only those
+    of `types`."""
+    wanted = spec.shoreline_types if types is None else types
     lines: list[LineString] = []
     for layer in layers:
-        types = layer.column(spec.shoreline.field("type"))
+        published = layer.column(spec.shoreline.field("type"))
         owners, parts = gdb.polylines(layer)
         for owner, points in zip(owners, parts, strict=True):
-            if str(types[owner]) in spec.shoreline_types and len(points) > 1:
+            if str(published[owner]) in wanted and len(points) > 1:
                 lines.append(LineString(points))
     return lines
+
+
+def polylines_of(
+    lines: list[LineString], frame: Polygon, simplify_m: float, transform: GameTransform
+) -> list[list[float]]:
+    """`lines` inside `frame`, simplified, each `[x0, z0, x1, z1, ...]` in game
+    plan metres: `triangles_of`'s terms, for a line."""
+    if not lines:
+        return []
+    kept = shapely.union_all(lines).intersection(frame).simplify(simplify_m)
+    found: list[list[float]] = []
+    for part in shapely.get_parts(kept):
+        if not isinstance(part, LineString) or part.length <= 0.0:
+            continue
+        points = np.asarray(part.coords)
+        game_x, _, game_z = transform.to_game(points[:, 0], points[:, 1])
+        flat: list[float] = []
+        for x, z in zip(game_x, game_z, strict=True):
+            flat.extend([round(float(x), 2), round(float(z), 2)])
+        found.append(flat)
+    return found
 
 
 def read_polygons(
@@ -212,6 +259,12 @@ def read_sea(
     return frame, sea_of(frame, shoreline, buildings, spec, report)
 
 
+def simplified(geometry: BaseGeometry, simplify_m: float) -> BaseGeometry:
+    """`geometry` as `triangles_of` cuts it: the outline the document
+    publishes, and so the one anything drawn against it must be cut from."""
+    return shapely.make_valid(geometry.simplify(simplify_m, preserve_topology=True))
+
+
 def triangles_of(
     geometry: BaseGeometry, simplify_m: float, transform: GameTransform
 ) -> list[list[float]]:
@@ -220,7 +273,7 @@ def triangles_of(
     Victoria Park's pond out of the park."""
     if geometry.is_empty:
         return []
-    simple = shapely.make_valid(geometry.simplify(simplify_m, preserve_topology=True))
+    simple = simplified(geometry, simplify_m)
     triangles: list[list[float]] = []
     for part in shapely.get_parts(simple):
         if not isinstance(part, Polygon) or part.area <= 0.0:
@@ -267,6 +320,85 @@ def water_mesh(
     return select_triangles(mesh, twice_area > MIN_TWICE_AREA_M2)
 
 
+def land_of(frame: Polygon, sea: BaseGeometry, drawn: list[Polygon], spec: Basemap) -> BaseGeometry:
+    """The land in `frame` within `land_within_m` of `sea` that lies in none of
+    `drawn`, the regions' own boxes. `sea` is the published outline
+    (`simplified`), so the land's edge is the water's edge and not a second
+    simplification of it."""
+    if sea.is_empty:
+        return Polygon()
+    near = sea.buffer(spec.land_within_m, quad_segs=4)
+    return frame.intersection(near).difference(shapely.union_all([sea, *drawn]))
+
+
+def land_mesh(
+    land: BaseGeometry,
+    sea: BaseGeometry,
+    transform: GameTransform,
+    spec: Basemap,
+    report: BasemapReport,
+) -> MeshData | None:
+    """`land` as one mesh: flat at `land_level_m` in `land_material`, and under
+    every edge it shares with `sea` a face down to `seabed_m` in
+    `quay_material`, looking out to sea. None with no land.
+
+    ⚠️ **Every sea edge is a face**, a high-water mark's too: the tiles slope a
+    natural shore on the sheets' terrain (`pipeline/shore.py`), and out here no
+    terrain is read."""
+    top = water_mesh(
+        triangles_of(land, 0.0, transform), spec.land_level_m, spec.land_material.colour
+    )
+    if top is None:
+        return None
+    report.land_m2 = float(land.area)
+    # The way `water_mesh` wound the top about `+Y`: a face is wound the same
+    # way about the direction it looks.
+    wound = np.sign(top.triangle_cross()[0, 1])
+    corners: list[np.ndarray] = []
+    facings: list[np.ndarray] = []
+    for polygon in shapely.get_parts(land):
+        if not isinstance(polygon, Polygon):
+            continue
+        for ring in (polygon.exterior, *polygon.interiors):
+            points = np.asarray(ring.coords)[:, :2]
+            middles = 0.5 * (points[:-1] + points[1:])
+            on_sea = shapely.distance(shapely.points(middles), sea) < _ON_SEA_M
+            for at in np.flatnonzero(on_sea):
+                step = points[at + 1] - points[at]
+                length = float(np.hypot(*step))
+                if length <= 0.0:
+                    continue
+                # Out of the land, in the sheet's plan; game z runs south.
+                out = np.array([step[1], -step[0]]) / length
+                if polygon.contains(shapely.Point(*(middles[at] + _ON_SEA_M * 10.0 * out))):
+                    out = -out
+                facing = np.array([out[0], 0.0, -out[1]])
+                x, _, z = transform.to_game(points[at : at + 2, 0], points[at : at + 2, 1])
+                x, z = np.round(x, 2), np.round(z, 2)
+                high = [[x[0], spec.land_level_m, z[0]], [x[1], spec.land_level_m, z[1]]]
+                low = [[x[1], spec.seabed_m, z[1]], [x[0], spec.seabed_m, z[0]]]
+                for face in (
+                    np.array([high[0], high[1], low[0]]),
+                    np.array([high[0], low[0], low[1]]),
+                ):
+                    cross = np.cross(face[1] - face[0], face[2] - face[0])
+                    corners.append(face if np.sign(cross @ facing) == wound else face[::-1])
+                    facings.append(facing)
+                report.land_quay_m += length
+    if not corners:
+        return replace(top, name=LAND_MESH_NAME, material=LAND_MATERIAL)
+    positions = np.concatenate(corners)
+    count = len(positions)
+    walls = MeshData(
+        name=LAND_MESH_NAME,
+        positions=positions,
+        normals=np.repeat(np.array(facings), 3, axis=0).astype(np.float32),
+        triangles=np.arange(count, dtype=np.uint32).reshape(-1, 3),
+        colours=np.tile(np.array([*spec.quay_material.colour, 255], dtype=np.uint8), (count, 1)),
+    )
+    return replace(merge([top, walls], name=LAND_MESH_NAME), material=LAND_MATERIAL)
+
+
 def build_region(
     city: Config,
     region_id: str,
@@ -298,13 +430,24 @@ def build_region(
 
     water = triangles_of(sea, spec.simplify_m, transform)
     park = triangles_of(green, spec.simplify_m, transform)
+    shores = _layers(city, spec, region_id, spec.shoreline, frame, sources_root)
+    soft_types = spec.shoreline_types - spec.hard_shoreline_types
+    report.shoreline = {
+        kind: polylines_of(read_shoreline(shores, spec, types), frame, spec.simplify_m, transform)
+        for kind, types in (("hard", spec.hard_shoreline_types), ("soft", soft_types))
+    }
     report.water_triangles = len(water)
     report.park_triangles = len(park)
 
     report.water_level_m = spec.water_level_m
     plane = water_mesh(water, spec.water_level_m, spec.water_material.colour)
     if plane is not None:
-        write_glb(out_dir / WATER_NAME, [plane])
+        outline = simplified(sea, spec.simplify_m)
+        tiled = [box(*city.projected_bounds(other).bbox) for other in city.regions]
+        land = land_mesh(land_of(frame, outline, tiled, spec), outline, transform, spec, report)
+        if land is not None:
+            report.land_triangles = land.triangle_count
+        write_glb(out_dir / WATER_NAME, [plane] if land is None else [plane, land])
         report.water_asset = WATER_NAME
     else:
         # Named from what was drawn, never from the constant: a stale plane
@@ -335,6 +478,11 @@ def _document(
         # `water_level_m`, which the engine-side check holds it to.
         "asset": report.water_asset or None,
         "water_level_m": report.water_level_m,
+        # The lines the sea was cut from, each `[x0, z0, x1, z1, ...]` in game
+        # plan metres: `hard` a sea wall or a breakwater, `soft` a high-water
+        # mark. `pipeline/shore.py` reads which stretch of the sea's edge is a
+        # wall from the nearer of the two.
+        "shoreline": report.shoreline,
         "report": {
             "pieces": report.pieces,
             "sea_pieces": report.sea_pieces,
@@ -342,6 +490,10 @@ def _document(
             "park_m2": round(report.park_m2, 1),
             "shoreline_lines": report.shoreline_lines,
             "park_polygons": report.park_polygons,
+            # The land no region's tiles draw, a second mesh in the asset.
+            "land_m2": round(report.land_m2, 1),
+            "land_quay_m": round(report.land_quay_m, 1),
+            "land_triangles": report.land_triangles,
         },
     }
 
