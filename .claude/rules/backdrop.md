@@ -33,5 +33,8 @@ footprints extruded to their published roof, one flat shore slab, and the sea ru
   a `basemap` change that moves `water` owes this stage.
 - `bounds` needs its sheets: `Config.fetch_extents` adds them to the fetch for each region in
   `regions`. A strip that touches a frame, or is not north of it, is refused.
+- Drawn on `GeneratedLayer.FAR_VISUAL_LAYER` alone and sorted last (`city_layer.gd`): a new lamp
+  must leave that layer out of its `light_cull_mask`, as `vehicle_lamps.gd` does, or the cull margin
+  pairs it with the far shore.
 - No collider, no shadow, unlit at night. A shader change owes a render, `grep -i "shader error"`
   and a frame under `--rendering-method gl_compatibility` (24-bit depth orders the band coarsely).

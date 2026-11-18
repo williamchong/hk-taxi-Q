@@ -3415,7 +3415,7 @@ share `twilight.tres`, a rose horizon; a shift never sees the 06:15 dawn.
 - Only Wan Chai ships it; Causeway Bay is drawn beside it. `city.json` schema 50 names `backdrop`.
 - 24-bit depth (Compatibility, the web build) orders the band at about 35 m a step at 1 km. One frame from Expo Drive East under `gl_compatibility` showed no artefact; the web build itself is owed.
 - Unlit at night: the skyline is dark blocks against the sky. Lit windows are not built.
-- Not measured, both read off the code in review: the far sea repeats each resident frame's own water, so a water pixel may be shaded twice where the copy draws first; and the cull margin may pair the taxi's lamps with the far shore at night. Both wait on the handset's frame time.
+- Two costs read off the code in review and closed in `city_layer.gd`, neither measurable on the desktop (frame time is at its 60 fps cap with the layer and without, GPU time not reported). The cull margin put the far shore's box round every lamp, so it is drawn on its own visual layer (`FAR_VISUAL_LAYER`) that a vehicle's beams leave out of `light_cull_mask`. The far sea repeats each frame's own water, so it carries a `sorting_offset` that sorts it as the furthest thing drawn and the copy fails the depth test rather than being shaded first. ⚠️ The opaque sort is in coarse depth layers: the handset's frame time is still the measurement.
 - Colour is three height bands off `materials:` (`Q33`); the default density is 5,000 pending the pick.
 
 ## `Q248` — Vehicles are glossy and inked: crowned panels, the painted sky back on paint, black lines and a black outline

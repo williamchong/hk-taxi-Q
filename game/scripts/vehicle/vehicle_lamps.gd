@@ -41,6 +41,8 @@ extends Node3D
 ## fraction of a second anyway, so sampling it 60 times inside that window
 ## re-derives the same answer 59 times over.
 
+const GeneratedLayer = preload("res://scripts/city/generated_layer.gd")
+
 ## The shader's per-instance channels. See `vehicle_body.gdshader`.
 const PARAMETER: StringName = &"lamp_lit"
 const PARAMETER_FRONT: StringName = &"lamp_front"
@@ -196,6 +198,9 @@ func _ready() -> void:
 		# so adding or removing a lamp is a scene edit and nothing else.
 		for node: Node in _car.find_children("*", "SpotLight3D", true, false):
 			var beam := node as SpotLight3D
+			# A beam reaches metres and the far shore stands a kilometre off,
+			# but its cull box reaches every lamp (`FAR_VISUAL_LAYER`).
+			beam.light_cull_mask &= ~GeneratedLayer.FAR_VISUAL_LAYER
 			_beams.append(beam)
 			_beam_ranges_m.append(beam.spot_range)
 			_beam_energies.append(beam.light_energy)

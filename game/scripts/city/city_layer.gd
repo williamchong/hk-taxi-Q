@@ -143,6 +143,11 @@ func _boot() -> void:
 				# The material draws it past the far plane; the engine culls
 				# by the box, which lies past it. The margin's own ceiling.
 				(found as GeometryInstance3D).extra_cull_margin = 16384.0
+				(found as GeometryInstance3D).layers = GeneratedLayer.FAR_VISUAL_LAYER
+				# Sorted as the furthest thing in the frame, which it is: the far
+				# sea repeats the region's own water, and drawn after it the copy
+				# fails the depth test instead of being shaded and painted over.
+				(found as GeometryInstance3D).sorting_offset = -16384.0
 	var line: String = (
 		"%s: %d triangles, %d colliders, spans %.0f x %.0f m"
 		% [layer, triangles, MeshMeasure.colliders(self), bounds.size.x, bounds.size.z]

@@ -371,6 +371,13 @@ static func casts_shadow(layer: String, mesh_name: String) -> bool:
 	return bool(row["casts_shadow"]) and (only.is_empty() or mesh_name in only)
 
 
+## The visual layer a `beyond_far` layer is drawn on, and no other. The cull
+## margin that keeps it past the far plane also puts its box round every lamp
+## in the city, so the engine would pair each beam with it; a lamp leaves this
+## layer out of its `light_cull_mask` (`vehicle_lamps.gd`) and is never paired.
+const FAR_VISUAL_LAYER: int = 1 << 1
+
+
 ## Whether the layer is drawn past the camera's far plane
 ## (`far_shore.gdshaderinc`), and so must not be culled at it.
 static func beyond_far(layer: String) -> bool:
