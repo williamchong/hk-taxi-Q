@@ -19,6 +19,7 @@ const KEY_MUSIC_VOLUME: String = "music_volume"
 const KEY_STEERING: String = "steering"
 const KEY_STEER_ON_RIGHT: String = "steer_on_right"
 const KEY_ANCHOR: String = "anchor"
+const KEY_WHEEL: String = "wheel"
 const KEY_FRAME_CAP: String = "frame_cap"
 ## The frame caps a phone is offered (`Q223`): the project's own 60
 ## (`application/run/max_fps.mobile`) and half of it, which is a whole number
@@ -151,6 +152,16 @@ static func anchor() -> String:
 
 static func set_anchor(choice: String) -> void:
 	_write(KEY_ANCHOR, choice)
+
+
+## How the steering thumb turns the wheel as saved (`Q251`), or "" where none
+## was: `ControlOptions.wheel` reads this after its flag and names the default.
+static func wheel() -> String:
+	return str(_read().get_value(SECTION, KEY_WHEEL, ""))
+
+
+static func set_wheel(choice: String) -> void:
+	_write(KEY_WHEEL, choice)
 
 
 ## Whether the steering thumb is the right one, the pedals under the left

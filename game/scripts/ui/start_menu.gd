@@ -545,6 +545,17 @@ func _controls(column: VBoxContainer) -> void:
 		],
 		ControlOptions.ANCHORS.find(ControlOptions.anchor())
 	)
+	# Spun or slid, whichever way the controls stand (`Q251`); the pause's too.
+	_choices(
+		column,
+		"Wheels",
+		"wheel",
+		[
+			["Spin", "wheel_spin", _pick_wheel.bind(ControlOptions.SPIN)],
+			["Slide", "wheel_slide", _pick_wheel.bind(ControlOptions.SLIDE)],
+		],
+		ControlOptions.WHEELS.find(ControlOptions.wheel())
+	)
 	if not pausing:
 		_choices(
 			column,
@@ -610,6 +621,16 @@ func _pick_anchor(choice: String) -> void:
 	Settings.set_anchor(choice)
 	if ControlOptions.anchor() != choice:
 		push_warning("menu: --touch-anchor= pins the controls this run; the choice is saved")
+		return
+	steering_changed.emit()
+	_relabel.call_deferred()
+
+
+## Save how the wheel is turned and say so, as the anchor is said.
+func _pick_wheel(choice: String) -> void:
+	Settings.set_wheel(choice)
+	if ControlOptions.wheel() != choice:
+		push_warning("menu: --touch-wheel= pins the wheel this run; the choice is saved")
 		return
 	steering_changed.emit()
 	_relabel.call_deferred()

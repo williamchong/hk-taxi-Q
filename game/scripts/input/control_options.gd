@@ -2,7 +2,8 @@ class_name ControlOptions
 extends RefCounted
 ## The player's picks that change how a drive handles or runs (`Q223`): the
 ## touch steering's response, whether the thumbs' controls stand still (`Q239`),
-## which thumb steers, and a phone's frame cap.
+## whether the wheel is spun or slid (`Q251`), which thumb steers, and a
+## phone's frame cap.
 ##
 ## ⚠️ **A dev flag beats a saved option**, as `Locale.language()` reads
 ## `--lang=` first: a scripted touch run must steer the same on every machine
@@ -17,6 +18,8 @@ const SIDE_ARG: String = "--touch-side="
 
 ## `--touch-anchor=relative|fixed`: where the thumbs' controls stand (`Q239`).
 const ANCHOR_ARG: String = "--touch-anchor="
+## `--touch-wheel=spin|slide`: how the steering thumb turns the wheel (`Q251`).
+const WHEEL_ARG: String = "--touch-wheel="
 
 const GENTLE: String = "gentle"
 const NORMAL: String = "normal"
@@ -29,6 +32,13 @@ const STEERINGS: PackedStringArray = [GENTLE, NORMAL, SHARP]
 const RELATIVE: String = "relative"
 const FIXED: String = "fixed"
 const ANCHORS: PackedStringArray = [RELATIVE, FIXED]
+## The wheel turns with the thumb's angle round its middle, the rim keeping up
+## with the finger; or with the thumb's sideways offset alone, at any height.
+## One or the other wherever the controls stand, never a switch between the two
+## mid-stroke (`Q251`, reversing `Q243`'s).
+const SPIN: String = "spin"
+const SLIDE: String = "slide"
+const WHEELS: PackedStringArray = [SPIN, SLIDE]
 const SIDE_LEFT: String = "left"
 const SIDE_RIGHT: String = "right"
 const MAX_FPS_SETTING: String = "application/run/max_fps"
@@ -56,12 +66,26 @@ static func anchor() -> String:
 	return resolve_anchor(Cmdline.value(ANCHOR_ARG), Settings.anchor())
 
 
-## `flag`, else `saved`, else RELATIVE: the first that names one.
+## `flag`, else `saved`, else FIXED (the user's call, 2026-11-18): the first
+## that names one.
 static func resolve_anchor(flag: String, saved: String) -> String:
 	for asked: String in [flag.to_lower(), saved]:
 		if asked in ANCHORS:
 			return asked
-	return RELATIVE
+	return FIXED
+
+
+## How the steering thumb turns the wheel this run: one of `WHEELS`.
+static func wheel() -> String:
+	return resolve_wheel(Cmdline.value(WHEEL_ARG), Settings.wheel())
+
+
+## `flag`, else `saved`, else SPIN (the user's call, `Q251`).
+static func resolve_wheel(flag: String, saved: String) -> String:
+	for asked: String in [flag.to_lower(), saved]:
+		if asked in WHEELS:
+			return asked
+	return SPIN
 
 
 ## `flag`, else `saved`, else NORMAL: the first that names a response. Apart

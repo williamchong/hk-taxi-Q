@@ -3234,7 +3234,7 @@ share `twilight.tres`, a rose horizon; a shift never sees the 06:15 dawn.
 
 ## `Q239` — The wheel and the pedals may stand still: CONTROLS offers FOLLOW THUMB or FIXED
 
-**Status.** Built 2026-11-17 on the user's ask; relative (`Q83`, `Q204`) stays the default. The handset drive owed.
+**Status.** Built 2026-11-17 on the user's ask; relative (`Q83`, `Q204`) was the default until 2026-11-18, when the user made FIXED the default (`resolve_anchor`, and `drive.sh` names it). The handset drive owed.
 
 - `ControlOptions.anchor`, `--touch-anchor=relative|fixed`: 操控位置 on CONTROLS, on the pause's
   too (no HUD is renewed).
@@ -3325,7 +3325,7 @@ share `twilight.tres`, a rose horizon; a shift never sees the 06:15 dawn.
 
 ## `Q243` — A thumb spins the wheel only once it is well down its side; until then the slide steers
 
-**Status.** Built 2026-11-18 on the user's ask ("only a more explicit spin turns the wheel into spin mode, and left right works most of the time"); reverses `Q238`'s "no spin state" and "the larger steers". Desk picks; the handset drive owed.
+**Status.** ⛔ Superseded 2026-11-18 by `Q251`: spin and slide are an explicit pick, never a switch mid-stroke. Was built 2026-11-18 on the user's ask ("only a more explicit spin turns the wheel into spin mode, and left right works most of the time"); reversed `Q238`'s "no spin state" and "the larger steers".
 
 - The slide alone steers, at any height, until the thumb is `spin_enter_deg` (120°) round the
   wheel's middle. Then the spin carries the wheel from where the slide had it to full lock at
@@ -3457,3 +3457,16 @@ share `twilight.tres`, a rose horizon; a shift never sees the 06:15 dawn.
 - Refused on the same sheets: 2.5 px (lamp posts and sign poles ink solid), half black, a darker own-hue, and a moonlit rim on the vehicles' own pass at night — the screen pass already draws that rim round a car, and at 1 cm the two were not told apart.
 - Next, planned not built: façade glass a step glossier; the handset's cost of the screen pass (`Q158`) now carries the vehicles' line too.
 
+## `Q251` — The wheel is spun or slid, the player's pick, spin by default; the controls stand fixed by default
+
+**Status.** Built 2026-11-18 on the user's ask ("make the wheel explicit about spin vs slide no matter the position mode, make spin default"; "static control position"); supersedes `Q243`, amends `Q239`'s default. The handset drive owed.
+
+- CONTROLS' 方向盤 is 轉動 (SPIN) or 滑動 (SLIDE), on the pause's too: `ControlOptions.wheel`,
+  `--touch-wheel=spin|slide`, `drive.sh` names spin. 操控位置 now defaults to 固定 (FIXED).
+- Spun: the wheel is the thumb's angle round the wheel's middle over `spin_lock_deg` (180°), so
+  the rim keeps up with the finger. Relative, from twelve o'clock where it landed, added to the
+  wheel it found; fixed, the absolute angle from twelve o'clock, read once off the hub. A move
+  through the hub turns nothing. Fixed used to be slide-only.
+- Slid: the sideways offset alone, at any height (`Q243`'s slide without its spin).
+- Gone: `spin_enter_deg` and the slide bias. The frame cap was already 60 by default on a phone
+  (`Settings.FRAME_CAPS[0]`, `Q223`); a desk stays uncapped.

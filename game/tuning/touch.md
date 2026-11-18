@@ -36,21 +36,15 @@ travel is full lock the instant a thumb lands. `verify_input.gd` refuses one.
 - `wheel_radius_px = 77.0`, `wheel_hub_px = 24.0` (`Q238`, the user's design): the wheel hangs
   from the thumb. The landing point is twelve o'clock and the wheel's middle is 77 units below
   (0.55 of `steer_travel_px`). Inside 24 units of the middle no bearing is read.
-- `spin_enter_deg = 120.0`, `spin_lock_deg = 180.0` (`Q243`, the user's ask: left and right work
-  most of the time, only an explicit spin turns the wheel). The slide alone steers, at any height,
-  until the thumb is 120° round the wheel's middle (four o'clock or eight o'clock). From there
-  the spin carries the wheel from where the slide had it to full lock at 180°, the bottom. Back
-  inside 120° the slide steers again, and what the spin left over shrinks to nothing by the
-  landing point. A lift ends a spin.
-  - How far a slide must sink before it is taken for a spin: 77 + 0.58 x units at `x` sideways,
-    so 106 at 50 out and 135 at 100 out (8 and 11 mm on the iPhone Air). Before `Q243` the turn
-    took over at about 77, and a stroke back across under the hub could leave the wheel turned
-    the wrong way.
-  - To ask for more of a spin, raise `spin_enter_deg` (135 gives 127 and 177 units); keep
-    `spin_lock_deg` over it. `verify_input.gd` requires enter over 90 and lock over enter.
-  - Costs: from three to four o'clock the wheel eases a little (0.28 to 0.21 of lock) before the
-    spin takes it up; a thumb landing in the bottom 6 mm of the glass can only slide.
-  - `spin_lock_deg` is also the angle the drawn wheel turns at full lock, now 180°.
-  - The fixed wheel (`Q239`) is slid across and never gone round.
+- `spin_lock_deg = 180.0` (`Q251`, the user's call): the steering thumb either SPINS the wheel or
+  SLIDES across it, the player's pick on CONTROLS (方向盤), spin by default, the same under either
+  anchor — never a switch between the two mid-stroke (that was `Q243`'s `spin_enter_deg`, gone).
+  - Spun: the wheel turns with the thumb's angle round its middle, full lock at 180° (the bottom),
+    so the drawn rim keeps up with the finger. Relative, the thumb lands on twelve o'clock and the
+    wheel takes up from where it was; fixed (`Q239`), the thumb's angle from twelve o'clock is the
+    wheel, as a fixed slide's offset from the middle is. A move through the hub turns nothing.
+  - Slid: the thumb's sideways offset alone, at any height, `steer_travel_px` to full lock.
+  - Lower `spin_lock_deg` for a quicker spin (90 is lock at three o'clock); it is also the angle
+    the drawn wheel turns at full lock on a slid wheel.
 
 The handbrake threshold and its hysteresis are not declared (`Q83`, deferred by `Q97`).

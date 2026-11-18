@@ -114,17 +114,9 @@ extends Resource
 ## across it is half a turn.
 @export_range(0.0, 200.0, 1.0) var wheel_hub_px: float
 
-## The degrees round the wheel's middle, from its twelve o'clock, at which a
-## thumb is spinning the wheel and no longer sliding across it (`Q243`). Under
-## it the thumb's sideways offset alone steers, however far it has sunk. Over
-## 90, so the thumb is below the wheel's middle before a spin is read: at 120 a
-## slide 100 units out has to sink 135 to be taken for one.
-@export_range(90.0, 360.0, 1.0, "suffix:°") var spin_enter_deg: float
-
-## The degrees round the wheel's middle at which a spinning thumb has full
-## lock, and the angle the drawn wheel turns at full lock. Over
-## `spin_enter_deg`: the spin carries the wheel from where the slide had it to
-## the lock between the two.
+## The degrees a thumb goes round the wheel's middle for full lock, on a
+## spun wheel (`Q251`), and the angle the drawn wheel turns at full lock on
+## either: the rim keeps up with a spinning finger.
 @export_range(30.0, 720.0, 1.0, "suffix:°") var spin_lock_deg: float
 
 ## Path to the shipped table. Named here so `input_router.gd` and

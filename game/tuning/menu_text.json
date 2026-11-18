@@ -134,6 +134,18 @@
       "en": "FIXED",
       "zh": "固定"
     },
+    "wheel": {
+      "en": "WHEEL",
+      "zh": "方向盤"
+    },
+    "wheel_spin": {
+      "en": "SPIN",
+      "zh": "轉動"
+    },
+    "wheel_slide": {
+      "en": "SLIDE",
+      "zh": "滑動"
+    },
     "side": {
       "en": "STEERING THUMB",
       "zh": "軚盤位置"

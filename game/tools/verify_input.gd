@@ -104,6 +104,10 @@ func _run() -> void:
 
 	_forget_settings_file()
 	SettingsScript.use_file(SETTINGS_PATH)
+	# The checks below are a relative, slid wheel's unless they say otherwise:
+	# named, since neither is the default (`Q239`, `Q251`).
+	SettingsScript.set_anchor("relative")
+	SettingsScript.set_wheel("slide")
 	_router = RouterScript.new()
 	_router.name = "TouchRouterUnderTest"
 	get_root().add_child(_router)
@@ -177,24 +181,18 @@ func _check_profile() -> void:
 		"profile",
 		"steer_return_at_top_s is %.3f" % _touch.steer_return_at_top_s
 	)
-	# A spin begins below the wheel's middle and ends at a lock beyond it
-	# (`Q243`): at 90 or under a level slide would be one.
+	# A wheel round a hub, spun to its lock (`Q251`): no lock is a divide by
+	# zero, and a hub as wide as the wheel turns nothing.
 	_expect(
 		(
 			_touch.wheel_radius_px > _touch.wheel_hub_px
 			and _touch.wheel_hub_px > 0.0
-			and _touch.spin_enter_deg > 90.0
-			and _touch.spin_lock_deg > _touch.spin_enter_deg
+			and _touch.spin_lock_deg > 0.0
 		),
 		"profile",
 		(
-			"the wheel is %.0f units round a %.0f hub, a spin from %.0f to %.0f degrees"
-			% [
-				_touch.wheel_radius_px,
-				_touch.wheel_hub_px,
-				_touch.spin_enter_deg,
-				_touch.spin_lock_deg
-			]
+			"the wheel is %.0f units round a %.0f hub, spun to its lock at %.0f degrees"
+			% [_touch.wheel_radius_px, _touch.wheel_hub_px, _touch.spin_lock_deg]
 		)
 	)
 	# The guard in `_axis_from` keeps a bad edit from dividing by zero; this is
@@ -687,10 +685,10 @@ func _check_wheel() -> void:
 	_check_spin(home)
 
 
-## A thumb that goes round the wheel turns it (`Q238`): the wheel hangs from
-## where the thumb landed, so the thumb is on its twelve o'clock, and the turn
-## is the thumb's angle round its middle once it is `spin_enter_deg` round
-## (`Q243`); short of that the slide steers.
+## The wheel is spun or slid, never a switch between the two (`Q251`). Slid,
+## the thumb's sideways offset alone steers, at any height. Spun, the wheel
+## hangs from where the thumb landed, so the thumb is on its twelve o'clock
+## (`Q238`), and turns with the thumb's angle round its middle.
 func _check_spin(home: Vector2) -> void:
 	var travel: float = _touch.steer_travel_px
 	var curve: float = _touch.steer_curve
@@ -703,61 +701,61 @@ func _check_spin(home: Vector2) -> void:
 		"spin",
 		"the wheel's middle is a radius under where the thumb landed"
 	)
-	# 🔴 Along the top the slide is what steers, at every offset: the reading a
-	# slide gave before there was a wheel to go round.
+	# 🔴 Slid: along the top, sunk past the middle, and round to the bottom,
+	# the sideways offset is the wheel.
 	var same: bool = true
 	for i: int in 41:
 		var x: float = travel * 1.5 * (i - 20) / 20.0
 		_move(FINGER_A, home + Vector2(x, 0.0))
 		same = same and is_equal_approx(_steer(), _touch.steer_from(x, curve))
-	_expect(same, "spin", "a thumb sliding along the wheel's top steers as a slide alone does")
-	# 🔴 And sunk below the wheel's middle it still is (`Q243`): out to the
-	# side, across under the hub and out the other side, short of a spin.
 	var sunk: float = radius + _touch.wheel_hub_px * 0.5
 	for x: float in [travel, -travel, travel * 0.5]:
 		_move(FINGER_A, home + Vector2(x, sunk))
 		same = same and is_equal_approx(_steer(), _touch.steer_from(x, curve))
-	_expect(same, "spin", "a slide that has sunk past the wheel's middle is still a slide")
+	_expect(same, "spin", "slid, the thumb's sideways offset steers at any height")
 	_move(FINGER_A, home)
+	for i: int in 12:
+		_move(FINGER_A, _on_circle(middle, radius, i + 1))
+	_expect(is_zero_approx(_steer()), "spin", "slid, a thumb gone round to the bottom is centred")
+	_lift(FINGER_A, home)
+	_roll()
 
-	# Round the rim, clockwise from the top, a twenty-fourth at a time.
+	_use_wheel("spin")
+	_press(FINGER_A, home)
+	var quarter: float = _touch.shape(90.0 / _touch.spin_lock_deg, curve)
 	for i: int in 6:
 		_move(FINGER_A, _on_circle(middle, radius, i + 1))
-	var quarter: float = _touch.steer_from(radius, curve)
 	_expect(
 		is_equal_approx(_steer(), quarter),
 		"spin",
-		"a quarter round to three o'clock is its sideways offset still, %.3f" % quarter
+		(
+			"spun, a quarter round to three o'clock is 90 of %.0f degrees: %.3f"
+			% [_touch.spin_lock_deg, _steer()]
+		)
 	)
-	for i: int in 4:
-		_move(FINGER_A, _on_circle(middle, radius, i + 7))
-	_expect(
-		_steer() > quarter and _steer() < 1.0,
-		"spin",
-		"on down the side the turn takes the wheel up, %.3f at five o'clock" % _steer()
-	)
-	for i: int in 2:
-		_move(FINGER_A, _on_circle(middle, radius, i + 11))
-	_expect(
-		is_equal_approx(_steer(), 1.0),
-		"spin",
-		"at the bottom, with no sideways offset left, the wheel is at its lock"
-	)
-	for i: int in 6:
-		_move(FINGER_A, _on_circle(middle, radius, i + 13))
+	# Back to the top along a level line: nothing a slide would read.
+	_move(FINGER_A, home + Vector2(radius, 0.0))
+	_move(FINGER_A, home)
+	_expect(is_zero_approx(_steer()), "spin", "spun, back at the top is straight ahead")
+	var lock_at: int = mini(roundi(_touch.spin_lock_deg / 15.0), 24)
+	for i: int in lock_at:
+		_move(FINGER_A, _on_circle(middle, radius, i + 1))
 	_expect(
 		is_equal_approx(_steer(), 1.0),
 		"spin",
-		"on round to nine o'clock the turn steers, not the offset now on the other side"
+		"round to %.0f degrees is the lock" % _touch.spin_lock_deg
 	)
+	for i: int in 3:
+		_move(FINGER_A, _on_circle(middle, radius, lock_at + i + 1))
+	_expect(is_equal_approx(_steer(), 1.0), "spin", "and on past it holds the lock")
 	# Back the way it came: what was wound is unwound, and no more.
-	for i: int in 18:
-		_move(FINGER_A, _on_circle(middle, radius, 17 - i))
+	for i: int in lock_at + 3:
+		_move(FINGER_A, _on_circle(middle, radius, lock_at + 2 - i))
 	_expect(is_zero_approx(_steer()), "spin", "back round to the top is straight ahead")
-	for i: int in 12:
+	for i: int in lock_at:
 		_move(FINGER_A, _on_circle(middle, radius, -(i + 1)))
 	_expect(
-		is_equal_approx(_steer(), -1.0), "spin", "and anticlockwise to the bottom is the other lock"
+		is_equal_approx(_steer(), -1.0), "spin", "and anticlockwise to the lock is the other one"
 	)
 	_lift(FINGER_A, home)
 	_roll()
@@ -779,6 +777,13 @@ func _check_spin(home: Vector2) -> void:
 	_expect(is_zero_approx(_steer()), "spin", "a flick across the wheel turns nothing")
 	_lift(FINGER_A, home)
 	_roll()
+	_use_wheel("slide")
+
+
+## Spin or slide the router's wheel from here on (`Q251`).
+func _use_wheel(choice: String) -> void:
+	SettingsScript.set_wheel(choice)
+	_router.refresh_options()
 
 
 ## The point `twentyfourths` of the way round a circle, clockwise on the glass
@@ -936,10 +941,12 @@ func _check_anchor() -> void:
 		(
 			ControlOptionsScript.resolve_anchor("FIXED", "relative") == "fixed"
 			and ControlOptionsScript.resolve_anchor("", "fixed") == "fixed"
-			and ControlOptionsScript.resolve_anchor("static", "") == "relative"
+			and ControlOptionsScript.resolve_anchor("RELATIVE", "fixed") == "relative"
+			and ControlOptionsScript.resolve_anchor("", "relative") == "relative"
+			and ControlOptionsScript.resolve_anchor("static", "") == "fixed"
 		),
 		"anchor",
-		"the anchor reads the flag, then the saved pick, then relative"
+		"the anchor reads the flag, then the saved pick, then fixed"
 	)
 	# ⚠️ Landed at the zones' middles, never at the rests: a headless canvas is
 	# square, and its zones (anchored mid-screen) do not reach its rests
@@ -984,8 +991,8 @@ func _check_anchor() -> void:
 		"anchor",
 		"the middle of the wheel is straight ahead, and below the pedals' is the brake"
 	)
-	# A fixed wheel is slid across, never gone round: under its middle is
-	# straight ahead, as its sideways offset says.
+	# A slid fixed wheel is never gone round: under its middle is straight
+	# ahead, as its sideways offset says.
 	_move(FINGER_A, wheel + Vector2(steer_travel, 0.0))
 	_move(FINGER_A, wheel + Vector2(steer_travel, steer_travel))
 	_move(FINGER_A, wheel + Vector2(0.0, steer_travel))
@@ -1004,6 +1011,7 @@ func _check_anchor() -> void:
 	)
 	_lift(FINGER_A, wheel)
 	_roll()
+	_check_fixed_spin(wheel, steer_at)
 
 	SettingsScript.set_anchor("relative")
 	_router.refresh_options()
@@ -1012,6 +1020,52 @@ func _check_anchor() -> void:
 		is_zero_approx(_steer()), "anchor", "relative again, a thumb steers nothing where it lands"
 	)
 	_lift(FINGER_A, steer_at)
+
+
+## A spun fixed wheel (`Q251`): the thumb's angle from the wheel's twelve
+## o'clock is the wheel, as a slid one's offset from the middle is.
+func _check_fixed_spin(wheel: Vector2, steer_at: Vector2) -> void:
+	var curve: float = _touch.steer_curve
+	var radius: float = _touch.wheel_radius_px
+	var lock: float = _touch.spin_lock_deg
+	_use_wheel("spin")
+	var off: Vector2 = steer_at - wheel
+	var from_top: float = rad_to_deg(Vector2.UP.angle_to(off))
+	var landed: float = _touch.shape(clampf(from_top / lock, -1.0, 1.0), curve)
+	_press(FINGER_A, steer_at)
+	_expect(
+		off.length() > _touch.wheel_hub_px and is_equal_approx(_steer(), landed),
+		"anchor",
+		(
+			"fixed and spun, a thumb down %.0f degrees round steers at once: %.3f"
+			% [from_top, _steer()]
+		)
+	)
+	# Out to the rim, then round it to three o'clock and up to the top.
+	_move(FINGER_A, wheel + off.normalized() * radius)
+	var at: float = from_top
+	for target: float in [90.0, 0.0]:
+		while not is_equal_approx(at, target):
+			at = move_toward(at, target, 10.0)
+			_move(FINGER_A, wheel + Vector2.UP.rotated(deg_to_rad(at)) * radius)
+		var expect: float = _touch.shape(target / lock, curve)
+		_expect(
+			is_equal_approx(_steer(), expect),
+			"anchor",
+			"fixed and spun, the thumb at %.0f degrees round is %.3f" % [target, _steer()]
+		)
+	# Across the hub in one move, three o'clock to nine: a fixed wheel is where
+	# the thumb is, so nothing the hub swallowed is left behind.
+	_move(FINGER_A, wheel + Vector2(radius, 0.0))
+	_move(FINGER_A, wheel + Vector2(-radius, 0.0))
+	_expect(
+		is_equal_approx(_steer(), -_touch.shape(90.0 / lock, curve)),
+		"anchor",
+		"fixed and spun, a thumb flicked across the hub reads where it landed: %.3f" % _steer()
+	)
+	_lift(FINGER_A, wheel)
+	_roll()
+	_use_wheel("slide")
 
 
 # --------------------------------------------------------------- options ----
@@ -1038,6 +1092,16 @@ func _check_options() -> void:
 		),
 		"options",
 		"the thumbs' sides read the flag, then the saved pick"
+	)
+	_expect(
+		(
+			ControlOptionsScript.resolve_wheel("SLIDE", "spin") == "slide"
+			and ControlOptionsScript.resolve_wheel("", "slide") == "slide"
+			and ControlOptionsScript.resolve_wheel("SPIN", "slide") == "spin"
+			and ControlOptionsScript.resolve_wheel("twist", "") == "spin"
+		),
+		"options",
+		"the wheel reads the flag, then the saved pick, then spin"
 	)
 
 	_check_anchor()

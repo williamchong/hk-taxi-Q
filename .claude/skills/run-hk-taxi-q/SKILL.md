@@ -77,9 +77,9 @@ godot --headless --path game --script "$PWD/.claude/skills/run-hk-taxi-q/driver.
 ### Arguments
 
 `drive.sh` appends `--debug-view=minimal`,
-`--menu=off`, `--lang=zh`, `--day-cycle=off`, `--touch-steer=normal`, `--touch-side=left` and
-`--touch-anchor=relative` unless the run names them, so a frame does not depend on this machine's
-saved options.
+`--menu=off`, `--lang=zh`, `--day-cycle=off`, `--touch-steer=normal`, `--touch-side=left`,
+`--touch-anchor=fixed` and `--touch-wheel=spin` (the defaults) unless the run names them, so a
+frame does not depend on this machine's saved options.
 
 | Argument | Meaning |
 |---|---|
@@ -110,7 +110,7 @@ saved options.
 | `--menu-page=home\|play\|guide\|options\|credits\|notices\|report\|record\|pause\|sound\|controls\|display\|language` | the sheet the menu opens on; needs `--menu=on`. `pause` drives 1 s first — shoot it after 1 s at `--debug-view=minimal`. `controls` shows nothing without `--touch=on` |
 | `--menu-sample=on` | fill the report sheet with a made-up result; saves no record |
 | `--touch=mouse\|on\|off` | `on` lays out for touch; `mouse` also drives the touch scheme with the mouse as one finger |
-| `--touch-steer=gentle\|normal\|sharp`, `--touch-side=left\|right`, `--touch-anchor=relative\|fixed` | touch steering curve, steering thumb's side, whether the controls follow the thumbs |
+| `--touch-steer=gentle\|normal\|sharp`, `--touch-side=left\|right`, `--touch-anchor=relative\|fixed`, `--touch-wheel=spin\|slide` | touch steering curve, steering thumb's side, whether the controls follow the thumbs, whether the wheel is spun or slid |
 | `--finger=fx,fy>gx,gy@start+dur` | a scripted touch in shares of the window; repeatable, so two are both thumbs |
 | `--window=WxH` | window size from boot; `1368x630` is an iPhone Air at half size |
 | `--safe-area=l,t,r,b` | handset insets in window pixels; `102,0,102,30` for the size above |

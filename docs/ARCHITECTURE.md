@@ -725,7 +725,8 @@ are per input method; drive assists are per car, tuned against a linear input.
 **Touch** is two relative thumbs: the landing point is the origin (`Q83`). `TouchSticks` draws a
 hint for each (`Q204`). `ControlOptions` picks the steering thumb's side (`--touch-side=`, default
 from the saved option), the response (`--touch-steer=`, `touch.tres`'s `steer_curve`, `Q220`) and
-whether the controls stand still (`--touch-anchor=relative|fixed`, `Q239`).
+whether the controls stand still (`--touch-anchor=relative|fixed`, default fixed, `Q239`) and
+whether the wheel is spun or slid (`--touch-wheel=spin|slide`, default spin, `Q251`).
 
 - `handbrake` is settled as a held offset on the steering thumb's vertical axis (`Q83`), not built.
   Nothing else goes on that axis.

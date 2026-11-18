@@ -91,7 +91,11 @@ case " $* " in
 esac
 case " $* " in
 *" --touch-anchor="*) ;;
-*) set -- "$@" --touch-anchor=relative ;;
+*) set -- "$@" --touch-anchor=fixed ;;
+esac
+case " $* " in
+*" --touch-wheel="*) ;;
+*) set -- "$@" --touch-wheel=spin ;;
 esac
 
 # Godot reports a failure with any of these and still exits 0.
