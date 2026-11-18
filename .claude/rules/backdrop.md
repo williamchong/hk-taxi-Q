@@ -36,5 +36,8 @@ footprints extruded to their published roof, one flat shore slab, and the sea ru
 - Drawn on `GeneratedLayer.FAR_VISUAL_LAYER` alone and sorted last (`city_layer.gd`): a new lamp
   must leave that layer out of its `light_cull_mask`, as `vehicle_lamps.gd` does, or the cull margin
   pairs it with the far shore.
+- Hidden by `city_layer.gd` when its box is outside the camera's view (`far_cull.gd`; `GROW_M`
+  covers the frame the answer is late by). Cost is measured facing the harbour AND facing away:
+  `--spawn-facing=212,5,0` and `212,5,80`, each against `--hide-layers=backdrop`.
 - No collider, no shadow, unlit at night. A shader change owes a render, `grep -i "shader error"`
   and a frame under `--rendering-method gl_compatibility` (24-bit depth orders the band coarsely).

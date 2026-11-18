@@ -14,6 +14,7 @@
 ## exists.
 extends SceneTree
 
+const FarCull = preload("res://scripts/city/far_cull.gd")
 const GeneratedLayer = preload("res://scripts/city/generated_layer.gd")
 const Manifest = preload("res://scripts/city/city_manifest.gd")
 const VerifyLayer = preload("res://tools/verify_layer.gd")
@@ -77,10 +78,41 @@ func _check(scene_root: Node3D) -> PackedStringArray:
 		problems.append("generated_layer.gd does not draw the far shore beyond the far plane")
 	if not problems.is_empty():
 		return problems
+	problems.append_array(_check_cull())
 	var pin: Dictionary = _check_pin(problems)
 	problems.append_array(_check_sea(library[SEA] as ArrayMesh))
 	if not pin.is_empty():
 		problems.append_array(_check_stands_off(library[SKYLINE] as ArrayMesh, pin))
+	return problems
+
+
+## `FarCull.outside` against a camera at the origin looking north (-Z) through
+## a square 90 degree frustum with its far plane at 400 m. The far shore is
+## hidden only by a side of the view: a box past the far plane is still seen,
+## which is the whole reason the engine's own cull could not be used.
+func _check_cull() -> PackedStringArray:
+	var slope: float = sqrt(0.5)
+	var planes: Array[Plane] = [
+		Plane(Vector3(0.0, 0.0, 1.0), 0.0),
+		Plane(Vector3(0.0, 0.0, -1.0), 400.0),
+		Plane(Vector3(-slope, 0.0, slope), 0.0),
+		Plane(Vector3(0.0, slope, slope), 0.0),
+		Plane(Vector3(slope, 0.0, slope), 0.0),
+		Plane(Vector3(0.0, -slope, slope), 0.0),
+	]
+	var size := Vector3(500.0, 100.0, 500.0)
+	var cases: Dictionary[String, Array] = {
+		"ahead, past the far plane": [Vector3(-250.0, 0.0, -1500.0), false],
+		"behind the camera": [Vector3(-250.0, 0.0, 1000.0), true],
+		"off to the east": [Vector3(3000.0, 0.0, -1000.0), true],
+		"across the edge of the view": [Vector3(700.0, 0.0, -1000.0), false],
+		"round the camera": [Vector3(-250.0, -50.0, -250.0), false],
+	}
+	var problems: PackedStringArray = []
+	for case: String in cases:
+		var hidden: bool = FarCull.outside(planes, AABB(cases[case][0], size))
+		if hidden != bool(cases[case][1]):
+			problems.append("a box %s is %s" % [case, "hidden" if hidden else "drawn"])
 	return problems
 
 

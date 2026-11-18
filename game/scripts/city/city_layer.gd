@@ -44,6 +44,7 @@
 ## (`trunks`), and the lamps' and the signs' posts (`posts`, `Q191`).
 extends Node3D
 
+const FarCull = preload("res://scripts/city/far_cull.gd")
 const GeneratedLayer = preload("res://scripts/city/generated_layer.gd")
 const MeshMeasure = preload("res://scripts/city/mesh_measure.gd")
 const PropBatch = preload("res://scripts/city/prop_batch.gd")
@@ -91,11 +92,29 @@ const _HEIGHT: Dictionary[String, String] = {
 	GeneratedLayer.SIGNS: "tops",
 }
 
+## The meshes of a layer drawn past the far plane, and each one's box in the
+## world; empty for every other layer, which then never processes.
+var _beyond_far: Array[GeometryInstance3D] = []
+var _beyond_far_boxes: Array[AABB] = []
+
 
 func _ready() -> void:
 	var began: int = PerfClock.begin()
+	# Only a layer `_boot` finds drawn past the far plane has anything to hide.
+	set_process(false)
 	_boot()
 	PerfClock.boot("layer %s" % layer, began)
+
+
+## A `beyond_far` layer's meshes are hidden while the camera cannot see them:
+## the engine no longer can, past the margin that keeps them drawn.
+func _process(_delta: float) -> void:
+	var camera: Camera3D = get_viewport().get_camera_3d()
+	if camera == null:
+		return
+	var planes: Array[Plane] = camera.get_frustum()
+	for index: int in _beyond_far.size():
+		_beyond_far[index].visible = not FarCull.outside(planes, _beyond_far_boxes[index])
 
 
 func _boot() -> void:
@@ -148,6 +167,10 @@ func _boot() -> void:
 				# sea repeats the region's own water, and drawn after it the copy
 				# fails the depth test instead of being shaded and painted over.
 				(found as GeometryInstance3D).sorting_offset = -16384.0
+				var far_mesh := found as GeometryInstance3D
+				_beyond_far.append(far_mesh)
+				_beyond_far_boxes.append(far_mesh.global_transform * far_mesh.get_aabb())
+	set_process(not _beyond_far.is_empty())
 	var line: String = (
 		"%s: %d triangles, %d colliders, spans %.0f x %.0f m"
 		% [layer, triangles, MeshMeasure.colliders(self), bounds.size.x, bounds.size.z]
