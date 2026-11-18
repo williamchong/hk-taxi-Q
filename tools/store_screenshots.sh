@@ -32,7 +32,7 @@ SHOTS="$ROOT/fastlane/screenshots"
 # name | the frame's time | the run
 SCENES=(
 	"1_hennessy|5|--spawn-fare=wan_chai/f_016 --seconds=6 --hold=accelerate@0.5+5.5"
-	"2_drift|4.2|--seconds=6 --hold=accelerate@0.3+5.7 --hold=steer_right@3.0+1.5 --hold=handbrake@3.0+1.5"
+	"2_drift|3.7|--seconds=6 --hold=accelerate@0.3+5.7 --hold=steer_right@3.0+1.5 --hold=handbrake@3.0+1.5"
 	"3_shift|3|--mode=shift --spawn-fare=wan_chai/f_018 --seconds=6 --hold=accelerate@0.5+5.5"
 	"4_harbour|5|--seconds=6 --hold=accelerate@0.5+5.5"
 	"5_night|3|--time-of-day=0.95 --spawn-fare=wan_chai/f_017 --seconds=6 --hold=accelerate@0.5+5.5"

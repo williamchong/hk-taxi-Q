@@ -12,22 +12,22 @@
   "captions": {
     "1_hennessy": {
       "en": {
-        "head": "Real Hong Kong streets",
-        "sub": "Built from the government's open map data"
+        "head": "Know this street?",
+        "sub": "Hennessy Road, built from the government's open map data"
       },
       "zh": {
-        "head": "真實香港街道",
-        "sub": "按政府開放地圖數據製成"
+        "head": "認得條街",
+        "sub": "按政府開放地圖數據製成，不用地圖都認得路"
       }
     },
     "2_drift": {
       "en": {
-        "head": "Drift for tips",
-        "sub": "Near misses, fast runs and jumps pay too"
+        "head": "Drift on real HK streets",
+        "sub": "Near misses and flyover jumps pay too"
       },
       "zh": {
-        "head": "甩尾賺小費",
-        "sub": "貼身而過、高速行駛、凌空飛躍都有小費"
+        "head": "香港街道上甩尾",
+        "sub": "貼身而過、凌空飛躍都有小費"
       }
     },
     "3_shift": {
