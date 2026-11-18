@@ -30,7 +30,7 @@ import yaml
 
 from pipeline.config import RailingClass, Railings, SourceLayer, load_config
 from pipeline.drawnroad import Ribbon as Road
-from pipeline.kerbside import NEARSIDE, OFFSIDE
+from pipeline.kerbside import NEARSIDE, OFFSIDE, merge_runs
 from pipeline.placements import Placement, expanded, stood_positions
 from pipeline.polyline import plan_lengths
 from pipeline.railings import (
@@ -539,6 +539,34 @@ class TestFence:
         assert across.min() == pytest.approx(5.6, abs=1e-6)
         assert across.max() == pytest.approx(5.6 + klass().thickness_m, abs=1e-6)
         assert np.isin(np.round(across, 6), [5.6, round(5.6 + klass().thickness_m, 6)]).all()
+
+    def test_a_survey_on_both_sides_of_the_fence_line_draws_one_straight_fence(self) -> None:
+        """Every sample is pushed to `outset_m` past the kerb, never only the
+        ones inside it (`Q78`).
+
+        The signs and lamps clamp a post outward only and leave one already
+        outside where it stands, because a post is a point. A fence is a run:
+        the same rule here would follow every sample past the line and zigzag a
+        straight street's fence. This survey zigzags between 4.0 m and 7.0 m
+        about the 5.6 m line, all inside `max_shift_m`, and the fence is straight.
+        """
+        edge = straight(0.0, 100.0)
+        survey = np.array(
+            [[x, 104.0 if i % 2 == 0 else 107.0] for i, x in enumerate(range(10, 91, 10))]
+        )
+        drawn = {7: ribbon(edge)}
+        cells, report = assign([(survey, "CRAIL1")], [(7, edge)], drawn)
+        assert drew(report).samples_over_shift == 0
+        stands: list[Placement] = []
+        for (_edge, _klass, side), found in cells.items():
+            for start, stop, code in merge_runs(found, spec().sample_m, klass().bridge_gap_m):
+                draw_run(
+                    stands, drawn[7], klass(), side, start, stop, code, spec().sample_m, report
+                )
+        mesh = panelled(stands)
+        assert mesh is not None
+        across = np.round(np.abs(mesh.positions[:, 2] - 100.0), 6)
+        assert np.isin(across, [5.6, round(5.6 + klass().thickness_m, 6)]).all()
 
     def test_the_fence_is_as_tall_as_it_was_authored_and_sinks_below_the_road(self) -> None:
         edge = straight(0.0, 100.0)
