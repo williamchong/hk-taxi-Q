@@ -130,6 +130,7 @@ func _init() -> void:
 	_check_near_miss()
 	_check_close()
 	_check_tally()
+	_check_restore()
 
 	_finish("verify_fares")
 
@@ -2760,6 +2761,135 @@ static func _drift_drive(
 	_slide(system, FAST, threshold, drift_ticks - 1)
 	_slide(system, FAST, 0.0, 1)
 	_tick(system, system.fare.destination.point, CRAWL, 1)
+
+
+## A saved run put back (`Q253`): a fare mid-carry is restored onto a fresh
+## system through the text a `ConfigFile` writes, with its meter, its clock,
+## its receipt and the run's books as they were, and the next sample delivers
+## it to the same money; its tally is already banked. A passenger still walking
+## to the car waits at the kerb and is hailed again; a fare whose stop no
+## longer resolves leaves the books and nobody aboard.
+func _check_restore() -> void:
+	var scout: FareSystem = _system(_fares, _profile, SEED)
+	var pickup: Fare.Stop = _reachable_pickup(scout)
+	scout.free()
+	if pickup == null:
+		_expect(true, "restore", "SKIP: no pickup on this region alone to carry a fare from")
+		return
+	var system: FareSystem = _system(_fares, _profile, SEED)
+	_tick(system, pickup.point, CRAWL, 1 + int(_profile.board_s / TICK_S))
+	# A run far from everything, past the flagfall's distance: the meter
+	# steps, and the speed skill pays. 3 km in 3 s, so the clock keeps time.
+	_tick(system, FAR_AWAY, 1000.0, 12)
+	_expect(
+		(
+			system.state == FareSystem.State.CARRYING
+			and system.fare.meter.steps > 0
+			and not system.fare.awards.is_empty()
+		),
+		"restore",
+		(
+			"carrying, the meter %d unit(s) past the flagfall and %d award(s) on the receipt, to save"
+			% [system.fare.meter.steps, system.fare.awards.size()]
+		)
+	)
+	if system.state != FareSystem.State.CARRYING:
+		system.free()
+		return
+	var saved: Dictionary = str_to_var(var_to_str(system.snapshot()))
+	var resumed: FareSystem = _system(_fares, _profile, SEED + 1)
+	var seated: Array[int] = [0]
+	resumed.restored.connect(func(_fare: Fare) -> void: seated[0] += 1)
+	var aboard: bool = resumed.restore(saved, pickup.point, Vector3.FORWARD)
+	var was: Fare = system.fare
+	var now: Fare = resumed.fare
+	_expect(
+		aboard and seated[0] == 1 and resumed.state == FareSystem.State.CARRYING,
+		"restore",
+		"the passenger is back aboard, said once"
+	)
+	_expect(
+		(
+			now.meter.reading_hkd() == was.meter.reading_hkd()
+			and now.meter.steps == was.meter.steps
+			and is_equal_approx(now.meter.distance_m(), was.meter.distance_m())
+		),
+		"restore",
+		"mutation caught: the meter reads HK$%.1f as saved" % was.meter.reading_hkd()
+	)
+	_expect(
+		(
+			is_equal_approx(now.remaining_s, was.remaining_s)
+			and is_equal_approx(now.allowance_s, was.allowance_s)
+			and is_equal_approx(now.tip_hkd, was.tip_hkd)
+			and now.awards.size() == was.awards.size()
+			and now.destination.same_as(was.destination)
+			and now.route != null
+		),
+		"restore",
+		"the clock, the tip, the receipt and the destination as saved, the route planned"
+	)
+	_expect(
+		(
+			resumed.tally.counts == system.tally.counts
+			and is_equal_approx(resumed.tally.top_speed_kph, system.tally.top_speed_kph)
+			and resumed.tally.take_unsaved().is_empty()
+		),
+		"restore",
+		"the run's books as saved, and already banked"
+	)
+	var still_waiting: bool = false
+	for stop: Fare.Stop in resumed.pickups():
+		still_waiting = still_waiting or stop.same_as(pickup)
+	_expect(not still_waiting, "restore", "the passenger aboard does not also wait at the kerb")
+	var destination: Vector3 = was.destination.point
+	_tick(system, destination, CRAWL, 1)
+	_tick(resumed, destination, CRAWL, 1)
+	_expect(
+		(
+			resumed.deliveries == 1
+			and system.deliveries == 1
+			and is_equal_approx(resumed.earned_hkd, system.earned_hkd)
+		),
+		"restore",
+		"delivered to the same money as the run never saved: HK$%.1f" % system.earned_hkd
+	)
+	resumed.free()
+
+	# A passenger still walking to the car is seated at their kerb again.
+	var boarding: FareSystem = _system(_fares, _profile, SEED)
+	_tick(boarding, pickup.point, CRAWL, 1)
+	var walking: Dictionary = str_to_var(var_to_str(boarding.snapshot()))
+	var kerb: FareSystem = _system(_fares, _profile, SEED + 1)
+	kerb.restore(walking, pickup.point, Vector3.FORWARD)
+	var waits: bool = false
+	for stop: Fare.Stop in kerb.pickups():
+		waits = waits or stop.same_as(pickup)
+	_expect(
+		kerb.state == FareSystem.State.IDLE and waits,
+		"restore",
+		"a passenger walking to the car waits at the kerb again"
+	)
+	_tick(kerb, pickup.point, CRAWL, 1)
+	_expect(kerb.state == FareSystem.State.BOARDING, "restore", "and the next stop hails them")
+	boarding.free()
+	kerb.free()
+
+	# A stop the bundle no longer publishes: the books, nobody aboard.
+	(saved["fare"] as Dictionary)["destination"] = "nowhere/f_000"
+	var stale: FareSystem = _system(_fares, _profile, SEED)
+	var refused: bool = not stale.restore(saved, pickup.point, Vector3.FORWARD)
+	_expect(
+		(
+			refused
+			and stale.state == FareSystem.State.IDLE
+			and is_equal_approx(stale.earned_hkd, float(saved["earned_hkd"]))
+		),
+		"restore",
+		"a fare whose stop is gone leaves the books and nobody aboard"
+	)
+	stale.free()
+	system.free()
 
 
 ## A system over `fares` with `profile`, the shipped tariff and skills, and a

@@ -82,6 +82,15 @@ brush is thin (`button_size_zh`, `heading_size_zh`), the 黑體 dense (`body_siz
   Never above the cap in force, and 0 holds nothing. Not low-processor mode: the water and the
   blinkers read `TIME`. The saving is not measured on a handset.
 
+## The saved run
+
+- `autosave_s` 30 (`Q253`): game seconds between saves of the run in play. The pause, the app
+  losing the screen, the window closing and every fare's boarding, delivery and walk-off save it
+  too, so this only bounds what a kill with no notice loses: a crash, or the system reclaiming a
+  foreground app. Half a minute of driving is the most the player can lose; one save is a small
+  `ConfigFile` write (`RunSave`), so a shorter step costs little but buys nothing a player feels.
+  0 is refused as a zero dial.
+
 ## The boot cover
 
 `ShaderWarmup` holds an opaque cover over the menu's first seconds so the web build compiles its

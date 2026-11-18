@@ -26,6 +26,12 @@ extends Node
 ## instead (`Q189`): what it banked and how long it drove. This node stays
 ## pausable — its children would inherit anything else — so the menu's signals
 ## are what reach it while the tree is held.
+##
+## And the saved run (`Q253`, the user's ask): what is in play is written to
+## `RunSave` as the pause opens — the app losing the screen and END both pass
+## through it — as the window closes, at every fare's start and end, and every
+## `MenuProfile.autosave_s` of game time for a kill with no notice. HOME offers
+## CONTINUE while one is saved; PLAY replaces it and 交更 removes it.
 
 ## How long `--menu-page=pause` drives before it pauses: the chase rig is
 ## snapped onto the car at start and needs a moment to frame it.
@@ -48,6 +54,9 @@ var _gui: Node = null
 var _ended: bool = false
 ## The menu over a paused drive, while one is up.
 var _pause_menu: StartMenu = null
+## Saves the run every `MenuProfile.autosave_s` of game time; a child, so it
+## holds with the tree under the pause.
+var _autosave: Timer = null
 
 
 func _ready() -> void:
@@ -72,6 +81,7 @@ func _ready() -> void:
 	level.shift_over.connect(_on_shift_over)
 	if not menu_up:
 		return
+	_follow_run()
 	if Cmdline.value(StartMenu.PAGE_ARG).to_lower() == "pause":
 		# A frame of the pause is one `drive.sh` run: the drive starts as
 		# PLAY would start it and is held once the chase rig has settled.
@@ -102,7 +112,7 @@ func _notification(what: int) -> void:
 		NOTIFICATION_APPLICATION_PAUSED, NOTIFICATION_APPLICATION_FOCUS_OUT:
 			pause()
 		NOTIFICATION_WM_CLOSE_REQUEST:
-			_bank_tally(false)
+			_save_run()
 
 
 ## Only a drive in play pauses: never under `--menu=off` (every scripted run),
@@ -128,7 +138,7 @@ func pause() -> void:
 		ControlOptions.hold_frames(profile.pause_fps)
 	# Before anything can end the app: this is also the way out of a run, and
 	# nothing moves while the tree is held, so END needs no second save.
-	_bank_tally(false)
+	_save_run()
 	var shown := StartMenu.new()
 	shown.name = "PauseMenu"
 	shown.pausing = true
@@ -216,6 +226,7 @@ func _uncover(shown: StartMenu) -> void:
 
 func _follow_menu(shown: StartMenu) -> void:
 	shown.started.connect(_on_started)
+	shown.continued.connect(_on_continued)
 	shown.language_changed.connect(_on_language_changed)
 	shown.steering_changed.connect(_on_steering_changed)
 	shown.side_changed.connect(_on_side_changed)
@@ -238,13 +249,28 @@ func _hand_over() -> void:
 
 
 func _on_started(mode: DayClock.Mode) -> void:
-	if _ended:
-		# The last run's receipt and total are still on its face.
-		_ended = false
-		_renew_hud()
+	# A new run replaces the saved one, before its first save can.
+	if _records_run():
+		RunSave.clear()
+	_take_the_wheel()
 	level.play(mode)
 	if is_instance_valid(hud):
 		hud.visible = true
+
+
+## CONTINUE (`Q253`): the saved run HOME read, back where it was left.
+func _on_continued(run: RunSave) -> void:
+	_take_the_wheel()
+	level.continue_run(run)
+	if is_instance_valid(hud):
+		hud.visible = true
+
+
+## A fresh HUD where the last run's receipt and total are still on its face.
+func _take_the_wheel() -> void:
+	if _ended:
+		_ended = false
+		_renew_hud()
 
 
 ## 交更 (`Q162`): the level parks under the report, and the run's total is
@@ -267,6 +293,9 @@ func _on_shift_over() -> void:
 	report.new_best = Settings.record_shift(report.total_hkd)
 	report.best_hkd = Settings.best_shift_hkd()
 	_bank_tally(true)
+	# The shift is over: there is nothing left of it to continue.
+	if _records_run():
+		RunSave.clear()
 	_open_menu(report)
 
 
@@ -274,14 +303,64 @@ func _on_shift_over() -> void:
 ## `Q169`). `shift_finished` is 交更's alone. Only a player's run: no menu is a
 ## scripted one, and a run naming a menu page or the sample is taking a frame.
 func _bank_tally(shift_finished: bool) -> void:
-	if (
-		_gui == null
-		or not is_instance_valid(level.fares)
-		or not Cmdline.value(StartMenu.PAGE_ARG).is_empty()
-		or not Cmdline.value(StartMenu.SAMPLE_ARG).is_empty()
-	):
+	if not _records_run():
 		return
 	Settings.bank_tally(level.fares.tally, shift_finished)
+
+
+## Whether this run is a player's, whose books and save are written: a menu,
+## a fare loop, and no flag taking a frame.
+func _records_run() -> bool:
+	return (
+		_gui != null
+		and is_instance_valid(level.fares)
+		and level.fares.usable()
+		and Cmdline.value(StartMenu.PAGE_ARG).is_empty()
+		and Cmdline.value(StartMenu.SAMPLE_ARG).is_empty()
+	)
+
+
+## The run in play into the lifetime books and then into `RunSave` (`Q253`).
+## Banked first, so the save's books are the banked ones and a resume adds
+## only what follows (`SessionTally.from_dict`). A parked car is no run in
+## play — a menu at boot, over a report, or after END — and writes no save.
+func _save_run() -> void:
+	_bank_tally(false)
+	if not _records_run():
+		return
+	var run: RunSave = level.capture_run()
+	if run == null:
+		return
+	run.write()
+	# Any save restarts the count: the timer bounds the time since the last.
+	if _autosave != null:
+		_autosave.start()
+
+
+## The saves a run in play takes besides the pause's: a fare's start and end,
+## and the timer. A table with no step saves at those alone, and says so.
+func _follow_run() -> void:
+	if not _records_run():
+		return
+	level.fares.boarded.connect(_save_run.unbind(1))
+	level.fares.delivered.connect(_save_run.unbind(1))
+	level.fares.bailed.connect(_save_run.unbind(1))
+	var profile: MenuProfile = load(MenuProfile.PATH) as MenuProfile
+	if profile == null or profile.autosave_s <= 0.0:
+		push_warning(
+			(
+				"Main: no autosave_s in %s; the run saves at the pause and fares only"
+				% MenuProfile.PATH
+			)
+		)
+		return
+	_autosave = Timer.new()
+	_autosave.name = "Autosave"
+	_autosave.wait_time = profile.autosave_s
+	_autosave.process_callback = Timer.TIMER_PROCESS_PHYSICS
+	_autosave.timeout.connect(_save_run)
+	add_child(_autosave)
+	_autosave.start()
 
 
 ## A fresh menu over the parked level: on the report, or on HOME for none.

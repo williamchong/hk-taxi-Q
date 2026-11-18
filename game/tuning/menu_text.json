@@ -30,6 +30,14 @@
       "en": "PLAY",
       "zh": "開始遊戲"
     },
+    "continue": {
+      "en": "CONTINUE",
+      "zh": "繼續遊戲"
+    },
+    "saved_run": {
+      "en": "%s · %s · HK$%s",
+      "zh": "%s · %s · HK$%s"
+    },
     "shift": {
       "en": "THE SHIFT",
       "zh": "特更"

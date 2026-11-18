@@ -88,6 +88,7 @@ func _ready() -> void:
 			_tail = node as LightTail
 	fares.hailed.connect(_on_hailed)
 	fares.boarded.connect(_on_boarded)
+	fares.restored.connect(_on_restored)
 	fares.cancelled.connect(_on_cancelled)
 	fares.delivered.connect(_on_alighted)
 	fares.bailed.connect(_on_alighted)
@@ -167,6 +168,16 @@ func _on_hailed(_fare: Fare) -> void:
 func _on_boarded(_fare: Fare) -> void:
 	flags_down += 1
 	_cabin_sound("flag_down")
+	_boarding_hazards(false)
+	if _lamps != null:
+		_lamps.for_hire = false
+	if _door != null:
+		_door.close()
+
+
+## A resumed run's passenger (`Q253`): the sign off and the door shut, as at
+## the boarding, but no flag dropped — the meter was running before the save.
+func _on_restored(_fare: Fare) -> void:
 	_boarding_hazards(false)
 	if _lamps != null:
 		_lamps.for_hire = false

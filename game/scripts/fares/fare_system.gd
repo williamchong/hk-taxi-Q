@@ -99,6 +99,9 @@ extends Node
 signal hailed(fare: Fare)
 ## Emitted when the passenger is aboard and the meter and the clock start.
 signal boarded(fare: Fare)
+## Emitted when a saved run put a passenger back aboard (`restore`, `Q253`):
+## the fare as `boarded` would hand it, minus the door and the flag's sound.
+signal restored(fare: Fare)
 ## Emitted when the car left the pickup's radius before boarding finished.
 signal cancelled(fare: Fare)
 ## Emitted at the destination, with `banked_hkd` set.
@@ -467,6 +470,119 @@ func reset() -> void:
 		combo.clear()
 
 
+## The run's books and the fare aboard, as plain values, for a saved run
+## (`Q253`). The waiting customers and the pools are not in it: they are the
+## city's, as `reset` keeps them, and a resumed run draws its own. A stop is
+## saved by its `Fare.Stop.key`, so a save names the published node, never an
+## index into a pool the next draw orders differently.
+func snapshot() -> Dictionary:
+	var saved: Dictionary = {
+		"earned_hkd": earned_hkd,
+		"cancellations": cancellations,
+		"hail_refusals": hail_refusals,
+		"retired": retired,
+		"armed": _armed,
+		"tally": tally.to_dict(),
+		"state": state,
+	}
+	if state == State.IDLE or fare == null:
+		return saved
+	var awards: Array = []
+	for award: Fare.Award in fare.awards:
+		awards.append([award.skill, award.hkd])
+	saved["fare"] = {
+		"pickup": fare.pickup.key(),
+		"destination": fare.destination.key(),
+		"par_m": fare.par_m,
+		"route_found": fare.route_found,
+		"allowance_s": fare.allowance_s,
+		"remaining_s": fare.remaining_s,
+		"skills_hkd": fare.skills_hkd,
+		"tip_hkd": fare.tip_hkd,
+		"awards": awards,
+		"meter": fare.meter.snapshot(),
+	}
+	return saved
+
+
+## A saved run back on this loop (`Q253`, the user's call: the passenger stays
+## aboard): `reset`, then the books, then the fare. A passenger CARRYING is
+## seated with the meter, the clock and the receipt as saved, and the route is
+## planned from `position` facing `heading`, as the next sample would plan it.
+## One BOARDING is seated at the kerb they were walking from instead — the car
+## stands beside them, so the next sample hails them again; nothing was on
+## their meter yet. False where the fare's stop no longer resolves (a rebuilt
+## region): the books are kept and nobody is aboard.
+func restore(saved: Dictionary, position: Vector3, heading: Vector3) -> bool:
+	if not _usable:
+		return false
+	reset()
+	earned_hkd = float(saved.get("earned_hkd", 0.0))
+	cancellations = int(saved.get("cancellations", 0))
+	hail_refusals = int(saved.get("hail_refusals", 0))
+	retired = int(saved.get("retired", 0))
+	_armed = bool(saved.get("armed", true))
+	tally = SessionTally.from_dict(saved.get("tally", {}))
+	_last_position = position
+	var aboard: bool = _restore_fare(
+		int(saved.get("state", State.IDLE)), saved.get("fare", {}), position, heading
+	)
+	_rescan(position)
+	pickups_changed.emit()
+	sampled.emit()
+	return aboard
+
+
+func _restore_fare(saved_state: int, aboard: Variant, position: Vector3, heading: Vector3) -> bool:
+	if saved_state == State.IDLE or not aboard is Dictionary or (aboard as Dictionary).is_empty():
+		return true
+	var details: Dictionary = aboard
+	var pickup: Fare.Stop = _stop_keyed(str(details.get("pickup", "")), pool() + dropoffs())
+	var destination: Fare.Stop = _stop_keyed(str(details.get("destination", "")), dropoffs())
+	if pickup == null or destination == null:
+		push_warning(
+			(
+				"fares: the saved fare %s -> %s no longer resolves; resumed with nobody aboard"
+				% [details.get("pickup", ""), details.get("destination", "")]
+			)
+		)
+		return false
+	if saved_state == State.BOARDING:
+		_armed = true
+		return wait_at(pickup.region, pickup.id)
+	var drawn: Fare = _new_fare(pickup, destination)
+	drawn.par_m = float(details.get("par_m", 0.0))
+	drawn.route_found = bool(details.get("route_found", false))
+	drawn.allowance_s = float(details.get("allowance_s", 0.0))
+	drawn.remaining_s = float(details.get("remaining_s", 0.0))
+	drawn.skills_hkd = float(details.get("skills_hkd", 0.0))
+	drawn.tip_hkd = float(details.get("tip_hkd", 0.0))
+	for paid: Variant in details.get("awards", []):
+		if paid is Array and (paid as Array).size() == 2:
+			drawn.awards.append(Fare.Award.new(int(paid[0]) as Fare.Skill, float(paid[1])))
+	drawn.meter.restore(details.get("meter", {}))
+	fare = drawn
+	# Off the kerb if this draw seated them there: they are aboard.
+	for index: int in _live.size():
+		if _live[index].same_as(pickup):
+			_bound.erase(_live[index].key())
+			_live.remove_at(index)
+			break
+	state = State.CARRYING
+	_last_reading_hkd = fare.meter.reading_hkd()
+	_reroute(position, heading)
+	restored.emit(fare)
+	return true
+
+
+## The stop in `stops` whose `Fare.Stop.key` is `key`, or null.
+static func _stop_keyed(key: String, stops: Array[Fare.Stop]) -> Fare.Stop:
+	for stop: Fare.Stop in stops:
+		if stop.key() == key:
+			return stop
+	return null
+
+
 ## The customers waiting now: where a fare may start. A handful, redrawn as
 ## they board (`pickups_changed`).
 func pickups() -> Array[Fare.Stop]:
@@ -733,6 +849,17 @@ func _sample_boarding(position: Vector3, since_sample: float) -> void:
 
 
 func _sample_carrying(position: Vector3, speed_kph: float, heading: Vector3) -> void:
+	var apart_m: float = _reroute(position, heading)
+	if apart_m > _profile.deliver_radius_m:
+		return
+	if speed_kph >= _profile.stop_below_kph:
+		return
+	_deliver()
+
+
+## The legal route from the car to the fare's destination, onto `fare`, and
+## the plan distance to it: every carrying sample, and a restored fare's first.
+func _reroute(position: Vector3, heading: Vector3) -> float:
 	var apart_m: float = RoadGraph.plan_distance(position, fare.destination.point)
 	var hit: RoadGraph.Hit = _graph.nearest_edge(position, heading)
 	if hit.hit():
@@ -755,11 +882,7 @@ func _sample_carrying(position: Vector3, speed_kph: float, heading: Vector3) -> 
 	else:
 		fare.remaining_road_m = apart_m
 		fare.route = null
-	if apart_m > _profile.deliver_radius_m:
-		return
-	if speed_kph >= _profile.stop_below_kph:
-		return
-	_deliver()
+	return apart_m
 
 
 ## The passenger has hailed from `pickup`: draw where they are going, or refuse.
@@ -769,10 +892,7 @@ func _hail(pickup: Fare.Stop) -> void:
 		hail_refusals += 1
 		_armed = false
 		return
-	var drawn := Fare.new()
-	drawn.kind = Fare.kind_of(destination.node)
-	drawn.pickup = pickup
-	drawn.destination = destination
+	var drawn: Fare = _new_fare(pickup, destination)
 	var route: RoadRouter.Route = _router.route(
 		pickup.edge, pickup.t, destination.edge, destination.t
 	)
@@ -781,11 +901,21 @@ func _hail(pickup: Fare.Stop) -> void:
 	drawn.remaining_road_m = route.distance_m
 	drawn.route = route
 	drawn.route_from_t = pickup.t
-	drawn.meter = FareMeter.new(_tariff)
 	fare = drawn
 	_board_accum_s = 0.0
 	state = State.BOARDING
 	hailed.emit(fare)
+
+
+## A fare from `pickup` to `destination` with its meter at the flagfall: the
+## hail's, and a restored one's before its saved reading goes on.
+func _new_fare(pickup: Fare.Stop, destination: Fare.Stop) -> Fare:
+	var drawn := Fare.new()
+	drawn.kind = Fare.kind_of(destination.node)
+	drawn.pickup = pickup
+	drawn.destination = destination
+	drawn.meter = FareMeter.new(_tariff)
+	return drawn
 
 
 ## Where the customer waiting at `pickup` is going, drawn with them; null for

@@ -133,6 +133,30 @@ func advance(metres: float, delta_s: float) -> void:
 		_charge()
 
 
+## The running reading, for a saved run (`Q253`). The tariff is not in it: the
+## table is `tariff.tres`'s, so a revision between the save and the resume
+## prices the resumed fare's next unit and leaves what was charged alone.
+func snapshot() -> Dictionary:
+	return {
+		"cents": _cents,
+		"steps": steps,
+		"distance_m": _distance_m,
+		"bucket_m": _bucket_m,
+		"bucket_s": _bucket_s,
+	}
+
+
+## Put `saved` (a `snapshot`) back on this meter. An inert meter stays inert.
+func restore(saved: Dictionary) -> void:
+	if not _usable:
+		return
+	_cents = int(saved.get("cents", _cents))
+	steps = int(saved.get("steps", steps))
+	_distance_m = float(saved.get("distance_m", _distance_m))
+	_bucket_m = float(saved.get("bucket_m", _bucket_m))
+	_bucket_s = float(saved.get("bucket_s", _bucket_s))
+
+
 func _charge() -> void:
 	_cents += _step_cents if _cents < _threshold_cents else _step_after_cents
 	steps += 1

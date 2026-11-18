@@ -105,6 +105,16 @@ func restart() -> void:
 	set_physics_process(_moves_rig() or mode == Mode.SHIFT)
 
 
+## A saved run's clock (`Q253`): `restart`, then `at_s` game seconds on. The
+## first tick off the parked car decides the run as for a new one, and the
+## rig's next move reads the hour from these seconds, so the sky catches up
+## within one `RigCycle.update_hz` step. A shift saved past 交更 closes again
+## on that tick, the passenger aboard still the last.
+func resume_at(at_s: float) -> void:
+	restart()
+	elapsed_s = maxf(at_s, 0.0)
+
+
 ## Stand the rig at `at` with no game time passing: the boot menu's hour
 ## (`DriveLevel.light_showroom`). The next `restart` puts the run's own back.
 func show_hour(at: float) -> void:

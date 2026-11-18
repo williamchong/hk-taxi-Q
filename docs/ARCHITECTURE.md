@@ -77,6 +77,8 @@ override of 0, so a base value only degrades desktop) and `directional_shadow/si
 Deliberately not autoloads: `RoadGraph.shared()` (a static `WeakRef`, parsed once per scene and
 dropped with it, `Q124`), `Cmdline` (the one reader of the command line) and `Settings`
 (`user://settings.cfg`). `Locale.language()` reads `--lang=`, then the saved setting, then the OS.
+`RunSave` (`user://run.cfg`, `Q253`) is the run in play, written by `Main._save_run` and read back by
+CONTINUE through `DriveLevel.continue_run`; a scripted run never writes or reads it.
 
 Game flags follow `--` and are read through `Cmdline`; each is documented at its reader
 (`grep -rn '"--' game/scripts`). The ones scripted runs use: `--region=`, `--menu=off`,

@@ -3503,3 +3503,16 @@ share `twilight.tres`, a rose horizon; a shift never sees the 06:15 dawn.
 - Decided per vertex into a `flat` varying: every face has its own vertices and one normal (`ColouredBuilder.polygon`). Per fragment, a wall whose offset lies near a metre's half could split where rounding crossed it (read in review, not seen in a frame).
 - Cost: Expo Drive East at `--time-of-day=1.0`, 0 against 0.55: `prims` 451,593 and `draws` 70 both, no geometry added.
 - ⚠️ Under `gl_compatibility` (the web build) night emission is far fainter — Wan Chai's floodlights too, the same frame pair on Hennessy Road — so the far shore reads near dark there, as the city does. Not this change's; no shader error.
+
+## `Q253` — A run is saved as it is played, and HOME offers CONTINUE
+
+**Status.** 🟡 Built 2026-11-18 (`P6-2`) on the user's ask ("allow user to resume a session when the app is killed or it is explicitly quit via pause menu"). The three picks are the user's: restore the fare aboard, CONTINUE on HOME, a free drive's END still opens REPORT. Owed: the handset kill-and-resume.
+
+- One slot, `user://run.cfg` (`RunSave`), beside `settings.cfg` and never in it: PLAY clears it, 交更 clears it, END keeps it.
+- Saved: the mode, `DayClock.elapsed_s`, the car's transform, and `FareSystem.snapshot` — the books, the tally, and a passenger CARRYING with meter, clock, tip and receipt. Not saved: traffic, trams, the waiting customers (the city's, as `reset` keeps them), a slide or a combo in progress.
+- Written as the pause opens (the app losing the screen and END pass through it), as the window closes, at every boarding, delivery and walk-off, and every `menu.tres` `autosave_s` (30) game seconds against a kill with no notice. Never for a scripted run (`Main._records_run`, `_bank_tally`'s gate).
+- **Banked before it is written**, so a resumed tally is already in the lifetime record (`SessionTally.from_dict` sets its baseline) and a resume never counts a run twice.
+- A passenger walking to the car is seated at their kerb, hailed again by the next stop: nothing was on their meter. A fare whose stop no longer resolves resumes the books with nobody aboard. A save over other resident regions is refused and removed: its pose is in another frame.
+- A shift saved past 交更 with its last passenger aboard closes again on its first tick; nothing special-cased.
+- No confirmation when PLAY replaces a save: picking a new run is the choice.
+- CONTINUE and PLAY share PLAY's row as two half-width choices, the run's line under them: HOME grows up from the bottom, and a whole row for CONTINUE pushed the title off a 1368x630 handset.

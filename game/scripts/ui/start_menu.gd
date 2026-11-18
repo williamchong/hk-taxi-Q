@@ -46,6 +46,9 @@ extends CanvasLayer
 
 ## The player picked a mode. `Main` starts the level in it and frees this.
 signal started(mode: DayClock.Mode)
+## The player picked CONTINUE (`Q253`): `Main` puts `run`, the save HOME
+## read, back.
+signal continued(run: RunSave)
 ## The player picked a language; `Locale.language()` already answers it.
 signal language_changed(code: String)
 ## The player picked the steering thumb's response; `ControlOptions.steering()`
@@ -163,6 +166,8 @@ var _pages: Dictionary[int, Control] = {}
 var _first: Dictionary[int, Button] = {}
 ## OPTIONS' groups on this device, in this menu (`_groups`), read at build.
 var _shown_groups: Array[Page] = []
+## The run HOME offers to CONTINUE, read as HOME was built; null for none.
+var _saved: RunSave = null
 ## The notices' label, filled on the first visit: the text is the engine's and
 ## costs a build, so neither boot nor a language change pays for a page the
 ## player may never open.
@@ -392,13 +397,43 @@ func _home() -> Control:
 	_size(record, _profile.body_size_zh, _profile.body_size)
 	record.add_theme_color_override(&"font_color", _style.dial_needle)
 	column.add_child(record)
-	column.add_child(_gap("Gap", _profile.button_gap_px * 2))
-	_first[Page.HOME] = _button(column, "Play", "start", _show.bind(Page.PLAY))
+	_saved = _saved_run()
+	if _saved == null:
+		column.add_child(_gap("Gap", _profile.button_gap_px * 2))
+		_first[Page.HOME] = _button(column, "Play", "start", _show.bind(Page.PLAY))
+	else:
+		_saved_choices(column, _saved)
 	_button(column, "Record", "record", _show.bind(Page.RECORD))
 	_button(column, "Guide", "guide", _show.bind(Page.GUIDE))
 	_button(column, "Options", "options", _show.bind(_options_page()))
 	_button(column, "Credits", "credits", _show.bind(Page.CREDITS))
 	return column
+
+
+## A saved run's CONTINUE (`Q253`), focused, beside PLAY in PLAY's row — two
+## half-width choices — with the run's line tight under them. The column grows
+## from the bottom and a handset has no height to spare over the title, so
+## the line stands in for half of the gap above the choices and HOME is
+## barely taller than without a save.
+func _saved_choices(column: VBoxContainer, saved: RunSave) -> void:
+	column.add_child(_gap("Gap", _profile.button_gap_px))
+	var block := VBoxContainer.new()
+	block.name = "Saved"
+	block.add_theme_constant_override(&"separation", 0)
+	column.add_child(block)
+	var row := HBoxContainer.new()
+	row.name = "Choices"
+	row.add_theme_constant_override(&"separation", _profile.button_gap_px)
+	block.add_child(row)
+	_first[Page.HOME] = _button(row, "Continue", "continue", _on_continue)
+	_button(row, "Play", "start", _show.bind(Page.PLAY))
+	var half := Vector2((_profile.button_px.x - _profile.button_gap_px) / 2.0, _profile.button_px.y)
+	for panel: Node in row.get_children():
+		(panel as Control).custom_minimum_size = half
+	var caption: Label = _line("Caption", _saved_caption(saved))
+	_size(caption, _profile.body_size_zh, _profile.body_size)
+	caption.add_theme_color_override(&"font_color", _style.chip_muted)
+	block.add_child(caption)
 
 
 ## The two ways to play (`Q162`), behind HOME's one PLAY: the shift first,
@@ -1064,6 +1099,36 @@ static func duration_text(seconds: float) -> String:
 	return "%d:%02d" % [minutes, whole % 60]
 
 
+## The run CONTINUE picks up: the saved one, or a sample under `SAMPLE_ARG`,
+## and none under any other frame's flag — a frame never shows what this
+## machine last drove.
+func _saved_run() -> RunSave:
+	if Cmdline.value(SAMPLE_ARG) == "on":
+		return RunSave.sample()
+	if not Cmdline.value(PAGE_ARG).is_empty():
+		return null
+	return RunSave.load_saved()
+
+
+## CONTINUE's line: the mode, the shift's hour or the time a free drive has
+## run, and what the run has banked.
+func _saved_caption(saved: RunSave) -> String:
+	var shift: bool = saved.mode == DayClock.Mode.SHIFT
+	var when: String = (
+		DayClock.clock_text(saved.hour_h)
+		if shift and not is_nan(saved.hour_h)
+		else duration_text(saved.driven_s())
+	)
+	return (
+		_text.say("saved_run", _language)
+		% [
+			_text.say("shift" if shift else "free", _language),
+			when,
+			FareFace.money(saved.earned_hkd())
+		]
+	)
+
+
 ## What a 成績表 shows: `tally`, or a filled sheet under `SAMPLE_ARG`.
 func _shown_tally(tally: SessionTally) -> SessionTally:
 	return SessionTally.sample() if Cmdline.value(SAMPLE_ARG) == "on" else tally
@@ -1075,6 +1140,11 @@ func _shown_tally(tally: SessionTally) -> SessionTally:
 func _on_start(mode: DayClock.Mode) -> void:
 	_leave()
 	started.emit(mode)
+
+
+func _on_continue() -> void:
+	_leave()
+	continued.emit(_saved)
 
 
 func _on_resume() -> void:

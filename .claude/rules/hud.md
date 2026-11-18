@@ -134,6 +134,9 @@ stalls. A run naming either flag saves no record.
   `assets/authored/loading/taxi.json` (`Q209`): a change owes `tools/make_splash.py` and a frame
   of both.
 - Two `_follow.bind` on one signal are ONE connection: a second follower connects a lambda.
+- **CONTINUE** (`Q253`) is on HOME only while `RunSave` loads; `--menu-sample=on` shows
+  `RunSave.sample()`, any other page flag none, so a frame never shows this machine's last run.
+  `verify_menu` writes its own `run.cfg`. A save is written only where `Main._records_run` holds.
 
 ## Type and street names
 

@@ -24,7 +24,8 @@ Keep rows to one line. A row that needs a paragraph belongs in `DECISIONS.md`.
   - `B4` (a game): skills, penalties, air, the style combo, 特更 / 兜風 modes, the 成績表 and record.
   - The car is a per-wheel tyre model on a spec sheet at pace 2.0 (`Q152`, `Q153`, `Q156`). The day
     runs to night and round again (`Q160`, `Q222`, `Q225`), a clock minute a second (`Q233`).
-- **Phase 6:** `P6-1` (menu, options, credits and licences, pause, RESET CAR) built early.
+- **Phase 6:** `P6-1` (menu, options, credits and licences, pause, RESET CAR) built early;
+  `P6-2` saves the run in play for CONTINUE (`Q253`).
 - **Phase 4:** `P4-1` done; the 15 tunnels stay shut. **Phase 5:** all built but `P5-8` (content)
   and `P5-14`. The runtime holds `wan_chai` + `causeway_bay` across a seam; `mong_kok` and
   `sha_tin` are built for measurement only.
@@ -170,6 +171,7 @@ Phase 4–6
   libraries (+3 to +11 draw calls at the seam). Owed: the drive across the seam (`P5-9f`).
 - `P5-8` ⬜ Content — behind `P3-9`, `Q6`. `P5-14` ⬜ Textures as an option on tiles.
 - `P6-1` 🟡 Start menu, options, credits, pause — owed: Android's back button (`P0-3b`).
+- `P6-2` 🟡 Saved run and CONTINUE (`Q253`) — owed: a handset kill mid-fare and its resume.
 
 ---
 

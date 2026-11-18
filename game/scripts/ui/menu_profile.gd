@@ -96,6 +96,10 @@ const PATH: String = "res://tuning/menu.tres"
 ## The most frames a second the pause draws (`Q165`,
 ## `ControlOptions.hold_frames`); 0 leaves the drive's cap in force.
 @export var pause_fps: int
+## Game seconds between saves of the run in play (`Q253`, `Main._save_run`),
+## besides the pause and every fare's start and end: what a kill with no
+## notice can lose.
+@export var autosave_s: float
 
 @export_group("Boot cover")
 ## The cover over the menu's first seconds (`ShaderWarmup`): how many frames it

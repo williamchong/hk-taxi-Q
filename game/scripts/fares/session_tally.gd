@@ -182,6 +182,49 @@ func add(other: SessionTally) -> void:
 		combo_best[index] = maxi(combo_best[index], other.combo_best[index])
 
 
+## This run's books as plain values, for a saved run (`Q253`). An untried
+## `closest_pass_m` is left out, as `Settings` leaves it off the record.
+func to_dict() -> Dictionary:
+	var saved: Dictionary = {
+		"counts": Array(counts),
+		"banked": Array(banked),
+		"combo_best": Array(combo_best),
+		"driven_s": driven_s,
+	}
+	for field: String in SUMS + BESTS:
+		if not (field == "closest_pass_m" and is_inf(closest_pass_m)):
+			saved[field] = get(field)
+	return saved
+
+
+## The books `to_dict` wrote, as already banked into the lifetime record: a
+## saved run is banked as it is saved (`Main._save_run`), so only what happens
+## after the resume reaches the record. A skill the save does not know reads 0.
+static func from_dict(saved: Dictionary) -> SessionTally:
+	var tally := SessionTally.new()
+	# Written back whole: a packed array is a value, so filling a parameter
+	# would fill a copy.
+	tally.counts = PackedInt32Array(_filled(Array(tally.counts), saved.get("counts")))
+	tally.banked = PackedFloat64Array(_filled(Array(tally.banked), saved.get("banked")))
+	tally.combo_best = PackedInt32Array(_filled(Array(tally.combo_best), saved.get("combo_best")))
+	for field: String in SUMS + BESTS:
+		if saved.has(field):
+			tally.set(field, saved[field])
+	tally.driven_s = float(saved.get("driven_s", 0.0))
+	tally.take_unsaved()
+	return tally
+
+
+## `into` with as much of `values` as fits laid over it; `into` alone where
+## `values` is not a list.
+static func _filled(into: Array, values: Variant) -> Array:
+	if values is Array:
+		var from: Array = values
+		for index: int in mini(from.size(), into.size()):
+			into[index] = from[index]
+	return into
+
+
 ## Whether there is nothing here to write.
 func is_empty() -> bool:
 	return (

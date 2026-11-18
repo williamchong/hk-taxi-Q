@@ -43,9 +43,14 @@ const LoadingCoverScript = preload("res://scripts/ui/loading_cover.gd")
 const ShaderWarmupScript = preload("res://scripts/ui/shader_warmup.gd")
 const FareTariffScript = preload("res://scripts/fares/fare_tariff.gd")
 const HudStyleScript = preload("res://scripts/ui/hud_style.gd")
+const RunSaveScript = preload("res://scripts/core/run_save.gd")
+const GeneratedRegionsScript = preload("res://scripts/city/generated_regions.gd")
 
 ## The file the settings round trip writes, never the player's own.
 const SETTINGS_PATH: String = "user://verify_menu_settings.cfg"
+## The file the saved-run round trip writes, never the player's run: every
+## HOME this tool builds reads it, so none shows a run this machine drove.
+const RUN_PATH: String = "user://verify_menu_run.cfg"
 
 ## Every string the menu asks for, so a row missing from the table is a
 ## failure here and not a bracketed key on screen.
@@ -53,6 +58,8 @@ const KEYS: PackedStringArray = [
 	"title",
 	"subtitle",
 	"start",
+	"continue",
+	"saved_run",
 	"shift",
 	"free",
 	"best",
@@ -202,6 +209,7 @@ const POSITIVE: PackedStringArray = [
 	"heading_size_zh",
 	"body_size",
 	"body_size_zh",
+	"autosave_s",
 	"cover_wait_frames",
 	"cover_settle_frames",
 	"cover_warm_frames",
@@ -221,11 +229,14 @@ const SHOT_POSITIVE: PackedStringArray = ["distance_m", "height_m", "fov_deg"]
 
 
 func _init() -> void:
+	RunSaveScript.use_file(RUN_PATH)
+	RunSaveScript.clear()
 	_check_profile()
 	_check_text()
 	_check_notices()
 	_check_settings()
 	_check_record()
+	_check_run_save()
 	_check_splash()
 	# The pause needs a tree, and autoloads register on the first frame.
 	_check_pause.call_deferred()
@@ -278,6 +289,7 @@ func _check_pause() -> void:
 	)
 	paused = false
 	await _check_pause_reset()
+	await _check_continue()
 	await _check_options()
 	await _check_sheet()
 	await _check_stacked()
@@ -1498,6 +1510,134 @@ func _check_record() -> void:
 	)
 	_forget_settings_file()
 	SettingsScript.use_file(SettingsScript.PATH)
+
+
+## The saved run's file (`Q253`): what is written reads back, the books through
+## the text a `ConfigFile` keeps, and a save driven over other regions — the
+## pose in another frame — is refused and removed.
+func _check_run_save() -> void:
+	RunSaveScript.clear()
+	_expect(
+		RunSaveScript.load_saved(PackedStringArray(["a"])) == null,
+		"run save",
+		"no file, no run to continue"
+	)
+	var tally: SessionTallyScript = SessionTallyScript.new()
+	tally.counts[FareScript.Skill.DRIFT] = 4
+	tally.banked[FareScript.Skill.CRASH] = -5.0
+	tally.combo_best[FareScript.Skill.SPEED] = 3
+	tally.meter_hkd = 81.5
+	tally.deliveries = 2
+	tally.top_speed_kph = 120.0
+	tally.driven_s = 300.0
+	var run: RunSaveScript = RunSaveScript.new()
+	run.mode = DayClockScript.Mode.SHIFT
+	run.elapsed_s = 412.5
+	run.hour_h = 13.25
+	run.pose = Transform3D(Basis(Vector3.UP, 0.7), Vector3(12.0, 6.5, -40.0))
+	run.books = {"earned_hkd": 210.5, "tally": tally.to_dict(), "fare": {"pickup": "a/f_001"}}
+	run.regions = PackedStringArray(["a"])
+	_expect(run.write(), "run save", "the run writes")
+	var back: RunSaveScript = RunSaveScript.load_saved(PackedStringArray(["a"]))
+	_expect(
+		(
+			back != null
+			and back.mode == DayClockScript.Mode.SHIFT
+			and is_equal_approx(back.elapsed_s, 412.5)
+			and is_equal_approx(back.hour_h, 13.25)
+			and back.pose.is_equal_approx(run.pose)
+			and is_equal_approx(back.earned_hkd(), 210.5)
+			and is_equal_approx(back.driven_s(), 300.0)
+			and back.carrying()
+		),
+		"run save",
+		"the mode, the clock, the car and the books read back"
+	)
+	var books: SessionTallyScript = SessionTallyScript.from_dict(
+		back.books.get("tally", {}) if back != null else {}
+	)
+	_expect(
+		(
+			books.counts[FareScript.Skill.DRIFT] == 4
+			and is_equal_approx(books.banked[FareScript.Skill.CRASH], -5.0)
+			and books.combo_best[FareScript.Skill.SPEED] == 3
+			and is_equal_approx(books.meter_hkd, 81.5)
+			and books.deliveries == 2
+			and is_inf(books.closest_pass_m)
+			and is_equal_approx(books.driven_s, 300.0)
+		),
+		"run save",
+		"the tally reads back through the file, an untried pass still untried"
+	)
+	_expect(
+		books.take_unsaved().is_empty(),
+		"run save",
+		"mutation caught: a restored tally is already banked, so the record never counts it twice"
+	)
+	_expect(
+		RunSaveScript.load_saved(PackedStringArray(["b"])) == null and not RunSaveScript.exists(),
+		"run save",
+		"a save over other regions is refused and removed"
+	)
+
+
+## CONTINUE on HOME (`Q253`): only while a run is saved, first and focused,
+## and a press says so once and the menu leaves; PLAY's mode still starts.
+func _check_continue() -> void:
+	RunSaveScript.clear()
+	var bare := StartMenuScript.new()
+	root.add_child(bare)
+	await process_frame
+	var home: Control = bare._pages.get(StartMenuScript.Page.HOME)
+	_expect(
+		home != null and home.get_node_or_null("Saved") == null,
+		"continue",
+		"no run saved, no CONTINUE"
+	)
+	bare.queue_free()
+	var run: RunSaveScript = RunSaveScript.new()
+	run.regions = PackedStringArray(["a"])
+	run.books = {"earned_hkd": 12.0}
+	run.write()
+	# HOME reads the save over the regions this checkout has, so write it over
+	# those: the round trip above holds the refusal.
+	run.regions = GeneratedRegionsScript.resident()
+	run.write()
+	var menu := StartMenuScript.new()
+	var continues: Array[int] = [0]
+	var starts: Array[int] = [0]
+	menu.continued.connect(
+		func(saved: RunSaveScript) -> void: continues[0] += 1 if saved != null else 0
+	)
+	menu.started.connect(func(_mode: int) -> void: starts[0] += 1)
+	root.add_child(menu)
+	await process_frame
+	home = menu._pages.get(StartMenuScript.Page.HOME)
+	var button: Button = (
+		home.get_node_or_null("Saved/Choices/Continue/Button") if home != null else null
+	)
+	_expect(
+		button != null and menu._first.get(StartMenuScript.Page.HOME) == button,
+		"continue",
+		"a saved run puts CONTINUE first, focused"
+	)
+	var caption: Label = home.get_node_or_null("Saved/Caption") if home != null else null
+	_expect(
+		caption != null and caption.text.ends_with("HK$12.0"),
+		"continue",
+		"its line names what the run banked"
+	)
+	if button != null:
+		button.pressed.emit()
+	_expect(
+		continues[0] == 1 and starts[0] == 0 and menu.is_queued_for_deletion(),
+		"continue",
+		"CONTINUE says so once, starts nothing new, and the menu leaves"
+	)
+	if not menu.is_queued_for_deletion():
+		menu.queue_free()
+	RunSaveScript.clear()
+	await process_frame
 
 
 ## The 成績表 as a picture (`P3-80`, `Q188`): offered beside the sheet but never

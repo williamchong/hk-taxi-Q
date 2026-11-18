@@ -208,6 +208,41 @@ func play(mode: DayClock.Mode) -> void:
 	resume()
 
 
+## The run in play as a save (`Q253`, `Main`'s call), or null where there is
+## none to save: a parked car is a menu, not a run, and a level with no fare
+## loop has no books to keep.
+func capture_run() -> RunSave:
+	if vehicle == null or vehicle.parked or not is_instance_valid(fares) or not fares.usable():
+		return null
+	var run := RunSave.new()
+	if clock != null:
+		run.mode = clock.mode
+		run.elapsed_s = clock.elapsed_s
+		run.hour_h = clock.hour_now()
+	run.pose = vehicle.global_transform
+	run.books = fares.snapshot()
+	run.regions = GeneratedRegions.resident()
+	return run
+
+
+## Go on with a saved run (`Q253`, `Main`'s call from CONTINUE): `play`'s
+## counterpart. The clock is put the run's seconds into its mode, the car where
+## it stood — a hand's breadth up, as a reset drops it — and the fare loop its
+## books and the passenger aboard. The start line stays the boot's: the fall
+## floor and a reset with no road in reach go back there, as after a `play`.
+func continue_run(run: RunSave) -> void:
+	if clock != null:
+		clock.mode = run.mode
+		clock.resume_at(run.elapsed_s)
+	_played = true
+	var lifted := Transform3D(
+		run.pose.basis.orthonormalized(), run.pose.origin + Vector3.UP * RoadSpawn.DROP_CLEARANCE_M
+	)
+	if is_instance_valid(fares) and fares.usable():
+		fares.restore(run.books, lifted.origin, -lifted.basis.z)
+	_release(true, lifted)
+
+
 ## 交更: the fare loop takes no more fares and says when the last one is out.
 ## Under `--fares=off` there is no fare to wait for.
 func _on_clock_closed() -> void:
@@ -286,6 +321,12 @@ func _stand_in_showroom() -> void:
 ## Undo `park`: the drive as it boots without a menu. The rig is snapped, for
 ## `snap_to_target`'s reason — it has been circling the car, not following it.
 func resume() -> void:
+	_release(not showroom_fare_id.is_empty(), _spawn)
+
+
+## The car off the menu: placed at `pose` first where `place`, else where it
+## stands.
+func _release(place: bool, pose: Transform3D) -> void:
 	if vehicle == null:
 		return
 	vehicle.parked = false
@@ -293,10 +334,10 @@ func resume() -> void:
 		guide.set_process(true)
 	if attract != null:
 		attract.end()
-	if not showroom_fare_id.is_empty():
+	if place:
 		if regions != null:
-			regions.hold_ground_at(_spawn.origin)
-		vehicle.place_at(_spawn)
+			regions.hold_ground_at(pose.origin)
+		vehicle.place_at(pose)
 	if camera_rig != null:
 		camera_rig.set_physics_process(true)
 		camera_rig.snap_to_target()
