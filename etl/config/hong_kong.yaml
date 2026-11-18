@@ -3902,9 +3902,9 @@ landmarks:
   # BUILDINGNAME 1810037446), a 27 m finger whose west face runs from the sea
   # wall (836191.3, 816020.0) to its seaward corner (836184.0, 816088.8), a
   # bearing of 353.9°. The hull lies alongside that face, as the fleet berths
-  # in the user's photos, its seaward end 2.0 m past the corner: 4.95 m out
-  # (its 4.25 m half beam, the 0.2 m strake and 0.5 m of water) and 15.9 m
-  # back along the face from the corner. Replaces nothing, and no elevation: it
+  # in the user's photos, the strake at its seaward end 2.0 m past the
+  # corner: 4.95 m out (its 4.25 m half beam, the 0.2 m strake and 0.5 m of
+  # water) and 15.9 m back along the face (the 17.9 m half length less 2.0). Replaces nothing, and no elevation: it
   # rests at `basemap.water_level_m` and the runtime rocks it.
   - id: star_ferry
     asset: "res://assets/authored/landmarks/star_ferry.glb"

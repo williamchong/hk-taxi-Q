@@ -57,7 +57,7 @@ from pipeline.gltf import MeshData, write_glb  # noqa: E402
 # drift on it. See `pipeline/landmarks.py` for why it is ≠ `city_facade`.
 from pipeline.landmarks import LANDMARK_MATERIAL as MATERIAL  # noqa: E402
 from pipeline.mesh import merge  # noqa: E402
-from primitives import Point, box, loft, polygon_facing, ring  # noqa: E402
+from primitives import Point, box, box_at, loft, polygon_facing, ring  # noqa: E402
 
 LOG = logging.getLogger("make_landmark")
 
@@ -386,6 +386,7 @@ class StarFerry:
     # Where along the straight side the rings, mullions and posts stop.
     straight_half_m: float = 12.8
     mullion_half_m: float = 0.07
+    mullion_proud_m: float = 0.04
     funnel_radius_m: float = 0.75
     funnel_black_m: float = 7.3
     funnel_top_m: float = 7.8
@@ -404,19 +405,19 @@ class StarFerry:
 def _pitched(half_span: float, pitch: float, offset: float = 0.0) -> list[float]:
     """Stations `pitch` apart from `offset`, mirrored about 0, within `half_span`."""
     stations: list[float] = []
-    along = offset
-    while along <= half_span:
+    for k in range(int((half_span - offset) // pitch) + 1):
+        along = offset + k * pitch
         stations.extend((-along, along) if along > 0.0 else (0.0,))
-        along += pitch
     return stations
 
 
 def _life_ring(p: StarFerry, side: float, z: float, wall_x: float, name: str) -> MeshData:
-    """A ring standing proud of the wall: face, rim and the inside of the hole.
+    """A ring standing proud of the wall: its face and its outer rim.
 
     Eight facets, as everything else is chamfered rather than smoothed; the
-    rim and the hole's side shade apart from the face, which is what reads as
-    a ring at a distance.
+    rim shades apart from the face, which is what reads as a ring at a
+    distance. The hole's own wall is left out: 0.17 m across, it is a pixel
+    from the chase camera and was a third of every ring's triangles.
     """
     out_x = wall_x + side * p.ring_proud_m
     angles = [np.pi / 8 + k * np.pi / 4 for k in range(8)]
@@ -446,15 +447,6 @@ def _life_ring(p: StarFerry, side: float, z: float, wall_x: float, name: str) ->
                     at(p.ring_outer_m, a, out_x),
                 ),
                 radial,
-            ),
-            (
-                (
-                    at(p.ring_inner_m, a, wall_x),
-                    at(p.ring_inner_m, b, wall_x),
-                    at(p.ring_inner_m, b, out_x),
-                    at(p.ring_inner_m, a, out_x),
-                ),
-                tuple(-c for c in radial),
             ),
         )
         faces.extend(
@@ -539,66 +531,57 @@ def build_star_ferry(p: StarFerry | None = None) -> MeshData:
     )
     parts: list[MeshData] = [hull, open_deck, band, saloon, funnel]
     wall_x = half_x - p.upper_inset_m
+    mullion_x = wall_x + p.mullion_proud_m / 2.0
+    tyre_x = half_x + p.fender_proud_m / 2.0
     for side in (-1.0, 1.0):
-        post_x = side * (half_x - p.post_half_m)
+        tag = f"{side:+.0f}"
         for index, z in enumerate(_pitched(p.straight_half_m, p.post_pitch_m)):
             parts.append(
-                box(
-                    (post_x - p.post_half_m, p.bulwark_top_m, z - p.post_half_m),
-                    (post_x + p.post_half_m, p.upper_deck_m, z + p.post_half_m),
+                box_at(
+                    (side * (half_x - p.post_half_m), (p.bulwark_top_m + p.upper_deck_m) / 2.0, z),
+                    (p.post_half_m, (p.upper_deck_m - p.bulwark_top_m) / 2.0, p.post_half_m),
                     FERRY_GREEN.colour,
-                    name=f"star_ferry_post_{side:+.0f}_{index}",
+                    name=f"star_ferry_post_{tag}_{index}",
                 )
             )
         for index, z in enumerate(_pitched(p.straight_half_m, p.ring_pitch_m)):
-            parts.append(
-                _life_ring(p, side, z, side * wall_x, f"star_ferry_ring_{side:+.0f}_{index}")
-            )
-        mullion_x = side * wall_x
+            parts.append(_life_ring(p, side, z, side * wall_x, f"star_ferry_ring_{tag}_{index}"))
+        glass_low, glass_high = p.upper_glass_m
         for index, z in enumerate(
             _pitched(p.straight_half_m, p.ring_pitch_m, p.ring_pitch_m / 2.0)
         ):
             parts.append(
-                box(
-                    (
-                        min(mullion_x, mullion_x + side * 0.04),
-                        p.upper_glass_m[0],
-                        z - p.mullion_half_m,
-                    ),
-                    (
-                        max(mullion_x, mullion_x + side * 0.04),
-                        p.upper_glass_m[1],
-                        z + p.mullion_half_m,
-                    ),
+                box_at(
+                    (side * mullion_x, (glass_low + glass_high) / 2.0, z),
+                    (p.mullion_proud_m / 2.0, (glass_high - glass_low) / 2.0, p.mullion_half_m),
                     FERRY_WHITE.colour,
-                    name=f"star_ferry_mullion_{side:+.0f}_{index}",
+                    name=f"star_ferry_mullion_{tag}_{index}",
                 )
             )
         for index, z in enumerate(t * s for t in p.tyre_at_m for s in (-1.0, 1.0)):
-            inner, outer = side * half_x, side * (half_x + p.fender_proud_m)
             parts.append(
-                box(
-                    (min(inner, outer), p.tyre_low_m, z - p.tyre_half_m),
-                    (max(inner, outer), p.tyre_high_m, z + p.tyre_half_m),
+                box_at(
+                    (side * tyre_x, (p.tyre_low_m + p.tyre_high_m) / 2.0, z),
+                    (p.fender_proud_m / 2.0, (p.tyre_high_m - p.tyre_low_m) / 2.0, p.tyre_half_m),
                     FENDER.colour,
-                    name=f"star_ferry_tyre_{side:+.0f}_{index}",
+                    name=f"star_ferry_tyre_{tag}_{index}",
                 )
             )
         mast_z = side * (half_z - p.mast_from_end_m)
         parts.append(
-            box(
-                (-p.mast_half_m, p.roof_m, mast_z - p.mast_half_m),
-                (p.mast_half_m, p.mast_top_m, mast_z + p.mast_half_m),
+            box_at(
+                (0.0, (p.roof_m + p.mast_top_m) / 2.0, mast_z),
+                (p.mast_half_m, (p.mast_top_m - p.roof_m) / 2.0, p.mast_half_m),
                 FERRY_WHITE.colour,
-                name=f"star_ferry_mast_{side:+.0f}",
+                name=f"star_ferry_mast_{tag}",
             )
         )
         parts.append(
-            box(
-                (-p.crosstree_half_m, p.crosstree_m, mast_z - p.mast_half_m / 2.0),
-                (p.crosstree_half_m, p.crosstree_m + p.mast_half_m, mast_z + p.mast_half_m / 2.0),
+            box_at(
+                (0.0, p.crosstree_m + p.mast_half_m / 2.0, mast_z),
+                (p.crosstree_half_m, p.mast_half_m / 2.0, p.mast_half_m / 2.0),
                 FERRY_WHITE.colour,
-                name=f"star_ferry_crosstree_{side:+.0f}",
+                name=f"star_ferry_crosstree_{tag}",
             )
         )
     return replace(merge(parts, name=f"star_ferry{COLLISION_SUFFIX}"), material=MATERIAL)

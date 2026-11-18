@@ -116,9 +116,9 @@ Phase 3 — `B2` and the road
   ground cut to a vertical quay along 2,776 m of published sea wall and breakwater, and the land
   beside the harbour drawn where no tile is (24.7 ha) — owed: the user's pick of the line tone
   (`build/driver/tone_sheets/`), the handset.
-- `P3-102` 🟡 A Star Ferry moored at Wan Chai Ferry Pier (`Q254`): 2,854 triangles modelled on the
+- `P3-102` 🟡 A Star Ferry moored at Wan Chai Ferry Pier (`Q254`): 2,246 triangles modelled on the
   user's photos, alongside the pier's west face, at the basemap's water level, rocking 0.08 m /
-  1.2° / 0.35°; +8,562 primitives and +2 draws in view, 0 facing away — owed: the user's look and
+  1.2° / 0.35°; +6,738 primitives and +2 draws in view, 0 facing away — owed: the user's look and
   amplitude pick, the PCK, a night frame.
 - `P3-99` 🟡 Glossy, inked vehicles (`Q248`): red `C*` 68.7 → 64.7 in sun. The city's line is black and
   draws the vehicles' outline too, their own pass off (`prims` 988,372 → 709,510 at the start
