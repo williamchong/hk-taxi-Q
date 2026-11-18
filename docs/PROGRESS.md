@@ -103,7 +103,7 @@ Phase 3 — `B2` and the road
 - `P3-87` 🟡 Pressed panels. `P3-88` 🟡 Tram doors and lamps.
 - `P3-100` 🟡 The far shore (`Q249`): 278 Kowloon blocks down to 56.0 m in 5,626 triangles and 2
   draws, +130 KB of PCK, the camera's `far` still 400 m — owed: the user's density pick (2,000 /
-  5,000 / 10,000) and his call on the unlit night skyline, the handset, the web build in a browser.
+  5,000 / 10,000) and his call on the unlit night skyline, the handset.
 - `P3-99` 🟡 Glossy, inked vehicles (`Q248`): red `C*` 68.7 → 64.7 in sun. The city's line is black and
   draws the vehicles' outline too, their own pass off (`prims` 988,372 → 709,510 at the start
   line) — owed: the handset, the web build.

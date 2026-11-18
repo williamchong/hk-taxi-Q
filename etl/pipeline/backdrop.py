@@ -157,6 +157,7 @@ def read_blocks(
     blocks that straddle it, and the same block from two sheets is one block.
     """
     seen: set[tuple[float, float, float]] = set()
+    shapely.prepare(strip)
     blocks: list[Block] = []
     for layer in layers:
         base = layer.column(spec.buildings.field("base")).astype(np.float64)
