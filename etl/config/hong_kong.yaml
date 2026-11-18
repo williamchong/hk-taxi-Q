@@ -3899,18 +3899,19 @@ landmarks:
 
   # A Star Ferry moored at Wan Chai Ferry Pier (`P3-102`, `Q254`, the user's
   # ask). The pier is iB1000 11-SW-10C block 1810133737 (named 灣仔渡輪碼頭 by
-  # BUILDINGNAME 1810037446), a 27 m finger whose seaward face runs
-  # (836186.4, 816092.0) to (836207.5, 816094.3), a bearing of 83.8°. The hull
-  # lies end-on to that face, its line on the face's normal (353.8°), centred
-  # on the face's midpoint (836196.95, 816093.15) and 18.4 m out: its 17.7 m
-  # half length, the 0.2 m fender, and 0.5 m of water. Replaces nothing, and no
-  # elevation: it rests at `basemap.water_level_m` and the runtime rocks it.
+  # BUILDINGNAME 1810037446), a 27 m finger whose west face runs from the sea
+  # wall (836191.3, 816020.0) to its seaward corner (836184.0, 816088.8), a
+  # bearing of 353.9°. The hull lies alongside that face, as the fleet berths
+  # in the user's photos, its seaward end 2.0 m past the corner: 4.95 m out
+  # (its 4.25 m half beam, the 0.2 m strake and 0.5 m of water) and 15.9 m
+  # back along the face from the corner. Replaces nothing, and no elevation: it
+  # rests at `basemap.water_level_m` and the runtime rocks it.
   - id: star_ferry
     asset: "res://assets/authored/landmarks/star_ferry.glb"
     pos:
-      easting: 836194.96
-      northing: 816111.44
-    rot_y_deg: 353.8
+      easting: 836180.76
+      northing: 816072.47
+    rot_y_deg: 353.9
     afloat: true
     name:
       en: "Star Ferry"
