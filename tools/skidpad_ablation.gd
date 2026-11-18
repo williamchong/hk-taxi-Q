@@ -1678,12 +1678,13 @@ func _speed_kph() -> float:
 ## the per-wheel slip signals back to `B4`, "when the effects that consume it are
 ## built, not before". A measuring instrument is not that consumer.
 ##
-## ⚠️ **This is now the only definition of slip in the repo.** `Q49` set a figure
-## from this tool against one `P0-5a` measured through the controller's own
-## `slip_angle_deg()`, and until `Q49` the two disagreed — that one left the nose
-## vector unflattened. `Q50` deleted the controller's copy along with the spike
-## that was its only caller, so there is nothing left to keep in step; the
-## flattening below is what those recorded figures mean.
+## ⚠️ **The game's `SlipAngle.deg_of` is a second definition, kept apart on
+## purpose**: the instrument never calls what it grades, so a change to the
+## flattening or the floor is made in both by hand, and
+## `etl/tests/test_grader_copies.py` fails if this file calls it (`Q84`, `Q145`).
+## `Q49` set a figure from this tool against one `P0-5a` measured through the
+## controller's own `slip_angle_deg()`, which left the nose vector unflattened;
+## the flattening below is what those recorded figures mean.
 ##
 ## Flattened to the ground plane so a ramp or a landing cannot read as slip.
 ## Read at the rear axle since 2026-10-06 (`Q153`): at the centre of mass a

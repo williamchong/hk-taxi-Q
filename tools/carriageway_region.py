@@ -22,10 +22,12 @@ centreline length, each territory's left/right extent per station against the
 ray survey's widths, how each cross-section ENDS (a kerb, another territory, or
 open), and the territory that is owned but not reachable.
 
-🔴 **It is read-only and it grades nothing in the bundle yet** — no stage builds
-R today. When one does, this stays on as its second implementation, on
-`carriageway_margin.py`'s precedent: it takes its I/O from `pipeline.gdb` and
-no method from `pipeline.carriageway` or `pipeline.carriageway_area`.
+🔴 **It is read-only, and the second implementation of `pipeline/region.py`**
+(`Q129`), on `carriageway_margin.py`'s precedent: it takes its I/O from
+`pipeline.gdb` and no method from `pipeline.region`, `pipeline.carriageway` or
+`pipeline.carriageway_area` — `etl/tests/test_grader_copies.py` holds that —
+and wherever the stage's `carriageway_region.json` exists it diffs each territory
+against it (`against_stage`).
 
 ⚠️ **The agreement with the ray survey is partly BUILT IN and must not be read
 as a second source**: where R comes from HyD, the ray survey's third publisher
