@@ -69,4 +69,8 @@ as furniture.
 - `touch_go`, `touch_stop` (`Q228`): a pedal shows its push as a level, never as opacity. Green
   up the accelerator, red down the brake: `accent` and `accent_negative` at 0.9. The one place a
   touch control is red.
+- `touch_turn`: the wheel's arrow on the side the steering is turned takes it, as a pedal's arrow
+  takes its pedal's paint. The dial needle's amber at 0.9 — a car's indicator, never green or red,
+  which are the pedals'. The pedals' arrows and levels and the wheel's arrows read the steering and
+  pedals the car is given, so a key or a pad lights them under a shown touch HUD too.
 - `slot_fill`, `slot_edge`, `slot_edge_px`: the reserved slots under `--debug-view=full`.

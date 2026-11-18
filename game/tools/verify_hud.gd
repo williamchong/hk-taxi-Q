@@ -248,6 +248,12 @@ func _check_pedal_levels() -> void:
 		"layout",
 		"touch_stop is a red that shows"
 	)
+	var turn: Color = style.touch_turn
+	_expect(
+		turn.r > turn.g and turn.g > turn.b and turn.g > 0.4 and turn.a > 0.5,
+		"layout",
+		"touch_turn is an amber that shows, neither the pedals' green nor their red"
+	)
 
 
 ## Both tables (`Q204`): the desk's, and the touch screen's, whose thumbs are

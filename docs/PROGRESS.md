@@ -34,7 +34,8 @@ Keep rows to one line. A row that needs a paragraph belongs in `DECISIONS.md`.
 
 - The user's drive of nearly every 🟡 row below; the largest are one fare start to finish (`B1`), a
   whole shift to 交更 (`P3-74`), a night drive (`P3-69`), and the touch scheme on a handset (`Q238`,
-  `Q239`, `Q230`, `Q241`, and `Q251`'s spin or slide, the spin now raw at `spin_curve` 1.0). Also a look at traffic
+  `Q239`, `Q230`, `Q241`, and `Q251`'s spin or slide, the spin now raw at `spin_curve` 1.0;
+  `Q255`'s wheel arrows lit amber on the side turned, from any input). Also a look at traffic
   changing lanes: it is drawn turned 6–7° now (`Q244`).
 - `P0-3b`: FPS on an A13, an Android build, then `P2-6` and the handset re-take of `traffic.tres`
   `cars`.

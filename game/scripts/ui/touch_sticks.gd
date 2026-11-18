@@ -44,6 +44,9 @@ const SPIN_ARROW_TO_DEG: float = 48.0
 const SPIN_ARROW_STEPS: int = 4
 ## The least turn of the wheel worth a redraw, as a share of its lock.
 const WHEEL_TURN_STEP: float = 1.0 / 256.0
+## The least change of the pedals' push worth a redraw: a pixel of the
+## accelerator's level at most, and a pad's half-held trigger drifts by less.
+const PUSH_STEP: float = 1.0 / 128.0
 
 var style: HudStyle = null
 ## The current car's wheel, drawn under the steering thumb; null draws a bare rim.
@@ -59,6 +62,9 @@ var _router: Node = null
 var _steer_drawn := PackedVector2Array()
 var _drive_drawn := PackedVector2Array()
 var _values_drawn := Vector2.ZERO
+## The side the steering is turned, -1, 0 or 1, from any input: its wheel arrow
+## is lit.
+var _turn_drawn: float = 0.0
 ## Whether the wheel was drawn spun (`Q251`): a pick over the pause changes it.
 var _spins_drawn: bool = true
 var _mesh: ArrayMesh = null
@@ -101,18 +107,23 @@ func _process(_delta: float) -> void:
 		# Snapped to a 256th of the drawn wheel's lock: a standing car's jitter
 		# returns it by less than a pixel a frame, and each would be a mesh.
 		snappedf(_router.wheel_position(), WHEEL_TURN_STEP),
-		_router.accelerate - _router.brake_reverse if drive.size() == 2 else 0.0
+		# The pedals the car is given, from a thumb, a key or a pad alike: a
+		# touch HUD shown beside a keyboard lights as the keys press.
+		snappedf(_router.accelerate - _router.brake_reverse, PUSH_STEP)
 	)
+	var steer_side: float = signf(_router.steer)
 	var spins: bool = _router.wheel_spins()
 	if (
 		steer != _steer_drawn
 		or drive != _drive_drawn
 		or values != _values_drawn
+		or steer_side != _turn_drawn
 		or spins != _spins_drawn
 	):
 		_steer_drawn = steer
 		_drive_drawn = drive
 		_values_drawn = values
+		_turn_drawn = steer_side
 		_spins_drawn = spins
 		queue_redraw()
 
@@ -185,7 +196,8 @@ func _stick(
 ## A steering wheel round the thumb: rim, three spokes and the stripe at the
 ## top that shows how far it has turned, and a small arrow either side of it —
 ## curved round the rim's top on a spun wheel, out sideways on a slid one
-## (`Q251`).
+## (`Q251`). The arrow on the side the steering is turned, by any input, is in
+## `HudStyle.touch_turn`.
 func _wheel(
 	points: PackedVector2Array, colours: PackedColorArray, at: Vector2, turn: float, held: bool
 ) -> void:
@@ -195,12 +207,14 @@ func _wheel(
 	var spin: float = deg_to_rad(_router.wheel_lock_deg()) * turn
 	_ring(points, colours, at, radius, width, ink)
 	# Kept under a thumb too (`Q228`): the arrows are what teach the gesture.
+	# The one on the side the steering is turned is lit, as a pedal's is.
 	for side: float in [-1.0, 1.0]:
+		var paint: Color = style.touch_turn if side == _turn_drawn else ink
 		if _spins_drawn:
-			_curved_arrow(points, colours, at, radius + width * 4.0, side, width, ink)
+			_curved_arrow(points, colours, at, radius + width * 4.0, side, width, paint)
 		else:
 			var tip: Vector2 = at + Vector2(side * (radius + width * 4.0), 0.0)
-			_chevron(points, colours, tip, Vector2(side, 0.0), width * 2.0, ink)
+			_chevron(points, colours, tip, Vector2(side, 0.0), width * 2.0, paint)
 	if wheel == null:
 		return
 	# The car's own wheel (`CarSpec.steering_wheel`): its horn pad, its spokes.

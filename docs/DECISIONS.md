@@ -3544,3 +3544,11 @@ share `twilight.tres`, a rose horizon; a shift never sees the 06:15 dawn.
 - **The motion is its own swell, not the water shader's chop.** The chop's 6 m crests average to almost nothing over 35 m. `moored.gd` sums three sines on `moored.tres`: heave 0.08 m at 5.3 s, roll 1.2° at 6.7 s, pitch 0.35° at 4.1 s — a mast top moves ~20 cm. It runs through a pause, as the water's `TIME` does. Visual only: `moored.gd` lifts the model's static body out of the hull onto itself, so the collider stays at rest and Jolt is never handed a moving static body.
 - `verify_landmarks.gd` holds an afloat entry to the basemap's water level (2 mm), the heave to within 95–100% of `heave_m`, and the hull's bottom under the water at the worst pose over 120 s. Each check mutation-checked: no heave, the hull lifted 2 m, the document's y at 2.3 m.
 - **Culling** (the user's question): an ordinary `MeshInstance3D`, so the engine's frustum culling is the whole of it. Preview A/B with the entry removed from the synced bundle: facing it from the water +6,738 primitives and +2 draws (colour and shadow); facing away +0 and +0. Not occlusion-culled: from the street behind the pier, the first model, hidden in the frame, still cost +696 and +2 — the pier's own occluder does not cover it. The drive camera's 400 m far plane culls it past that.
+
+## `Q255` — The wheel's arrow lights on the side it turns, and the touch controls light from any input
+
+**Status.** 🟡 Built 2026-11-18 (`P2-4`) on the user's ask ("can the wheel arrows light up when turning to that direction, like throttle does?"; "even when it is controlled via keyboard/other input, but when a touch ui is also shown"). Owed: his look on a handset.
+
+- The wheel's arrow on the side `InputRouter.steer` points is drawn in `HudStyle.touch_turn`, the dial needle's amber at 0.9: a car's indicator, and neither the pedals' green nor their red. `verify_hud` holds it amber.
+- The pedals' levels and arrows, and the lever's handle, read `accelerate - brake_reverse` from any input, no longer only under a driving thumb. The arrows read `steer`, which a key, a pad and a thumb all write.
+- The wheel itself still turns only under a thumb: `wheel_position()` is the thumb's wheel (`Q238`), and a key leaves it centred.

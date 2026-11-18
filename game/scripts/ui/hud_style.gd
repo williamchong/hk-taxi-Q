@@ -282,6 +282,9 @@ const PATH: String = "res://tuning/hud_style.tres"
 ## is pushed, and the brake.
 @export var touch_go: Color
 @export var touch_stop: Color
+## The wheel's arrow on the side the steering is turned, from any input: the
+## indicator's amber.
+@export var touch_turn: Color
 ## The menu's sheets of text (credits, guide, notices): the whole screen dimmed
 ## behind bare lettering, rather than a box on it.
 @export var scrim: Color
