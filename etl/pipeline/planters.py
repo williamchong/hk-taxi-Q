@@ -37,10 +37,10 @@ from pipeline.config import Config, GameTransform, Planters, load_config
 from pipeline.documents import write_document
 from pipeline.fetch import cached_source
 from pipeline.gltf import COLLISION_ONLY_SUFFIX, MeshData, write_glb
-from pipeline.meshbuild import ColouredBuilder
+from pipeline.meshbuild import ColouredBuilder, polygons_of, prism
 from pipeline.railings import facing_away
 from pipeline.surface_region import read as read_carriageway_region
-from pipeline.trees import Faces, face, tile_corners
+from pipeline.trees import Faces, tile_corners
 
 log = logging.getLogger(__name__)
 
@@ -174,12 +174,6 @@ def read_walls(
     return walls
 
 
-def _polygons(shape) -> list[shapely.Polygon]:
-    if shape.geom_type == "Polygon":
-        return [] if shape.is_empty else [shape]
-    return [part for inner in getattr(shape, "geoms", ()) for part in _polygons(inner)]
-
-
 def _heights(ground: Faces, ring: np.ndarray) -> np.ndarray | None:
     """The ground under each ring point; a point over none takes the nearest that has."""
     found = np.full(len(ring), np.nan)
@@ -194,46 +188,6 @@ def _heights(ground: Faces, ring: np.ndarray) -> np.ndarray | None:
         gaps = np.linalg.norm(ring[known] - ring[row], axis=1)
         found[row] = found[known][int(np.argmin(gaps))]
     return found
-
-
-def prism(
-    builder: ColouredBuilder,
-    polygon: shapely.Polygon,
-    floor_of: Callable[[np.ndarray], np.ndarray],
-    drop_m: float,
-    rise_m: float,
-    side: tuple[int, int, int],
-    top: tuple[int, int, int],
-) -> None:
-    """`polygon` stood from `drop_m` under `floor_of(points)` to `rise_m` over it."""
-    polygon = shapely.geometry.polygon.orient(polygon, 1.0)
-    for ring in (polygon.exterior, *polygon.interiors):
-        plan = np.asarray(ring.coords)[:, :2]
-        floor = floor_of(plan)
-        feet, tops = floor - drop_m, floor + rise_m
-        for row in range(len(plan) - 1):
-            (x0, z0), (x1, z1) = plan[row], plan[row + 1]
-            if abs(x1 - x0) + abs(z1 - z0) < 1e-6:
-                continue
-            quad = np.array(
-                [
-                    [x0, feet[row], z0],
-                    [x1, feet[row + 1], z1],
-                    [x1, tops[row + 1], z1],
-                    [x0, tops[row], z0],
-                ]
-            )
-            outward = np.array([z1 - z0, 0.0, -(x1 - x0)])
-            if feet[row] == feet[row + 1] and tops[row] == tops[row + 1]:
-                face(builder, quad, side, outward)
-            else:
-                # Two triangles: the four corners are not coplanar on a slope.
-                face(builder, quad[[0, 1, 2]], side, outward)
-                face(builder, quad[[0, 2, 3]], side, outward)
-    for triangle in _polygons(shapely.constrained_delaunay_triangles(polygon)):
-        plan = np.asarray(triangle.exterior.coords)[:3, :2]
-        heights = floor_of(plan) + rise_m
-        face(builder, np.column_stack([plan[:, 0], heights, plan[:, 1]]), top, _UP)
 
 
 def _shade(colour: tuple[int, int, int], factor: float) -> tuple[int, int, int]:
@@ -255,7 +209,7 @@ def _clumps(
 ) -> None:
     """The planting: the bed inside its wall, cut into cells of their own height and green."""
     colour = spec.shrub_material.colour
-    for inner in _polygons(bed.buffer(-spec.shrub_inset_m)):
+    for inner in polygons_of(bed.buffer(-spec.shrub_inset_m)):
         x0, z0, x1, z1 = inner.bounds
         for column in range(int(x0 // spec.clump_m), int(x1 // spec.clump_m) + 1):
             for row in range(int(z0 // spec.clump_m), int(z1 // spec.clump_m) + 1):
@@ -265,7 +219,7 @@ def _clumps(
                     (column + 1) * spec.clump_m,
                     (row + 1) * spec.clump_m,
                 )
-                for piece in _polygons(inner.intersection(cell)):
+                for piece in polygons_of(inner.intersection(cell)):
                     if piece.area < _MIN_CLUMP_M2:
                         continue
                     rise = spec.shrub_min_m + (spec.shrub_max_m - spec.shrub_min_m) * _draw(
@@ -370,7 +324,7 @@ def build_planters(
         if not rings:
             report.open += 1
             strip = lines.buffer(0.5 * spec.wall_width_m, cap_style="flat")
-            for piece in _polygons(strip.difference(kept_clear).intersection(frame)):
+            for piece in polygons_of(strip.difference(kept_clear).intersection(frame)):
                 if piece.area < spec.min_wall_m2:
                     report.walls_too_small += 1
                 elif stand(piece, False):
@@ -405,7 +359,7 @@ def build_planters(
                 bed = cut
             pieces = [
                 piece
-                for piece in _polygons(bed.intersection(frame))
+                for piece in polygons_of(bed.intersection(frame))
                 if piece.area >= spec.min_bed_m2
             ]
             if not pieces:

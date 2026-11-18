@@ -14,7 +14,6 @@
 ## exists.
 extends SceneTree
 
-const GeneratedBasemap = preload("res://scripts/city/generated_basemap.gd")
 const GeneratedLayer = preload("res://scripts/city/generated_layer.gd")
 const Manifest = preload("res://scripts/city/city_manifest.gd")
 const VerifyLayer = preload("res://tools/verify_layer.gd")
@@ -42,9 +41,6 @@ const PIN_PARAMETERS: PackedStringArray = ["street_far_m", "pin_band_m", "pin_fr
 ## The scene whose camera `street_far_m` restates, and the camera in it.
 const DRIVE_SCENE: String = "res://scenes/city_drive.tscn"
 const DRIVE_CAMERA: String = "Camera3D"
-
-## `verify_water.gd`'s, for its reason.
-const LEVEL_TOLERANCE_M: float = 0.005
 
 
 func _init() -> void:
@@ -147,21 +143,7 @@ func _drive_far() -> float:
 ## without it is cut off at 400 m like the basemap's own water.
 func _check_sea(mesh: ArrayMesh) -> PackedStringArray:
 	var problems: PackedStringArray = MeshContract.check_faces_up(mesh, 0, SEA, "the far sea")
-	var document: Dictionary = GeneratedBasemap.load_basemap()
-	if document.get("water_level_m") == null:
-		problems.append(
-			"%s publishes no water_level_m to hold the far sea to" % GeneratedBasemap.path()
-		)
-		return problems
-	var level: float = float(document["water_level_m"])
-	var box: AABB = mesh.get_aabb()
-	if box.size.y > LEVEL_TOLERANCE_M or absf(box.position.y - level) > LEVEL_TOLERANCE_M:
-		problems.append(
-			(
-				"the far sea spans %.3f to %.3f m, basemap.json publishes water_level_m %.3f"
-				% [box.position.y, box.end.y, level]
-			)
-		)
+	problems.append_array(MeshContract.check_water_level(mesh, "the far sea"))
 	var colours: PackedColorArray = mesh.surface_get_arrays(0)[Mesh.ARRAY_COLOR]
 	var unmarked: int = 0
 	for colour: Color in colours:

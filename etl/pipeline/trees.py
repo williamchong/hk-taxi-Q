@@ -48,7 +48,7 @@ from pipeline.config import Config, GameTransform, TreeKind, Trees, load_config
 from pipeline.documents import read_document, write_document
 from pipeline.fetch import cached_source
 from pipeline.gltf import MeshData, read_render
-from pipeline.meshbuild import ColouredBuilder
+from pipeline.meshbuild import ColouredBuilder, face
 from pipeline.placements import Placement, placement, stand_library
 from pipeline.railings import facing_away
 from pipeline.report import tail_of
@@ -284,19 +284,6 @@ _FROND_HALF_WIDTH_M = 0.3
 # A conifer is two cones: (base as a share of height, top as one, base radius
 # as a share of `crown_radius_m`).
 _CONES = ((0.0, 0.75, 1.0), (0.45, 1.0, 0.7))
-
-
-def face(
-    builder: ColouredBuilder, points: np.ndarray, colour: tuple[int, int, int], outward: np.ndarray
-) -> None:
-    """A convex polygon, wound so its front faces `outward`."""
-    normal = np.cross(points[1] - points[0], points[2] - points[0])
-    if float(normal @ outward) < 0.0:
-        points, normal = points[::-1], -normal
-    length = float(np.linalg.norm(normal))
-    if length <= 0.0:
-        return
-    builder.polygon(points, normal / length, colour)
 
 
 def _ring(radius: float, y: float, sides: int) -> np.ndarray:

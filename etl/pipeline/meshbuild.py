@@ -18,9 +18,11 @@ here is only the accumulation arithmetic.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import Protocol
 
 import numpy as np
+import shapely
 
 from pipeline.gltf import MeshData
 from pipeline.mesh import select_triangles
@@ -267,3 +269,66 @@ def import_quantum_m(points: np.ndarray) -> float:
         return 0.0
     spans = points.max(axis=0) - points.min(axis=0)
     return float(spans.max()) / 65535.0
+
+
+_UP = np.array([0.0, 1.0, 0.0])
+
+
+def face(
+    builder: ColouredBuilder, points: np.ndarray, colour: tuple[int, int, int], outward: np.ndarray
+) -> None:
+    """A convex polygon, wound so its front faces `outward`."""
+    normal = np.cross(points[1] - points[0], points[2] - points[0])
+    if float(normal @ outward) < 0.0:
+        points, normal = points[::-1], -normal
+    length = float(np.linalg.norm(normal))
+    if length <= 0.0:
+        return
+    builder.polygon(points, normal / length, colour)
+
+
+def polygons_of(shape) -> list[shapely.Polygon]:
+    """Every polygon in `shape`, however deeply a collection nests it."""
+    if shape.geom_type == "Polygon":
+        return [] if shape.is_empty else [shape]
+    return [part for inner in getattr(shape, "geoms", ()) for part in polygons_of(inner)]
+
+
+def prism(
+    builder: ColouredBuilder,
+    polygon: shapely.Polygon,
+    floor_of: Callable[[np.ndarray], np.ndarray],
+    drop_m: float,
+    rise_m: float,
+    side: tuple[int, int, int],
+    top: tuple[int, int, int],
+) -> None:
+    """`polygon` stood from `drop_m` under `floor_of(points)` to `rise_m` over it."""
+    polygon = shapely.geometry.polygon.orient(polygon, 1.0)
+    for ring in (polygon.exterior, *polygon.interiors):
+        plan = np.asarray(ring.coords)[:, :2]
+        floor = floor_of(plan)
+        feet, tops = floor - drop_m, floor + rise_m
+        for row in range(len(plan) - 1):
+            (x0, z0), (x1, z1) = plan[row], plan[row + 1]
+            if abs(x1 - x0) + abs(z1 - z0) < 1e-6:
+                continue
+            quad = np.array(
+                [
+                    [x0, feet[row], z0],
+                    [x1, feet[row + 1], z1],
+                    [x1, tops[row + 1], z1],
+                    [x0, tops[row], z0],
+                ]
+            )
+            outward = np.array([z1 - z0, 0.0, -(x1 - x0)])
+            if feet[row] == feet[row + 1] and tops[row] == tops[row + 1]:
+                face(builder, quad, side, outward)
+            else:
+                # Two triangles: the four corners are not coplanar on a slope.
+                face(builder, quad[[0, 1, 2]], side, outward)
+                face(builder, quad[[0, 2, 3]], side, outward)
+    for triangle in polygons_of(shapely.constrained_delaunay_triangles(polygon)):
+        plan = np.asarray(triangle.exterior.coords)[:3, :2]
+        heights = floor_of(plan) + rise_m
+        face(builder, np.column_stack([plan[:, 0], heights, plan[:, 1]]), top, _UP)

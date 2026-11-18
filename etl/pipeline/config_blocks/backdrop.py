@@ -12,6 +12,7 @@ from typing import Any
 from pipeline.config_blocks.base import (
     Material,
     SourceLayer,
+    _bounds,
     _MaterialTable,
     _require,
     _source_layer,
@@ -129,12 +130,7 @@ def _backdrop(body: Any, where: str, table: _MaterialTable) -> Backdrop | None:
     return Backdrop(
         source=str(_require(body, "source", where)),
         member=_tile_member(body, where),
-        bounds=GeodeticBounds(
-            west=float(_require(bounds, "west", f"{where}:bounds")),
-            east=float(_require(bounds, "east", f"{where}:bounds")),
-            south=float(_require(bounds, "south", f"{where}:bounds")),
-            north=float(_require(bounds, "north", f"{where}:bounds")),
-        ),
+        bounds=_bounds(bounds, f"{where}:bounds"),
         regions=frozenset(str(region) for region in regions),
         buildings=_source_layer(
             _require(body, "buildings", where), f"{where}:buildings", _BUILDING_ROLES

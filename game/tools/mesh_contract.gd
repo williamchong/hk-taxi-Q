@@ -13,7 +13,12 @@
 ## checks, and only the verify tools load it.
 extends RefCounted
 
+const GeneratedBasemap = preload("res://scripts/city/generated_basemap.gd")
 const MeshMeasure = preload("res://scripts/city/mesh_measure.gd")
+
+## How far a vertex of a water plane may sit from `water_level_m`. Compression
+## is off project-wide (`Q82`), so this is float32 at a few metres, not slack.
+const LEVEL_TOLERANCE_M: float = 0.005
 
 
 ## Triangles below `node` whose centroid falls inside `box`, in `node`'s space.
@@ -778,6 +783,34 @@ static func check_stands_upright(
 			(
 				"%s: only %d of %d triangles stand upright. " % [where, upright, triangle_count]
 				+ "%s — a mostly-horizontal mesh has been laid flat." % shape
+			)
+		)
+	return problems
+
+
+## Problems with a water plane's height: `mesh` is flat, at the level the
+## basemap publishes. Both halves matter: a flat plane at the wrong height is
+## the quay flooded or the sea drained, and a plane at the right mean height
+## that is not flat is the sheets' terrain noise the sink exists to remove,
+## back on the water. `what` names the plane: "the water", "the far sea".
+static func check_water_level(mesh: ArrayMesh, what: String) -> PackedStringArray:
+	var document: Dictionary = GeneratedBasemap.load_basemap()
+	if document.is_empty():
+		return ["%s shipped but %s did not load" % [what, GeneratedBasemap.path()]]
+	if document.get("water_level_m") == null:
+		return ["%s publishes no water_level_m to hold %s to" % [GeneratedBasemap.path(), what]]
+	var level: float = float(document["water_level_m"])
+	var box: AABB = mesh.get_aabb()
+	var problems: PackedStringArray = []
+	if box.size.y > LEVEL_TOLERANCE_M:
+		problems.append(
+			"%s is not flat: %.3f m from its lowest vertex to its highest" % [what, box.size.y]
+		)
+	if absf(box.position.y - level) > LEVEL_TOLERANCE_M:
+		problems.append(
+			(
+				"%s sits at %.3f m, basemap.json publishes water_level_m %.3f"
+				% [what, box.position.y, level]
 			)
 		)
 	return problems

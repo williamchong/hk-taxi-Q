@@ -50,8 +50,7 @@ from pipeline.crs import GameTransform, project_bounds
 from pipeline.documents import write_document
 from pipeline.fetch import source_reads
 from pipeline.gltf import MeshData, write_glb
-from pipeline.meshbuild import ColouredBuilder
-from pipeline.planters import prism
+from pipeline.meshbuild import ColouredBuilder, prism
 
 log = logging.getLogger(__name__)
 

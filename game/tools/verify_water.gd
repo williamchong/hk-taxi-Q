@@ -19,7 +19,6 @@
 ## exists and matches `generated_layer.gd`'s path for it.
 extends SceneTree
 
-const GeneratedBasemap = preload("res://scripts/city/generated_basemap.gd")
 const GeneratedLayer = preload("res://scripts/city/generated_layer.gd")
 const VerifyLayer = preload("res://tools/verify_layer.gd")
 const MeshContract = preload("res://tools/mesh_contract.gd")
@@ -36,10 +35,6 @@ const SURFACES: int = 1
 ## imported `BaseMaterial3D` draws the right blue at 0.9 roughness — matte, pale,
 ## water that reads as painted ground — and nothing else here would notice.
 const WATER_MATERIAL: String = "res://tuning/water.tres"
-
-## How far a vertex may sit from `water_level_m`. Compression is off
-## project-wide (`Q82`), so this is float32 at a few metres, not slack.
-const LEVEL_TOLERANCE_M: float = 0.005
 
 ## The asset's two meshes by node name: `water_mesh`'s name and
 ## `LAND_MESH_NAME` in `etl/pipeline/basemap.py`. The land is optional — a
@@ -76,7 +71,7 @@ func _check(scene_root: Node3D) -> PackedStringArray:
 			MeshContract.check_shader_material(mesh, surface, where, WATER_MATERIAL)
 		)
 		problems.append_array(MeshContract.check_faces_up(mesh, surface, where, "the water"))
-	problems.append_array(_check_level(mesh))
+	problems.append_array(MeshContract.check_water_level(mesh, "the water"))
 
 	if meshes.has(LAND_MESH):
 		problems.append_array(_check_land(meshes[LAND_MESH] as ArrayMesh, mesh))
@@ -108,33 +103,6 @@ func _check_land(land: ArrayMesh, water: ArrayMesh) -> PackedStringArray:
 		problems.append(
 			(
 				"the land's face stops at %.2f m, over the water at %.2f m: it floats"
-				% [box.position.y, level]
-			)
-		)
-	return problems
-
-
-## The plane is flat, at the level the basemap publishes. Both halves matter: a
-## flat plane at the wrong height is the quay flooded or the sea drained, and a
-## plane at the right mean height that is not flat is the sheets' terrain noise
-## the sink exists to remove, back on the water.
-func _check_level(mesh: ArrayMesh) -> PackedStringArray:
-	var document: Dictionary = GeneratedBasemap.load_basemap()
-	if document.is_empty():
-		return ["water shipped but %s did not load" % GeneratedBasemap.path()]
-	if document.get("water_level_m") == null:
-		return ["%s publishes no water_level_m to hold the plane to" % GeneratedBasemap.path()]
-	var level: float = float(document["water_level_m"])
-	var box: AABB = mesh.get_aabb()
-	var problems: PackedStringArray = []
-	if box.size.y > LEVEL_TOLERANCE_M:
-		problems.append(
-			"the water is not flat: %.3f m from its lowest vertex to its highest" % box.size.y
-		)
-	if absf(box.position.y - level) > LEVEL_TOLERANCE_M:
-		problems.append(
-			(
-				"the water sits at %.3f m, basemap.json publishes water_level_m %.3f"
 				% [box.position.y, level]
 			)
 		)

@@ -46,6 +46,7 @@ from pipeline.config_blocks.base import (  # noqa: F401
     LayerSpec,
     Material,
     SourceLayer,
+    _bounds,
     _field,
     _fields,
     _MaterialTable,
@@ -1376,15 +1377,6 @@ def _elevation_levels(raw: dict[Any, Any], path: Path) -> dict[int, float]:
     if 0 not in levels:
         raise ValueError(f"{path}:elevation_levels has no level 0 — ground must be mapped")
     return levels
-
-
-def _bounds(body: dict[str, Any], where: str) -> GeodeticBounds:
-    return GeodeticBounds(
-        west=float(_require(body, "west", where)),
-        east=float(_require(body, "east", where)),
-        south=float(_require(body, "south", where)),
-        north=float(_require(body, "north", where)),
-    )
 
 
 def _census_stations(body: Any, where: str) -> tuple[str, ...]:

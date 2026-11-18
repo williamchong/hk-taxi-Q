@@ -14,6 +14,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from pipeline.crs import GeodeticBounds
+
 
 @dataclass(frozen=True)
 class Material:
@@ -362,3 +364,12 @@ def _unread(mappings: list[_Read]) -> list[str]:
         for key in dict.keys(body)
         if key not in body.read
     ]
+
+
+def _bounds(body: dict[str, Any], where: str) -> GeodeticBounds:
+    return GeodeticBounds(
+        west=float(_require(body, "west", where)),
+        east=float(_require(body, "east", where)),
+        south=float(_require(body, "south", where)),
+        north=float(_require(body, "north", where)),
+    )
