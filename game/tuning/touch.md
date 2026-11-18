@@ -46,6 +46,11 @@ travel is full lock the instant a thumb lands. `verify_input.gd` refuses one.
     left; along its top it pushes sideways. A thumb going round the wheel turns it too, by its
     way along the rim; whichever of the two has gone further steers. The wheel is taken up from
     where it was, never jumped to the thumb.
+- `spin_curve = 1.0` (`Q251`, the user: "lets try spinning to be raw input instead of easing"):
+  a spun wheel's steering is its position to this power, relative or fixed; `steer_curve` is the
+  slid wheel's. At 1 the steering is the drawn rim: 90° round is half the lock (it was a
+  quarter on NORMAL's 2.0). STEERING RESPONSE picks among the slide's three only; a spun
+  wheel reads this one under any pick. Raise it toward 2.0 if small spins at speed snatch.
 - `round_floor_px = 40.0` (`Q251`): a fixed spun wheel's way round is the thumb's angle round
   the hub, as a length on the drawn rim, so a steady circle of any size turns the wheel at the
   finger's pace; inside 40 units it is the thumb's length, where an angle would jump.

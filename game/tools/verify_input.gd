@@ -154,6 +154,7 @@ func _check_profile() -> void:
 	# A missing key reads 0.0, which `steer_from` drives as linear rather than
 	# as a switch; this is what says the key is missing.
 	_expect(_touch.steer_curve >= 1.0, "profile", "steer_curve is %.1f" % _touch.steer_curve)
+	_expect(_touch.spin_curve >= 1.0, "profile", "spin_curve is %.1f" % _touch.spin_curve)
 	# The player's three (`Q223`): gentle is the larger power, and a missing
 	# key reads 0.0 here too.
 	_expect(
@@ -728,7 +729,7 @@ func _check_spin(home: Vector2) -> void:
 
 	_use_wheel("spin")
 	_press(FINGER_A, home)
-	var quarter: float = _touch.shape(90.0 / _touch.spin_lock_deg, curve)
+	var quarter: float = _touch.shape(90.0 / _touch.spin_lock_deg, _touch.spin_curve)
 	for i: int in 6:
 		_move(FINGER_A, _on_circle(middle, radius, i + 1))
 	_expect(
@@ -1041,7 +1042,7 @@ func _check_anchor() -> void:
 func _check_fixed_spin(steer_at: Vector2) -> void:
 	var travel: float = _touch.push_travel_px
 	var radius: float = _touch.wheel_radius_px
-	var curve: float = _touch.steer_curve
+	var curve: float = _touch.spin_curve
 	var rest := _router.find_child("SteerRest", true, false) as Control
 	var was: Vector2 = rest.global_position
 	rest.global_position += steer_at + Vector2(radius, 0.0) - _zone("SteerRest").get_center()
@@ -1183,6 +1184,12 @@ func _check_options() -> void:
 			is_equal_approx(_steer(), pow(0.5, curves[pick])),
 			"options",
 			"picked %s, half the travel is %.3f of the lock" % [pick, _steer()]
+		)
+		# A spun wheel has its own curve, whatever the pick.
+		_expect(
+			_touch.curve_for(pick, true) == _touch.spin_curve,
+			"options",
+			"picked %s, a spun wheel still reads spin_curve" % pick
 		)
 	_lift(FINGER_A, home)
 

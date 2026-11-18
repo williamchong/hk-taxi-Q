@@ -3499,6 +3499,10 @@ share `twilight.tres`, a rose horizon; a shift never sees the 06:15 dawn.
   needs a longer stroke for lock (2x at twice the rim's reach). A straight vertical stroke cannot reach lock going round (at the rim it
   sweeps under 90°), so neither reading alone serves both gestures.
 - Slid: the sideways offset alone, at any height (`Q243`'s slide without its spin).
+- Each wheel has its own two: slid, `steer_travel_px` and `steer_curve`; spun, `spin_lock_deg`
+  (`push_travel_px` fixed) and `spin_curve` (2026-11-18, the user: "lets try spinning to be raw
+  input instead of easing"). `spin_curve` 1.0: the steering is the wheel's position, as drawn.
+  STEERING RESPONSE's three curves are the slide's; a spun wheel reads `spin_curve` under any pick.
 - Gone: `spin_enter_deg` and the slide bias. The frame cap was already 60 by default on a phone
   (`Settings.FRAME_CAPS[0]`, `Q223`); a desk stays uncapped.
 

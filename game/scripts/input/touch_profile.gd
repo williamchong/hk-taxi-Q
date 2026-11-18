@@ -119,6 +119,13 @@ extends Resource
 ## either: the rim keeps up with a spinning finger.
 @export_range(30.0, 720.0, 1.0, "suffix:°") var spin_lock_deg: float
 
+## A spun wheel's own curve, relative or fixed: the steering is the wheel's
+## position to this power, as `steer_curve` is a slid one's. 1 is the raw
+## wheel, the drawn rim and the steering one and the same. The player's
+## STEERING RESPONSE (`curve_for`) picks among the slide's three only: a spun
+## wheel reads this one under every pick.
+@export_range(1.0, 4.0, 0.1) var spin_curve: float
+
 ## A fixed spun wheel's push for full lock (`Q251`): the thumb's travel along
 ## the rim under it. Half the rim's round at `spin_lock_deg` 180 — pi times
 ## `wheel_radius_px` — and the rim moves with the thumb; below that the rim
@@ -175,8 +182,10 @@ func shape(share: float, curve: float) -> float:
 
 
 ## The curve for `steering`, one of `ControlOptions.STEERINGS`; anything else
-## reads the one between.
-func curve_for(steering: String) -> float:
+## reads the one between. A spun wheel (`spin`) has its own, under any pick.
+func curve_for(steering: String, spin: bool) -> float:
+	if spin:
+		return spin_curve
 	match steering:
 		ControlOptions.GENTLE:
 			return steer_curve_gentle

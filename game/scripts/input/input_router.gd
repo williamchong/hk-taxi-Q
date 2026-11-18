@@ -166,7 +166,8 @@ class Thumb:
 
 
 var _touch: TouchProfile = null
-## The steering thumb's curve, the player's pick of `_touch`'s three (`Q223`):
+## The steering thumb's curve: a slid wheel's is the player's pick of
+## `_touch`'s three (`Q223`), a spun wheel's its own `spin_curve`;
 ## read when the zones are built and on `refresh_options`, never per tick.
 var _steer_curve: float = 1.0
 ## The touch wheel's position, -1.0 to 1.0, before its curve (`Q238`). Carried
@@ -298,13 +299,13 @@ func _build_zones() -> void:
 ## Read the player's steering pick again (`ControlOptions`): the options menu
 ## changed it, at boot or over a paused drive.
 func refresh_options() -> void:
-	if _touch != null:
-		_steer_curve = _touch.curve_for(ControlOptions.steering())
 	# From each thumb's next landing: one that is down keeps the origin it has.
 	var fixed: bool = ControlOptions.anchor() == ControlOptions.FIXED
 	_steer_thumb.fixed = fixed
 	_drive_thumb.fixed = fixed
 	_spin = ControlOptions.wheel() == ControlOptions.SPIN
+	if _touch != null:
+		_steer_curve = _touch.curve_for(ControlOptions.steering(), _spin)
 
 
 ## Build the zones afresh: the thumbs swapped sides (`Q223`). Both thumbs are
@@ -363,7 +364,7 @@ static func _thumb_points(thumb: Thumb) -> PackedVector2Array:
 
 
 ## The steering the touch wheel gives, -1.0 to 1.0, under a thumb or left by
-## one: the wheel's position through the curve the player picked. It stays
+## one: the wheel's position through its curve (`_steer_curve`). It stays
 ## where a lifted thumb left it and comes back as the car rolls (`Q238`); 0
 ## while anything but a thumb steers.
 func wheel_turn() -> float:
