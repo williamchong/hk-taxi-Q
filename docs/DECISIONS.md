@@ -3589,3 +3589,19 @@ the drive (a Moreton Terrace road that "becomes a disconnected huge slope spike"
 - Measured: Causeway Bay 2 uncovered, 2 bridged; nodes 73 / 76 17.68 / 16.29 → 12.02 m;
   `touchdown_error` steps at node 69 +6.00 → +0.00. Wan Chai: 1 uncovered, 0 bridged, roadgraph
   byte-identical.
+
+## `Q258` — A traffic car is drawn pitched on the road's grade
+
+**Status.** Built 2026-11-19 on the user's report from the drive (traffic "horizontal when moving
+up or down a slope"). Desk-checked; the user's drive owed.
+
+- `Car.pitch` is the grade between the car's axle stations on its edge (`car.s ± half_length`,
+  `RoadGraph.point_at`), or ±0.05 of its turn's curve, recomputed only when it moves along.
+  `drawn_pose` tilts the body, the instance and the beam about the car's own right.
+- Drawn only, as `Q244`'s steer: `car.pose` stays upright, so every rule that reads a heading or a
+  centre is untouched and the seeded drives (`drive0`–`drive5`, `hours`) are byte-identical on both
+  regions. A knock folds the steer into the pose but not the pitch: `_centre_of` reads the upright
+  pose, and folding it moved the push's centre and spun a car pushed through its middle.
+- Trams stay level: the tram line is flat by the user's word, and a grade on it would be noise.
+- Deciding number: on the steepest road by its ends, `e335` (Wan Chai, 16.5 %) and `e21` (Causeway
+  Bay, 14.5 %), the nose reads ±0.163 / ±0.143, opposite each way. Mutation caught: the sign.

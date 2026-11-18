@@ -36,7 +36,8 @@ Keep rows to one line. A row that needs a paragraph belongs in `DECISIONS.md`.
   whole shift to 交更 (`P3-74`), a night drive (`P3-69`), and the touch scheme on a handset (`Q238`,
   `Q239`, `Q230`, `Q241`, and `Q251`'s spin or slide, the spin now raw at `spin_curve` 1.0;
   `Q255`'s wheel arrows lit amber on the side turned, from any input). Also a look at traffic
-  changing lanes: it is drawn turned 6–7° now (`Q244`).
+  changing lanes: it is drawn turned 6–7° now (`Q244`), and on a slope it is drawn pitched
+  (`Q258`).
 - `P0-3b`: FPS on an A13, an Android build, then `P2-6` and the handset re-take of `traffic.tres`
   `cars`.
 - `P3-9` (authenticity round 1, the Phase 3 gate): different drivers from `P3-9a`, on a handset.

@@ -277,6 +277,9 @@ class Car:
 	## across the lanes, in radians about up (`Q244`). Drawn only: `pose` keeps
 	## the road's heading, which is what every rule reads.
 	var steer: float = 0.0
+	## How far the car is drawn nose-up on the road's grade, in radians about
+	## its own right. Drawn only, as `steer`: `pose` stays upright.
+	var pitch: float = 0.0
 	## The lanes it has moved across since its steer was last read, toward the
 	## offside positive: `_change_lane` adds to it, `_steer` takes it.
 	var lanes_moved: float = 0.0
@@ -1432,6 +1435,7 @@ func _place(car: Car, edge: int, along: bool, s: float, lane: float, cruise_shar
 	_enter(car)
 	car.speed = car.cruise_mps * cruise_share
 	car.pose = _pose_on_edge(car)
+	car.pitch = _pitch_on_edge(car)
 	car.shape.disabled = false
 	spawned += 1
 
@@ -2103,7 +2107,8 @@ func take_push(body: Object, impulse: Vector3, at: Vector3) -> void:
 func _knock(car: Car) -> void:
 	car.knocked = true
 	# Hit part way across the lanes, it slides from the heading it was drawn at.
-	car.pose = drawn_pose(car)
+	# Its pose stays upright: the wreck keeps its drawn pitch, as it stands.
+	car.pose = Transform3D(Basis(Vector3.UP, car.steer) * car.pose.basis, car.pose.origin)
 	car.steer = 0.0
 	var forward: Vector3 = -car.pose.basis.z
 	car.slide = Vector3(forward.x, 0.0, forward.z) * car.speed
@@ -2826,6 +2831,9 @@ func _advance(car: Car, metres: float) -> void:
 		_start_turn(car)
 	if car.live:
 		car.pose = _pose_on_turn(car) if car.turning else _pose_on_edge(car)
+		# The grade moves only with the car along; a lane change keeps it.
+		if metres > 0.0:
+			car.pitch = _pitch_on_turn(car) if car.turning else _pitch_on_edge(car)
 		_steer(car, metres)
 
 
@@ -2862,11 +2870,15 @@ func _steer(car: Car, metres: float) -> void:
 		car.steer = goal
 
 
-## Where `car` is drawn and its body stands: its pose, turned by its steer.
+## Where `car` is drawn and its body stands: its pose, turned by its steer and
+## tilted on its grade.
 static func drawn_pose(car: Car) -> Transform3D:
-	if car.steer == 0.0:
+	if car.steer == 0.0 and car.pitch == 0.0:
 		return car.pose
-	return Transform3D(Basis(Vector3.UP, car.steer) * car.pose.basis, car.pose.origin)
+	return Transform3D(
+		Basis(Vector3.UP, car.steer) * car.pose.basis * Basis(Vector3.RIGHT, car.pitch),
+		car.pose.origin
+	)
 
 
 func _start_turn(car: Car) -> void:
@@ -2918,6 +2930,33 @@ func _pose_on_edge(car: Car) -> Transform3D:
 		car.edge, _edge_m(car.s, car.length_m, car.along), car.along, car.lane
 	)
 	return Transform3D(_facing(_travel_dir(car.edge, car.s, car.length_m, car.along)), at)
+
+
+## The grade under `car` on its edge, nose-up positive: the rise between its
+## axles' stations on the road, so it noses over a crest rather than snapping.
+func _pitch_on_edge(car: Car) -> float:
+	var behind: Vector3 = graph.point_at(
+		car.edge,
+		_edge_m(maxf(car.s - car.half_length, 0.0), car.length_m, car.along) / car.length_m
+	)
+	var ahead: Vector3 = graph.point_at(
+		car.edge,
+		_edge_m(minf(car.s + car.half_length, car.length_m), car.length_m, car.along) / car.length_m
+	)
+	return _grade(ahead - behind)
+
+
+## The grade under `car` on its turn's curve, nose-up positive.
+func _pitch_on_turn(car: Car) -> float:
+	var u: float = clampf(car.turn_u / car.turn_len, 0.0, 1.0) if car.turn_len > 0.0 else 1.0
+	var ahead: Vector3 = TrafficTurns.curve_point(car.p0, car.p1, car.p2, minf(u + 0.05, 1.0))
+	var behind: Vector3 = TrafficTurns.curve_point(car.p0, car.p1, car.p2, maxf(u - 0.05, 0.0))
+	return _grade(ahead - behind)
+
+
+static func _grade(rise: Vector3) -> float:
+	var run: float = Vector2(rise.x, rise.z).length()
+	return atan2(rise.y, run) if run > 0.0 else 0.0
 
 
 func _pose_on_turn(car: Car) -> Transform3D:

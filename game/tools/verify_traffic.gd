@@ -1154,6 +1154,7 @@ func _check_lane_looks(
 		"a car part way across follows the one in the lane it moves onto, and one keeping its lane does not"
 	)
 	_check_steer(system, ahead, behind)
+	_check_grade(system, behind)
 
 
 ## A car moving across the lanes is drawn turned the way it moves (`Q244`, the
@@ -1200,7 +1201,10 @@ func _check_steer(
 	for _step: int in int(system.profile.lane_steer_m * 12.0 / STEER_STEP_M):
 		system._advance(behind, STEER_STEP_M)
 	_expect(
-		behind.steer == 0.0 and TrafficSystem.drawn_pose(behind) == behind.pose,
+		(
+			behind.steer == 0.0
+			and TrafficSystem.drawn_pose(behind).basis.x.is_equal_approx(behind.pose.basis.x)
+		),
 		"lane",
 		"and is drawn straight once it holds its lane"
 	)
@@ -1211,6 +1215,41 @@ func _check_steer(
 		)
 	)
 	ahead.live = true
+
+
+## A car on a slope is drawn nose-up climbing it and nose-down coming down it,
+## its pose still upright (the user's drive 2026-11-19: traffic level on a
+## hill). On the steepest road by its ends, at its middle, both ways.
+func _check_grade(system: TrafficSystem, car: TrafficSystem.Car) -> void:
+	var steepest: int = -1
+	var grade: float = 0.0
+	for edge: int in system.graph.edge_ids():
+		var length: float = system.graph.plan_length_of(edge)
+		if system.graph.is_stub(edge) or length <= 0.0:
+			continue
+		var rise: float = system.graph.point_at(edge, 1.0).y - system.graph.point_at(edge, 0.0).y
+		if absf(rise / length) > absf(grade):
+			steepest = edge
+			grade = rise / length
+	var climbs: bool = grade > 0.0
+	var noses: Array[float] = []
+	for along: bool in [true, false]:
+		_stage(system, car, steepest, along, system.graph.plan_length_of(steepest) * 0.5)
+		var drawn: Transform3D = TrafficSystem.drawn_pose(car)
+		noses.append((-drawn.basis.z).y)
+		_expect(
+			car.pose.basis.y == Vector3.UP and drawn.basis.x.is_equal_approx(car.pose.basis.x),
+			"lane",
+			"a car on a slope keeps an upright pose and is drawn pitched about its own right only"
+		)
+	_expect(
+		(noses[0] > 0.0) == climbs and (noses[1] > 0.0) != climbs,
+		"lane",
+		(
+			"a car is drawn nose-up climbing e%d (%.1f%%) and nose-down coming down it (%.3f, %.3f)"
+			% [steepest, grade * 100.0, noses[0], noses[1]]
+		)
+	)
 
 
 static func _stage(
@@ -1232,6 +1271,7 @@ static func _stage(
 	system._unwreck(car)
 	system._enter(car)
 	car.pose = system._pose_on_edge(car)
+	car.pitch = system._pitch_on_edge(car)
 
 
 ## Drive `system` for `RUN_S`, every check on every tick; `at_signals` adds the
