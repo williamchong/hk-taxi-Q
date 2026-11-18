@@ -38,7 +38,8 @@ Owed: an A/B render at one camera, HUD off and on, and the draw-call delta (both
   measured against the screen, not the window.
 - One head-up display (`Q163`): bare readouts, a round scope map, only the 咪錶 boxed.
 - A pedal shows its push as a level, never opacity (`Q228`). The wheel draws
-  `InputRouter.wheel_turn()` at `wheel_centre()`, never the thumb's offset (`Q238`).
+  `InputRouter.wheel_position()` (before the curve, `Q251`) at `wheel_centre()`, never the thumb's
+  offset (`Q238`).
 - No screen blur in the drive: `backdrop_blur.gdshader` is the menu's.
 
 ## Wrong way — `wrong_way_monitor.gd`, `no_entry_icon.gd`, `wrong_way.tres`, `warn_*` keys

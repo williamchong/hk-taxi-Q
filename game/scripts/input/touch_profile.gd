@@ -119,6 +119,18 @@ extends Resource
 ## either: the rim keeps up with a spinning finger.
 @export_range(30.0, 720.0, 1.0, "suffix:°") var spin_lock_deg: float
 
+## A fixed spun wheel's push for full lock (`Q251`): the thumb's travel along
+## the rim under it. Half the rim's round at `spin_lock_deg` 180 — pi times
+## `wheel_radius_px` — and the rim moves with the thumb; below that the rim
+## runs ahead of the thumb.
+@export_range(10.0, 1200.0, 1.0) var push_travel_px: float
+
+## Inside this many units of a fixed spun wheel's middle, a thumb going round
+## turns it by its length along the rim, read as if this far out, not by its
+## angle (`Q251`): an angle so close to the hub jumps the wheel. Outside it, a circle of any size turns the
+## wheel at the finger's pace.
+@export_range(0.0, 400.0, 1.0) var round_floor_px: float
+
 ## Path to the shipped table. Named here so `input_router.gd` and
 ## `verify_input.gd` cannot end up loading two different files — a check that
 ## names its own path can go green while the game reads something else.
@@ -145,6 +157,12 @@ func steer_from(offset_px: float, curve: float) -> float:
 ## which the router carries between touches (`Q238`).
 func steer_share(offset_px: float) -> float:
 	return _axis_from(offset_px, steer_travel_px)
+
+
+## The share of a fixed spun wheel's push a thumb `offset_px` along the rim has
+## used, -1.0 to 1.0 (`Q251`): `steer_share` on the push's own travel.
+func push_share(offset_px: float) -> float:
+	return _axis_from(offset_px, push_travel_px)
 
 
 ## The steering a wheel at `share` of its travel gives: the share to the power

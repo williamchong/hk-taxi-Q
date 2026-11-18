@@ -43,8 +43,16 @@ travel is full lock the instant a thumb lands. `verify_input.gd` refuses one.
     so the drawn rim keeps up with the finger. Relative, the thumb lands on twelve o'clock and the
     wheel takes up from where it was. A move through the hub turns nothing.
   - Spun and fixed (`Q239`): a push. Down on the wheel's left, up turns right and down turns
-    left, `steer_travel_px` each way to full lock; along its top it is a slide. The wheel is
-    taken up from where it was, never jumped to the thumb.
+    left; along its top it pushes sideways. A thumb going round the wheel turns it too, by its
+    way along the rim; whichever of the two has gone further steers. The wheel is taken up from
+    where it was, never jumped to the thumb.
+- `round_floor_px = 40.0` (`Q251`): a fixed spun wheel's way round is the thumb's angle round
+  the hub, as a length on the drawn rim, so a steady circle of any size turns the wheel at the
+  finger's pace; inside 40 units it is the thumb's length, where an angle would jump.
+- `push_travel_px = 242.0` (`Q251`): a fixed spun wheel's push for full lock, pi x
+  `wheel_radius_px` so the drawn rim moves with the thumb (at `spin_lock_deg` 180). At the
+  slide's 140 it ran 1.7x ahead and was too quick even on GENTLE. Raise it for a slower push;
+  under 242 the rim outruns the thumb.
   - Slid: the thumb's sideways offset alone, at any height, `steer_travel_px` to full lock.
   - Lower `spin_lock_deg` for a quicker spin (90 is lock at three o'clock); it is also the angle
     the drawn wheel turns at full lock on a slid wheel.

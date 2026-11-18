@@ -188,11 +188,17 @@ func _check_profile() -> void:
 			_touch.wheel_radius_px > _touch.wheel_hub_px
 			and _touch.wheel_hub_px > 0.0
 			and _touch.spin_lock_deg > 0.0
+			and _touch.push_travel_px > _touch.jitter_deadzone_px
 		),
 		"profile",
 		(
-			"the wheel is %.0f units round a %.0f hub, spun to its lock at %.0f degrees"
-			% [_touch.wheel_radius_px, _touch.wheel_hub_px, _touch.spin_lock_deg]
+			"the wheel is %.0f units round a %.0f hub, spun to its lock at %.0f degrees or pushed %.0f"
+			% [
+				_touch.wheel_radius_px,
+				_touch.wheel_hub_px,
+				_touch.spin_lock_deg,
+				_touch.push_travel_px
+			]
 		)
 	)
 	# The guard in `_axis_from` keeps a bad edit from dividing by zero; this is
@@ -1011,7 +1017,7 @@ func _check_anchor() -> void:
 	)
 	_lift(FINGER_A, wheel)
 	_roll()
-	_check_fixed_spin(wheel, steer_at)
+	_check_fixed_spin(steer_at)
 
 	SettingsScript.set_anchor("relative")
 	_router.refresh_options()
@@ -1022,14 +1028,25 @@ func _check_anchor() -> void:
 	_lift(FINGER_A, steer_at)
 
 
-## A spun fixed wheel (`Q251`): pushed round from where the thumb landed, along
-## the way the rim moves under it there, a slide's travel to full lock — so a
-## thumb down on the wheel's left turns it all the way and back by going up and
-## down. It takes the wheel up from where it is, as a relative one does.
-func _check_fixed_spin(wheel: Vector2, steer_at: Vector2) -> void:
-	var travel: float = _touch.steer_travel_px
+## A spun fixed wheel (`Q251`), read with the thumb down on its rim at nine
+## o'clock: pushed straight up and down, the way the rim moves there,
+## `push_travel_px` to full lock and back in one stroke; or gone round, a
+## quarter of the drawn rim for a quarter turn at the finger's pace. Landed
+## twice as far out, both run at half the pace. It takes the wheel up from
+## where it is, as a relative one does.
+##
+## ⚠️ The rest is moved under the thumb for it: a headless canvas lands a
+## thumb in the zone hundreds of units from the rest, where the push is scaled
+## to nothing worth reading.
+func _check_fixed_spin(steer_at: Vector2) -> void:
+	var travel: float = _touch.push_travel_px
+	var radius: float = _touch.wheel_radius_px
+	var curve: float = _touch.steer_curve
+	var rest := _router.find_child("SteerRest", true, false) as Control
+	var was: Vector2 = rest.global_position
+	rest.global_position += steer_at + Vector2(radius, 0.0) - _zone("SteerRest").get_center()
+	var wheel: Vector2 = _zone("SteerRest").get_center()
 	_use_wheel("spin")
-	var along: Vector2 = _router.push_along(steer_at, wheel)
 	_expect(
 		(
 			_router.push_along(wheel + Vector2(-100.0, 0.0), wheel).is_equal_approx(Vector2.UP)
@@ -1045,25 +1062,69 @@ func _check_fixed_spin(wheel: Vector2, steer_at: Vector2) -> void:
 	_expect(
 		is_zero_approx(_steer()), "anchor", "fixed and spun, a thumb steers nothing where it lands"
 	)
-	_move(FINGER_A, steer_at + along * travel)
+	_move(FINGER_A, steer_at + Vector2.UP * travel)
 	_expect(
-		is_equal_approx(_steer(), 1.0), "anchor", "a slide's travel along the push is full lock"
+		is_equal_approx(_steer(), 1.0),
+		"anchor",
+		"on the rim's left, push_travel_px straight up is full lock: %.3f" % _steer()
 	)
-	_move(FINGER_A, steer_at - along * travel)
+	_move(FINGER_A, steer_at + Vector2.DOWN * travel)
 	_expect(
 		is_equal_approx(_steer(), -1.0),
 		"anchor",
-		"and as far back is the other lock, in one stroke"
+		"and as far down is the other lock, in one stroke: %.3f" % _steer()
 	)
-	_move(FINGER_A, steer_at + along.orthogonal() * travel)
+	_move(FINGER_A, steer_at + Vector2.LEFT * travel)
 	_expect(is_zero_approx(_steer()), "anchor", "a stroke square to the push turns nothing")
-	_move(FINGER_A, steer_at + along * travel)
+	_lift(FINGER_A, wheel)
+	_roll()
+	# Landed twice as far out, the same stroke turns it half as far.
+	var far: Vector2 = wheel + Vector2(-2.0 * radius, 0.0)
+	_press(FINGER_A, far)
+	_move(FINGER_A, far + Vector2.UP * travel * 0.5)
+	_expect(
+		is_equal_approx(_steer(), _touch.shape(_touch.push_share(travel * 0.25), curve)),
+		"anchor",
+		"twice as far out, half the stroke turns it a quarter of the lock's push: %.3f" % _steer()
+	)
+	_lift(FINGER_A, wheel)
+	_roll()
+	# 🔴 Round the wheel a quarter turn, each way, on the rim and twice as far
+	# out: a quarter of the drawn rim whatever the circle's size, at the
+	# finger's pace. A quarter, not a half: a doubled pace would hide behind
+	# the lock at a half.
+	var quarter: float = _touch.shape(_touch.push_share(PI * 0.5 * radius), curve)
+	var zone: Rect2 = _zone("SteerZone")
+	for scale: float in [1.0, 2.0]:
+		var off: Vector2 = Vector2(-radius * scale, 0.0)
+		_expect(
+			zone.has_point(wheel + off),
+			"anchor",
+			"the circle %.0f units out starts in the zone" % off.length()
+		)
+		for way: float in [1.0, -1.0]:
+			_press(FINGER_A, wheel + off)
+			for i: int in 9:
+				_move(FINGER_A, wheel + off.rotated(way * PI * 0.5 * (i + 1) / 9.0))
+			_expect(
+				is_equal_approx(_steer(), way * quarter),
+				"anchor",
+				(
+					"a quarter round a fixed spun wheel %.0f units out turns it %.3f (%.3f)"
+					% [off.length(), _steer(), way * quarter]
+				)
+			)
+			_lift(FINGER_A, wheel)
+			_roll()
+	_press(FINGER_A, steer_at)
+	_move(FINGER_A, steer_at + Vector2.UP * travel)
 	_lift(FINGER_A, wheel)
 	_press(FINGER_A, steer_at)
 	_expect(is_equal_approx(_steer(), 1.0), "anchor", "a thumb landing on a turned wheel holds it")
 	_lift(FINGER_A, wheel)
 	_roll()
 	_use_wheel("slide")
+	rest.global_position = was
 
 
 # --------------------------------------------------------------- options ----

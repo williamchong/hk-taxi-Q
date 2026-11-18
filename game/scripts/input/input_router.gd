@@ -186,10 +186,20 @@ var _spin: bool = true
 ## 360.
 var _bearing_deg: float = 0.0
 ## A fixed spun wheel's push (`Q251`), read only while fixed and spun: where
-## the thumb landed, and the way the rim moves clockwise under it there — up on the wheel's left, right along its
-## top — so a stroke along it turns the wheel, from where it was, by its length.
+## the thumb landed, and the way the rim moves clockwise under it there — up
+## on the wheel's left, right along its top — so a straight stroke along it
+## turns the wheel, from where it was, by its length.
 var _landed_at: Vector2 = Vector2.ZERO
 var _push_along: Vector2 = Vector2.RIGHT
+## Landed outside the rim, the push is read as the rim moves under it there: a
+## thumb twice as far out turns the wheel half as fast, as going round does.
+## Inside, it is the thumb's own length, so a stroke up the wheel's left side
+## reaches the lock.
+var _push_scale: float = 1.0
+## And the same wheel turned round its hub: each move's angle round it as a
+## length along the drawn rim, summed, so a thumb going round keeps turning it
+## where the straight push would fold back on itself.
+var _round_px: float = 0.0
 ## The layer the zones stand on, kept so `rebuild_zones` can retire it.
 var _zones: CanvasLayer = null
 ## The keyboard's input assist (`Q210`), or null when it did not load — then a
@@ -352,14 +362,22 @@ static func _thumb_points(thumb: Thumb) -> PackedVector2Array:
 	return PackedVector2Array([thumb.origin, thumb.current])
 
 
-## How far round the drawn wheel is, -1.0 to 1.0 of its lock: the steering the
-## touch wheel gives, under a thumb or left by one. It stays where a lifted
-## thumb left it and comes back as the car rolls (`Q238`); 0 while anything but
-## a thumb steers.
+## The steering the touch wheel gives, -1.0 to 1.0, under a thumb or left by
+## one: the wheel's position through the curve the player picked. It stays
+## where a lifted thumb left it and comes back as the car rolls (`Q238`); 0
+## while anything but a thumb steers.
 func wheel_turn() -> float:
 	if _touch == null:
 		return 0.0
 	return _touch.shape(_wheel, _steer_curve)
+
+
+## How far round the drawn wheel is, -1.0 to 1.0 of its lock: its position,
+## before the curve (`Q251`). The curve is the steering's, as a car's rack can
+## be, never the wheel's: drawn through it, a wheel spun at a steady pace would
+## creep and then race under the finger.
+func wheel_position() -> float:
+	return _wheel
 
 
 ## The middle of the wheel the steering thumb is on, in canvas units, for the
@@ -498,10 +516,10 @@ func _return_wheel(speed_share: float, delta: float) -> void:
 
 
 ## The steering thumb moved from `from` to `to`: keep how far round the
-## wheel's middle it is (`Q251`). A relative spun wheel only: a slid one reads
-## the thumb's sideways offset, and a fixed spun one its push.
+## wheel's middle it is (`Q251`): an angle on a relative wheel, a length along
+## the rim on a fixed one. A slid wheel reads the thumb's sideways offset.
 func _go_round(from: Vector2, to: Vector2) -> void:
-	if not _spin or _steer_thumb.fixed:
+	if not _spin:
 		return
 	# The whole move, not its two ends: a flick across the wheel between two
 	# events reads as half a turn, either way round. ⚠️ A move the hub
@@ -510,6 +528,21 @@ func _go_round(from: Vector2, to: Vector2) -> void:
 	var centre: Vector2 = wheel_centre()
 	var nearest: Vector2 = Geometry2D.get_closest_point_to_segment(centre, from, to)
 	if nearest.distance_to(centre) < _touch.wheel_hub_px:
+		return
+	if _steer_thumb.fixed:
+		# The move's angle round the hub, as a length along the drawn rim, so
+		# a steady circle of any size turns the wheel at the finger's pace.
+		# Within `round_floor_px` its length along the rim instead, read as if
+		# at the floor: an angle so close to the hub would jump.
+		var mid: Vector2 = (from + to) * 0.5
+		if mid.distance_to(centre) >= _touch.round_floor_px:
+			_round_px += (from - centre).angle_to(to - centre) * _touch.wheel_radius_px
+		else:
+			_round_px += (
+				(to - from).dot(push_along(mid, centre))
+				* _touch.wheel_radius_px
+				/ _touch.round_floor_px
+			)
 		return
 	# Screen Y runs down, so a positive angle here is clockwise on the glass.
 	_bearing_deg += rad_to_deg((from - centre).angle_to(to - centre))
@@ -529,11 +562,16 @@ func push_along(at: Vector2, centre: Vector2) -> Vector2:
 ## Slid: the thumb's sideways offset, whatever its height (`Q243`). Spun and
 ## relative: its angle round the wheel's middle, full lock at
 ## `spin_lock_deg`, so the rim keeps up with the finger. Spun and fixed: its
-## push along the rim from where it landed, a slide's travel to full lock.
+## straight push from where it landed or its way round the hub, whichever has
+## gone further, `push_travel_px` to full lock — a stroke straight up the
+## wheel's left reaches the lock, which going round could not, and a circle
+## round it keeps turning, which the straight push could not.
 func _thumb_wheel() -> float:
 	var turned: float
 	if _spin and _steer_thumb.fixed:
-		turned = _touch.steer_share((_steer_thumb.current - _landed_at).dot(_push_along))
+		var pushed: float = (_steer_thumb.current - _landed_at).dot(_push_along) * _push_scale
+		var along: float = pushed if absf(pushed) >= absf(_round_px) else _round_px
+		turned = _touch.push_share(along)
 	elif _spin:
 		turned = _bearing_deg / _touch.spin_lock_deg
 	else:
@@ -601,6 +639,10 @@ func _finger(index: int, at: Vector2, pressed: bool) -> void:
 		_bearing_deg = 0.0
 		_landed_at = at
 		_push_along = push_along(at, wheel_centre())
+		_push_scale = (
+			_touch.wheel_radius_px / maxf(at.distance_to(wheel_centre()), _touch.wheel_radius_px)
+		)
+		_round_px = 0.0
 		return
 	_drive_thumb.claim(index, at)
 

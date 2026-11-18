@@ -3470,8 +3470,26 @@ share `twilight.tres`, a rose horizon; a shift never sees the 06:15 dawn.
   vertical movement" left of the control): a PUSH. The landing fixes the way the rim moves
   clockwise under the thumb (`InputRouter.push_along`: up on the wheel's left, right along its
   top, a slide's on the hub); the stroke's length along it turns the wheel from where it was,
-  `steer_travel_px` to full lock. An absolute angle (built first) jumped the wheel on landing and
-  could not reach lock by a vertical stroke. Fixed used to be slide-only.
+  `push_travel_px` (242, pi x `wheel_radius_px`: the rim moves with the thumb) to full lock. An
+  absolute angle (built first) jumped the wheel on landing and could not reach lock by a vertical
+  stroke. Fixed used to be slide-only.
+- The push at a slide's 140 was too quick even on GENTLE (the user, from the handset): the drawn
+  rim ran 1.7x ahead of the thumb. Raise `push_travel_px` for a slower push.
+- And a thumb going round the wheel could not turn it (the user): the straight push folds back
+  on itself round a circle. The fixed wheel also sums each move's length along the rim where the
+  thumb is, and takes whichever of the two has gone further.
+- And a steady circle did not turn the wheel at the finger's pace (the user): the drawn wheel took
+  the steering's curve, so it crept then raced, and a length round the hub runs fast on a wide
+  circle and slow on a tight one. The wheel is drawn at its position (`wheel_position`), the curve
+  left to the steering alone, as a variable-ratio rack; the way round is its ANGLE as a length on
+  the drawn rim (x `wheel_radius_px` / reach), a length only within `round_floor_px` (40) where an
+  angle jumps. Half a circle of any size outside that is full lock. A thumb landed outside the rim
+  has its straight push scaled the same way (x `wheel_radius_px` / its reach): unscaled, a circle
+  twice the rim's size ran the wheel at up to twice the finger's pace while the push read the
+  larger. Inside the rim the push is the thumb's own length, so the stroke up the wheel's left
+  still reaches lock. The user's pick over "own length always": a thumb landed left of the wheel
+  needs a longer stroke for lock (2x at twice the rim's reach). A straight vertical stroke cannot reach lock going round (at the rim it
+  sweeps under 90°), so neither reading alone serves both gestures.
 - Slid: the sideways offset alone, at any height (`Q243`'s slide without its spin).
 - Gone: `spin_enter_deg` and the slide bias. The frame cap was already 60 by default on a phone
   (`Settings.FRAME_CAPS[0]`, `Q223`); a desk stays uncapped.

@@ -11,10 +11,11 @@ extends Control
 ##
 ## 🔴 **The wheel shows where the steering IS, not where the thumb is**
 ## (`Q238`): a lifted thumb leaves it turned at its rest, and it comes back as
-## the car rolls. 🔴 **Under a thumb the wheel HANGS from it**: the thumb is on
-## its twelve o'clock and its middle is a radius below (`InputRouter.
-## wheel_centre`), so a thumb that goes on round the rim turns it and one that
-## slides along the top does what it always did. The pedals still stand where
+## the car rolls. Its position, before the steering's curve (`Q251`), so a
+## wheel spun at a steady pace turns at that pace. 🔴 **Under a thumb the wheel
+## HANGS from it**: the thumb is on its twelve o'clock and its middle is a
+## radius below (`InputRouter.wheel_centre`), so a thumb that goes on round the
+## rim turns it and one that slides along the top does what it always did. The pedals still stand where
 ## their thumb landed.
 ##
 ## 🔴 **Steering draws its sideways travel only and the pedals their upright
@@ -97,9 +98,9 @@ func _process(_delta: float) -> void:
 	var steer: PackedVector2Array = _router.steer_touch()
 	var drive: PackedVector2Array = _router.drive_touch()
 	var values := Vector2(
-		# Snapped to half a degree of the drawn wheel: a standing car's jitter
+		# Snapped to a 256th of the drawn wheel's lock: a standing car's jitter
 		# returns it by less than a pixel a frame, and each would be a mesh.
-		snappedf(_router.wheel_turn(), WHEEL_TURN_STEP),
+		snappedf(_router.wheel_position(), WHEEL_TURN_STEP),
 		_router.accelerate - _router.brake_reverse if drive.size() == 2 else 0.0
 	)
 	var spins: bool = _router.wheel_spins()
