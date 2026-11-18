@@ -10,3 +10,4 @@ shader_parameter/roughness_value = 0.9
 shader_parameter/street_far_m = 400.0
 shader_parameter/pin_band_m = 8.0
 shader_parameter/pin_from_m = 500.0
+shader_parameter/night_spot_strength = 0.55

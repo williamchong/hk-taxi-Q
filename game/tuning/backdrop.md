@@ -17,5 +17,9 @@ the camera's far plane.
   own material. `verify_backdrop.gd` refuses a pair that differs.
 - A block left on its imported `BaseMaterial3D` is culled at the far plane and draws nothing, so
   `verify_backdrop.gd` checks the dispatch by `resource_path`.
-- Unlit at night (`Q160`).
+- `night_spot_strength = 0.55` (`Q252`, the user's pick from 0 / 0.35 / 0.55 / 1.0 / 2.0): Wan
+  Chai's floodlight strength (`city_facade.tres`). 0 is `Q249`'s dark skyline. The colour, share
+  0.6, reach 120 m and top 0.3 are the shader's defaults and Wan Chai's values; a wall is drawn
+  lit or dark by its own plane, since the mesh carries no building.
+- `wall_normal_max` (default 0.3) caps at 0.9 so a roof is never a wall.
 - `roughness_value = 0.9`: matte.

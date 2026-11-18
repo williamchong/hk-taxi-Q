@@ -25,7 +25,8 @@ footprints extruded to their published roof, one flat shore slab, and the sea ru
   — and `street_far_m` restates the drive camera's `far`. `verify_backdrop.gd` holds all three;
   move them together.
 - `triangle_cap` is a cap, tallest first. The count, 5,000, is the user's pick from frames (2,000 / 5,000 /
-  10,000), and so is the dark skyline at night; `min_height_drawn_m` says how far down it reached.
+  10,000); `min_height_drawn_m` says how far down it reached. The night wash is the user's pick too: 0.55,
+  Wan Chai's, over the dark skyline `Q249` shipped (`Q252`).
 - The shore is a closing of what stands on it (`ground_close_m`), not `basemap.sea_of`: the
   published shoreline over Kowloon has gaps of hundreds of metres and the cut finds no sea.
 - The far sea is a rectangle from the frame's north edge to the strip plus each resident frame's
@@ -39,5 +40,6 @@ footprints extruded to their published roof, one flat shore slab, and the sea ru
 - Hidden by `city_layer.gd` when its box is outside the camera's view (`far_cull.gd`; `GROW_M`
   covers the frame the answer is late by). Cost is measured facing the harbour AND facing away:
   `--spawn-facing=212,5,0` and `212,5,80`, each against `--hide-layers=backdrop`.
-- No collider, no shadow, unlit at night. A shader change owes a render, `grep -i "shader error"`
+- No collider, no shadow. Floodlit at night per wall (`Q252`): a night frame at 0 and at the
+  shipped strength. A shader change owes a render, `grep -i "shader error"`
   and a frame under `--rendering-method gl_compatibility` (24-bit depth orders the band coarsely).
