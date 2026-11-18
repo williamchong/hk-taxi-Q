@@ -53,6 +53,7 @@ FONTS = ROOT / "game" / "assets" / "authored" / "fonts"
 TUNING = ROOT / "game" / "tuning"
 MENU_TEXT = TUNING / "menu_text.json"
 SCRIPTS = ROOT / "game" / "scripts"
+CITY_CONFIG = ROOT / "etl" / "config" / "hong_kong.yaml"
 
 HEI_OUT = FONTS / "NotoSansHK-subset.ttf"
 BRUSH_OUT = FONTS / "TaxiAceBrush-Medium.ttf"
@@ -101,6 +102,30 @@ def shown_codes() -> set[int]:
     codes: set[int] = set()
     for path in sorted([*TUNING.glob("*.json"), *TUNING.glob("*.tres"), *SCRIPTS.rglob("*.gd")]):
         codes |= {ord(c) for c in path.read_text(encoding="utf-8")}
+    return codes
+
+
+def signboard_codes() -> set[int]:
+    """Every character `signboards.text` can letter a board with (`Q260`).
+
+    Read as text, the block's own lines, so the tool needs no YAML library and a
+    comment elsewhere in the config adds nothing to the subset.
+    """
+    lines = CITY_CONFIG.read_text(encoding="utf-8").splitlines()
+    start = lines.index("signboards:")
+    codes: set[int] = set()
+    inside = False
+    for line in lines[start + 1 :]:
+        if line and not line.startswith(" "):
+            break
+        if line.startswith("  text:"):
+            inside = True
+        elif line.startswith("  ") and not line.startswith("   "):
+            inside = False
+        if inside and not line.lstrip().startswith("#"):
+            codes |= {ord(c) for c in line if ord(c) > 0x2E7F}
+    if not codes:
+        raise ValueError(f"{CITY_CONFIG} has no signboards.text block with a character in it")
     return codes
 
 
@@ -157,7 +182,7 @@ def main(argv: list[str] | None = None) -> int:
             return 1
 
     base = base_codes()
-    shown = shown_codes() | base
+    shown = shown_codes() | signboard_codes() | base
     cut(args.sources / "NotoSansHK[wght].ttf", HEI_OUT, shown)
     cut(args.sources / "Bakudai-Medium.ttf", BRUSH_OUT, shown, BRUSH_FAMILY, "Medium")
     cut(args.sources / "Bakudai-Bold.ttf", TITLE_OUT, title_codes() | base, BRUSH_FAMILY, "Bold")

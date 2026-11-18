@@ -614,6 +614,10 @@ sources:
   # outlined in red. 70 MB. ⚠️ `NameEN` is the building name and a permit
   # number, never the shop's, and nothing names what a board says.
   signboards: https://portal.csdi.gov.hk/csdi-webpage/file-api?dataset_id=bd_rcd_1629267205232_53467&format=geojson&layer_name=BDLSMW
+  # FEHD's restaurant licences (`Q260`): a point for each licensed premises,
+  # read for the position alone, so a board near a restaurant is lettered as
+  # one. The licensee's name is in the data and is never read.
+  fehd_restaurants: https://portal.csdi.gov.hk/csdi-webpage/file-api?dataset_id=fehd_rcd_1630036390312_58893&format=geojson&layer_name=FEHD_RL
 
 # Buildings ship as one ~44 MB glTF zip per 1:1000 map sheet, 3,456 sheets for
 # the territory, with no single bulk URL. The CSDI portal's `file-api` serves
@@ -3853,6 +3857,53 @@ signboards:
   survey_min_share: 0.25
   survey_lightness: [12.0, 90.0]
   cell_m: 300.0
+  # The lettering (`P3-103` step 2): a generic shop name, never a real one,
+  # seeded by the board's id. Two picks from `prefixes` and a trade's suffix,
+  # the trade weighted by mount, by a restaurant licence nearby and by street.
+  # Every character must be in the brush font: `tools/make_fonts.py` reads
+  # this block, and the stage refuses a character the font lacks.
+  text:
+    font: game/assets/authored/fonts/TaxiAceBrush-Medium.ttf
+    glyph_px: 64
+    fill: 0.7
+    vertical_aspect: 1.3
+    lift_m: 0.02
+    inks: ["#f4f1e8", "#1a1a1a", "#f2c500", "#c8102e"]
+    name_chars: 2
+    prefixes: [金, 興, 富, 祥, 利, 隆, 華, 美, 新, 大, 永, 泰, 昌, 發, 德, 和, 盛, 安, 寶, 恆, 福, 豐, 旺, 珍, 鴻, 嘉, 錦, 好, 記, 東, 港, 龍]
+    licences:
+      source: fehd_restaurants
+      fields:
+        easting: EASTING
+        northing: NORTHING
+      reach_m: 15.0
+      boost: 8.0
+      elsewhere: 0.25
+    trades:
+      cafe: {suffixes: [茶餐廳, 冰室], weight: 3.0, food: true}
+      restaurant: {suffixes: [酒家, 酒樓, 小廚, 餐廳], weight: 3.0, food: true}
+      noodles: {suffixes: [麵家, 粥麵, 雲吞麵], weight: 2.0, food: true}
+      roast: {suffixes: [燒臘, 燒味], weight: 1.5, food: true}
+      sweets: {suffixes: [甜品, 涼茶], weight: 1.0, food: true}
+      bar: {suffixes: [酒吧], weight: 0.3, food: true, mounts: [wall, projecting]}
+      pharmacy: {suffixes: [藥房, 藥行], weight: 2.0}
+      gold: {suffixes: [金行, 珠寶], weight: 1.5}
+      pawn: {suffixes: [大押], weight: 0.5, mounts: [projecting]}
+      optician: {suffixes: [眼鏡], weight: 1.0}
+      property: {suffixes: [地產], weight: 1.5}
+      exchange: {suffixes: [找換], weight: 0.5, mounts: [wall, projecting]}
+      fashion: {suffixes: [時裝, 鞋店], weight: 1.5}
+      electrical: {suffixes: [電器, 五金], weight: 1.0}
+      clinic: {suffixes: [診所, 牙科, 醫務所], weight: 1.0}
+      tutoring: {suffixes: [補習社], weight: 0.5}
+      salon: {suffixes: [髮型, 美容], weight: 1.0}
+      dried_seafood: {suffixes: [海味, 參茸], weight: 0.5}
+      tea: {suffixes: [茶莊], weight: 0.3}
+      phone: {suffixes: [電訊, 手機], weight: 1.0}
+      group: {suffixes: [集團, 中心, 大廈], weight: 1.0, mounts: [roof]}
+    # Lockhart Road's bars are the street's own trade; authored, not surveyed.
+    streets:
+      LOCKHART ROAD: {bar: 12.0}
 
 # HyD's roadside planters (`P3-98`, `Q247`), built by `pipeline/planters.py`.
 #

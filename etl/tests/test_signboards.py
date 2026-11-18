@@ -19,6 +19,7 @@ import yaml
 from pipeline.config import CONFIG_PATH, Mount
 from pipeline.config_blocks.signboards import _signboards
 from pipeline.railings import facing_away
+from pipeline.signboard_text import build_atlas, characters, ink, pick_name
 from pipeline.signboards import (
     LIT_ALPHA,
     Board,
@@ -227,7 +228,8 @@ def test_every_face_is_wound_the_way_it_is_lit_and_only_the_faces_glow(spec, kin
         item = _place(spec, normal_wall)
         stack(spec, [item], NOWHERE, SignboardReport())
         item.colour = (200, 16, 46)
-        (mesh,) = build_meshes(spec, [item])
+        (mesh,), lettering = build_meshes(spec, [item])
+        assert lettering == []
         assert facing_away(mesh) == 0
         assert len(mesh.triangles) == 12
         lit = mesh.colours[mesh.triangles[:, 0], 3] == LIT_ALPHA
@@ -289,6 +291,10 @@ def test_a_blown_out_photo_is_clamped_into_the_lightness_bounds(spec) -> None:
         (lambda b: b.update(frame_darken=1.5), "frame_darken"),
         (lambda b: b.update(max_snap_m=0.0), "max_snap_m"),
         (lambda b: b["fields"].pop("facing"), "facing"),
+        (lambda b: b["text"]["trades"]["bar"].update(mounts=["floating"]), "floating"),
+        (lambda b: b["text"]["streets"].update({"X ROAD": {"bakery": 2.0}}), "bakery"),
+        (lambda b: b["text"].update(name_chars=0), "name_chars"),
+        (lambda b: b["text"].update(fill=1.5), "fill"),
     ],
 )
 def test_block_refuses(mutate, message: str) -> None:
@@ -309,3 +315,88 @@ def test_every_published_type_in_the_region_has_a_mount(spec) -> None:
         "SIGNBOARD ON OR HUNG UNDERNEATH BALCONY OR CANOPY",
     ):
         assert isinstance(spec.mounts[kind], Mount)
+
+
+# --------------------------------------------------------------------------
+# The lettering (step 2)
+# --------------------------------------------------------------------------
+
+
+def test_every_character_the_block_can_letter_is_in_its_font(spec) -> None:
+    import sys
+
+    from pipeline.config import CONFIG_PATH as config_path
+
+    root = config_path.parents[2]
+    sys.path.insert(0, str(root / "tools"))
+    from font_coverage import read_cmap
+
+    cmap = read_cmap(root / spec.text.font)
+    missing = [c for c in characters(spec.text) if ord(c) not in cmap]
+    assert not missing, f"{spec.text.font} lacks {''.join(missing)}: re-run tools/make_fonts.py"
+
+
+def test_a_name_is_generic_seeded_by_id_and_never_empty(spec) -> None:
+    text = spec.text
+    names = {pick_name(text, str(ident), "wall", (), False)[0] for ident in range(300)}
+    assert "" not in names and len(names) > 250
+    assert pick_name(text, "77", "wall", (), False) == pick_name(text, "77", "wall", (), False)
+    for name in names:
+        suffix_ok = any(name.endswith(s) for t in text.trades.values() for s in t.suffixes)
+        assert suffix_ok and all(c in text.prefixes for c in name[: text.name_chars])
+
+
+def test_a_licence_nearby_makes_a_restaurant_and_a_trade_keeps_to_its_mount(spec) -> None:
+    text = spec.text
+
+    def food_share(near: bool) -> float:
+        trades = [pick_name(text, str(i), "wall", (), near)[1] for i in range(600)]
+        return sum(text.trades[t].food for t in trades) / len(trades)
+
+    assert food_share(True) > 0.8 > 0.3 > food_share(False)
+    roof = {pick_name(text, str(i), "roof", (), False)[1] for i in range(300)}
+    wall = {pick_name(text, str(i), "wall", (), False)[1] for i in range(600)}
+    assert "pawn" not in roof | wall and "group" not in wall and "group" in roof
+
+
+def test_a_street_weights_its_own_trade(spec) -> None:
+    text = spec.text
+    street = next(iter(text.streets))
+    trade = next(iter(text.streets[street]))
+    on = [pick_name(text, str(i), "wall", (street,), True)[1] for i in range(400)]
+    off = [pick_name(text, str(i), "wall", (), True)[1] for i in range(400)]
+    assert on.count(trade) > 3 * max(1, off.count(trade))
+
+
+def test_the_ink_stands_out_from_its_board(spec) -> None:
+    assert ink(spec.text, (20, 20, 20)) != (26, 26, 26)
+    assert ink(spec.text, (244, 241, 232)) == (26, 26, 26)
+
+
+@pytest.mark.parametrize(
+    ("kind", "sizes", "faces"),
+    [
+        ("WALL SIGNBOARD", {"length": 6.0, "height": 1.0}, 1),
+        ("PROJECTING SIGNBOARD", {"length": 1.0, "height": 4.0}, 2),
+        ("SIGNBOARD ON ROOF", {"length": 8.0, "height": 2.0}, 1),
+    ],
+)
+def test_the_lettering_faces_out_of_its_board_and_stays_on_it(spec, kind, sizes, faces) -> None:
+    item = _place(spec, _board(spec, 5.0, 9.8, kind=kind, **sizes))
+    stack(spec, [item], NOWHERE, SignboardReport())
+    item.colour = (200, 16, 46)
+    item.name = "金興茶餐廳"
+    atlas = build_atlas(spec.text, CONFIG_PATH.parents[2])
+    (board,), (lettering,) = build_meshes(spec, [item], atlas)
+    assert facing_away(lettering) == 0
+    assert len(lettering.triangles) == 2 * len(item.name) * faces
+    assert (lettering.colours[:, 3] == LIT_ALPHA).all()
+    # Every glyph inside the board's outline, off its face.
+    low, high = board.positions.min(axis=0), board.positions.max(axis=0)
+    margin = spec.text.lift_m + 1e-4
+    assert (lettering.positions >= low - margin).all()
+    assert (lettering.positions <= high + margin).all()
+    # A blade is lettered top to bottom; the wall and roof boards across.
+    spread = np.ptp(lettering.positions, axis=0)
+    assert (spread[1] > max(spread[0], spread[2])) == (kind == "PROJECTING SIGNBOARD")
+    assert lettering.texture is not None and lettering.texture.uri == "signboards_text.png"

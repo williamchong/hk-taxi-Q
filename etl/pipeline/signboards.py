@@ -42,13 +42,22 @@ import numpy as np
 import shapely
 from shapely.geometry.base import BaseGeometry
 
+from pipeline import signboard_text
 from pipeline.colour import lab_to_srgb, srgb_to_lab
-from pipeline.config import Config, GameTransform, Mount, Signboards, load_config
+from pipeline.config import (
+    CONFIG_PATH,
+    Config,
+    GameTransform,
+    Mount,
+    Signboards,
+    SignText,
+    load_config,
+)
 from pipeline.config_blocks.base import _parse_hex
 from pipeline.config_blocks.signboards import PROJECTING, ROOF
 from pipeline.documents import read_document, write_document
 from pipeline.fetch import cached_source, read_feature_collection, source_dir
-from pipeline.gltf import MeshData, write_glb
+from pipeline.gltf import MeshData, Texture, write_glb
 from pipeline.meshbuild import Cell, ColouredBuilder, cell_name, face
 from pipeline.railings import facing_away
 from pipeline.report import tail_of
@@ -60,7 +69,8 @@ log = logging.getLogger(__name__)
 
 SIGNBOARDS_NAME = "signboards.glb"
 SIGNBOARDS_MANIFEST_NAME = "signboards.json"
-SIGNBOARDS_MANIFEST_SCHEMA = 1
+# 2 since step 2: the manifest names `text_atlas`, the lettering's own PNG.
+SIGNBOARDS_MANIFEST_SCHEMA = 2
 SIGNBOARDS_MESH_NAME = "signboards"
 # The glTF material the engine's importer dispatches on — `SHADERS` in
 # `game/tools/generated_scene_import.gd` holds the other end.
@@ -135,6 +145,14 @@ class SignboardReport:
     # nothing. Must be 0.
     facing_away: int = 0
     bytes: int = 0
+    # The lettering: boards named, by trade, and how many near a restaurant
+    # licence; then the atlas and the quads.
+    lettered: int = 0
+    by_trade: dict[str, int] = field(default_factory=dict)
+    near_licence: int = 0
+    text_atlas_px: int = 0
+    text_atlas_bytes: int = 0
+    text_triangles: int = 0
 
 
 # --------------------------------------------------------------------------
@@ -373,6 +391,8 @@ class Placed:
     wall_top_y: float
     base_y: float = 0.0
     colour: tuple[int, int, int] = (0, 0, 0)
+    # The generic name lettered on it, or "" for a plain board.
+    name: str = ""
 
     @property
     def top_y(self) -> float:
@@ -602,8 +622,16 @@ def draw(builder: ColouredBuilder, item: Placed, spec: Signboards) -> None:
         face(builder, cap, frame, np.array([0.0, up, 0.0]))
 
 
-def build_meshes(spec: Signboards, placed: list[Placed]) -> list[MeshData]:
+def build_meshes(
+    spec: Signboards, placed: list[Placed], atlas: signboard_text.Atlas | None = None
+) -> tuple[list[MeshData], list[MeshData]]:
+    """The boards, and their lettering, a mesh each a plan cell.
+
+    The lettering is its own primitive: it needs `TEXCOORD_0` and a texture,
+    and the boards need neither (`verify_signs.gd`'s reason for the signs).
+    """
     cells: dict[Cell, ColouredBuilder] = {}
+    letters: dict[Cell, signboard_text.TextBuilder] = {}
     for item in placed:
         cell: Cell = (
             math.floor(item.foot[0] / spec.cell_m),
@@ -612,12 +640,32 @@ def build_meshes(spec: Signboards, placed: list[Placed]) -> list[MeshData]:
         if cell not in cells:
             cells[cell] = ColouredBuilder(SIGNBOARDS_MATERIAL)
         draw(cells[cell], item, spec)
-    meshes = []
-    for cell in sorted(cells):
-        mesh = cells[cell].build(cell_name(SIGNBOARDS_MESH_NAME, cell))
-        if mesh is not None:
-            meshes.append(mesh)
-    return meshes
+        if atlas is None or spec.text is None or not item.name:
+            continue
+        signboard_text.letter(
+            letters.setdefault(cell, signboard_text.TextBuilder()),
+            spec.text,
+            atlas,
+            item.name,
+            (*signboard_text.ink(spec.text, item.colour), LIT_ALPHA),
+            item.board.mount.mount,
+            box(item, spec),
+        )
+    meshes = [
+        mesh
+        for cell in sorted(cells)
+        if (mesh := cells[cell].build(cell_name(SIGNBOARDS_MESH_NAME, cell))) is not None
+    ]
+    if atlas is None:
+        return meshes, []
+    texture = Texture(data=atlas.png, mime_type="image/png", uri=signboard_text.TEXT_ATLAS_NAME)
+    lettering = [
+        mesh
+        for cell in sorted(letters)
+        if (mesh := letters[cell].build(cell_name(signboard_text.TEXT_MESH_NAME, cell), texture))
+        is not None
+    ]
+    return meshes, lettering
 
 
 # --------------------------------------------------------------------------
@@ -638,7 +686,7 @@ def build_region(
     out_dir = city.out_dir(region_id, out_root)
     if spec is None:
         log.info("city '%s' declares no signboards block; nothing to build", city.id)
-        (out_dir / SIGNBOARDS_NAME).unlink(missing_ok=True)
+        _clear(out_dir)
         _write_manifest(out_dir, city, region_id, report)
         return report
 
@@ -660,6 +708,13 @@ def build_region(
             continue
         item.colour = colour_of(spec, board.ident, survey, report)
         placed.append(item)
+    atlas = None
+    if spec.text is not None:
+        atlas = signboard_text.build_atlas(spec.text, CONFIG_PATH.parents[2])
+        licences = signboard_text.read_licences(
+            city, spec.text, region_id, transform, sources_root=sources_root
+        )
+        name_boards(spec.text, placed, licences, report)
     stack(spec, placed, read_carriageway_region(out_dir, region_id).whole, report)
     for item in placed:
         report.drawn_by_mount[item.board.mount.mount] = (
@@ -667,19 +722,47 @@ def build_region(
         )
     report.drawn = len(placed)
 
-    meshes = build_meshes(spec, placed)
+    meshes, lettering = build_meshes(spec, placed, atlas)
     report.cells = len(meshes)
     report.triangles = sum(len(mesh.triangles) for mesh in meshes)
     report.vertices = sum(len(mesh.positions) for mesh in meshes)
-    report.facing_away = sum(facing_away(mesh) for mesh in meshes)
+    report.text_triangles = sum(len(mesh.triangles) for mesh in lettering)
+    report.facing_away = sum(facing_away(mesh) for mesh in [*meshes, *lettering])
+    _clear(out_dir)
     if meshes:
-        report.bytes = write_glb(out_dir / SIGNBOARDS_NAME, meshes)
-    else:
-        # Named from what was drawn: a stale mesh beside a manifest that says
-        # "none" is what `sync_generated.sh` would ship.
-        (out_dir / SIGNBOARDS_NAME).unlink(missing_ok=True)
+        report.bytes = write_glb(out_dir / SIGNBOARDS_NAME, [*meshes, *lettering])
+    if lettering and atlas is not None:
+        report.text_atlas_px = atlas.pixels
+        report.text_atlas_bytes = len(atlas.png)
     _write_manifest(out_dir, city, region_id, report)
     return report
+
+
+def name_boards(
+    text: SignText,
+    placed: list[Placed],
+    licences: shapely.STRtree | None,
+    report: SignboardReport,
+) -> None:
+    """Each board's generic name, from its mount, a licence nearby and its street."""
+    for item in placed:
+        near = signboard_text.licensed(text, licences, item.foot)
+        name, trade = signboard_text.pick_name(
+            text, item.board.ident, item.board.mount.mount, item.board.facing, near
+        )
+        if not name:
+            continue
+        item.name = name
+        report.lettered += 1
+        report.near_licence += int(near)
+        report.by_trade[trade] = report.by_trade.get(trade, 0) + 1
+
+
+def _clear(out_dir: Path) -> None:
+    """Remove what an earlier build wrote: a stale mesh or atlas beside a
+    manifest that says "none" is what `sync_generated.sh` would ship."""
+    (out_dir / SIGNBOARDS_NAME).unlink(missing_ok=True)
+    (out_dir / signboard_text.TEXT_ATLAS_NAME).unlink(missing_ok=True)
 
 
 def _write_manifest(out_dir: Path, city: Config, region_id: str, report: SignboardReport) -> int:
@@ -722,6 +805,14 @@ def _write_manifest(out_dir: Path, city: Config, region_id: str, report: Signboa
         "vertices": report.vertices,
         "facing_away": report.facing_away,
         "bytes": report.bytes,
+        # The lettering (`P3-103` step 2): generic names, never a real one.
+        "text_atlas": signboard_text.TEXT_ATLAS_NAME if report.text_atlas_px else None,
+        "lettered": report.lettered,
+        "by_trade": dict(sorted(report.by_trade.items())),
+        "near_licence": report.near_licence,
+        "text_atlas_px": report.text_atlas_px,
+        "text_atlas_bytes": report.text_atlas_bytes,
+        "text_triangles": report.text_triangles,
     }
     return write_document(out_dir / SIGNBOARDS_MANIFEST_NAME, document)
 

@@ -22,7 +22,8 @@ restate the terms here.
 ### Required credits-screen text (draft)
 
 > Contains geospatial data from the Lands Department, the Transport Department, the Highways
-> Department, the Leisure and Cultural Services Department and the Buildings Department of the Government
+> Department, the Leisure and Cultural Services Department, the Buildings Department and the Food and
+> Environmental Hygiene Department of the Government
 > of the Hong Kong Special Administrative Region, obtained via DATA.GOV.HK and the Common Spatial
 > Data Infrastructure (CSDI) Portal. **The Government of the HKSAR and the relevant organisations own
 > the intellectual property rights in that data.** Used under the DATA.GOV.HK and CSDI Portal Terms
@@ -478,5 +479,10 @@ found.
   the four driven regions: 3,455 of 3,883 measured (3,362 vector outline, 93 raster ring), 422 with
   no outline, 5 dead links. Some photos are the applicant's own, extracted from minor works records.
   `LICENSING.md` item 6.
-- **No owner and no trade name** in either: the database names no shop. The text step that follows
-  (`P3-103` step 2) writes generic names, never a real one.
+- **No owner and no trade name** in either: the database names no shop. The lettering (`P3-103`
+  step 2) is generic, never a real name.
+- **FEHD Restaurant Licences** — `fehd_rcd_1630036390312_58893`, Food and Environmental Hygiene
+  Department, CSDI `file-api` GeoJSON, layer `FEHD_RL`, 17,272 licensed premises territory-wide
+  with `EASTING` / `NORTHING` (EPSG:2326). Read for position alone: a board within
+  `licences.reach_m` of one is more likely lettered as a food trade (959 of Wan Chai's 2,031).
+  ⚠️ The licensee's shop name (`NSEARCH03_*`) and address are in the data and are **never read**.

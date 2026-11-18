@@ -367,6 +367,7 @@ class _Region:
                 "city_id": city.id,
                 "region_id": REGION,
                 "asset": None,
+                "text_atlas": None,
             },
             # And no `backdrop:` block (`P3-100`).
             BACKDROP_MANIFEST_NAME: {
@@ -639,6 +640,13 @@ class TestAssembly:
         region.build()
         assert region.manifest()["signboards"] == "signboards.glb"
         assert "signboards.glb" in shipped(region.manifest())
+        assert region.manifest()["signboards_text_atlas"] is None
+
+        region.documents[SIGNBOARDS_MANIFEST_NAME]["text_atlas"] = "signboards_text.png"
+        (region.out_dir / "signboards_text.png").write_bytes(b"png")
+        region.build()
+        assert region.manifest()["signboards_text_atlas"] == "signboards_text.png"
+        assert "signboards_text.png" in shipped(region.manifest())
 
     def test_a_built_far_shore_is_shipped(self, region) -> None:
         """The optional-key contract again, for `P3-100`'s `backdrop.glb`."""

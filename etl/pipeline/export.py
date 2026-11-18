@@ -327,7 +327,10 @@ CITY_NAME = "city.json"
 # 53 since `P3-103` (`Q260`): the manifest names `signboards.glb`, the
 # Buildings Department's signboards on the walls. A v52 reader ships a region
 # without them.
-CITY_SCHEMA = 53
+# 54 since `P3-103` step 2: the manifest names `signboards_text_atlas`, the
+# boards' lettering. A v53 reader ships the glb without it, and every name
+# samples nothing.
+CITY_SCHEMA = 54
 
 # The hero-building placement document (`P3-6`), written by this stage from the
 # city config — ~2 entries derived from `landmarks:` plus one CRS conversion,
@@ -377,6 +380,7 @@ OPTIONAL_ASSET_KEYS = (
     "planters",
     "paths",
     "signboards",
+    "signboards_text_atlas",
     "backdrop",
     "lamps",
     "lamps_placements",
@@ -663,6 +667,7 @@ def build_region(
         # The Buildings Department's signboards (`P3-103`, `Q260`); `null`
         # where the city declares no `signboards:` block or the region has none.
         "signboards": signboards["asset"],
+        "signboards_text_atlas": signboards.get("text_atlas"),
         # The far shore (`P3-100`, `Q249`); `null` where the city declares no
         # `backdrop:` block or this region is not one that ships it.
         "backdrop": backdrop["asset"],

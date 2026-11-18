@@ -26,6 +26,14 @@ const SURFACES: int = 1
 ## `SIGNBOARDS_MATERIAL` in `etl/pipeline/signboards.py`.
 const SIGNBOARDS_MATERIAL: String = "res://tuning/signboards.tres"
 
+## The lettering (`P3-103` step 2): its own primitive a cell, named
+## `signboards_text_<cell>` (`TEXT_MESH_NAME` in `etl/pipeline/signboard_text.py`),
+## on a material duplicated per region to hold the atlas, so checked through its
+## shader as `verify_signs.gd` checks the signs' lettering.
+const TEXT_PREFIX: String = "signboards_text"
+const TEXT_MATERIAL: String = "res://tuning/signboards_text.tres"
+const TEXT_SHADER: String = "res://assets/shaders/signboards_text.gdshader"
+
 
 func _init() -> void:
 	VerifyLayer.run(self, GeneratedLayer.SIGNBOARDS, _check)
@@ -38,6 +46,9 @@ func _check(scene_root: Node3D) -> PackedStringArray:
 	)
 	for cell: String in cells:
 		var mesh: Mesh = cells[cell]
+		if cell.begins_with(TEXT_PREFIX):
+			problems.append_array(_check_lettering(mesh, cell))
+			continue
 		for surface: int in mesh.get_surface_count():
 			var where: String = "%s surface %d" % [cell, surface]
 			# `true`: the colour and the lit-face marker ride `COLOR_0`.
@@ -52,4 +63,24 @@ func _check(scene_root: Node3D) -> PackedStringArray:
 			scene_root, "the signboards", "SIGNBOARDS_MESH_NAME in etl/pipeline/signboards.py"
 		)
 	)
+	return problems
+
+
+## A glyph whose texture never arrived samples black and the scissor cuts it
+## away; one whose material was not dispatched draws as a solid block. Neither
+## moves a triangle count.
+func _check_lettering(mesh: Mesh, cell: String) -> PackedStringArray:
+	var problems: PackedStringArray = []
+	for surface: int in mesh.get_surface_count():
+		var where: String = "%s surface %d" % [cell, surface]
+		if not (mesh.surface_get_format(surface) & Mesh.ARRAY_FORMAT_TEX_UV):
+			problems.append("%s carries no UVs" % where)
+		problems.append_array(
+			MeshContract.check_surface(
+				mesh, surface, where, true, GeneratedLayer.SIGNBOARDS_TEXT_ATLAS_BUDGET_PX
+			)
+		)
+		problems.append_array(
+			MeshContract.check_shader_source(mesh, surface, where, TEXT_SHADER, TEXT_MATERIAL)
+		)
 	return problems

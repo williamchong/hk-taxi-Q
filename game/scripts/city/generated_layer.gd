@@ -81,6 +81,12 @@ const SIGNS_TEXT_MESH: String = "signs_text"
 ## grid.
 const SIGNS_TEXT_ATLAS_BUDGET_PX: int = 1536 * 256
 
+## The signboards' lettering atlas (`P3-103` step 2, `Q260`): a coverage cell a
+## character, `signboards.text.glyph_px` square plus padding, packed into the
+## smallest power-of-two image. 95 characters at 64 px are 512 x 1024. Raised
+## only with the vocabulary, on the signs' terms above.
+const SIGNBOARDS_TEXT_ATLAS_BUDGET_PX: int = 512 * 1024
+
 const GeneratedRegions = preload("res://scripts/city/generated_regions.gd")
 
 ## The layer ids. Code callers pass these and never the bare string, so a

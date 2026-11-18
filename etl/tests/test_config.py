@@ -1631,7 +1631,8 @@ class TestPaletteExposure:
         ⚠️ **`signboards.palette` is the same argument at a third layer**
         (`P3-103`): a board's ground is a printed or lit face, every board is
         its own colour inside one draw call, and the palette is only the
-        fallback for a board the photo survey could not measure.
+        fallback for a board the photo survey could not measure. Its lettering's
+        `text.inks` are the same: paint on a board, picked for contrast.
         """
         document = yaml.safe_load((CONFIG_PATH).read_text(encoding="utf-8"))
         declared = {entry["colour"] for entry in document["materials"].values()}
@@ -1656,6 +1657,7 @@ class TestPaletteExposure:
                     ".signs.colours.",
                     ".signals.heads.drawing.colours.",
                     ".signboards.palette[",
+                    ".signboards.text.inks[",
                 )
             )
         }

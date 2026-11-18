@@ -252,7 +252,14 @@ from pipeline.config_blocks.signals import (  # noqa: F401
     _signals,
     is_signal_head,
 )
-from pipeline.config_blocks.signboards import Mount, Signboards, _signboards  # noqa: F401
+from pipeline.config_blocks.signboards import (  # noqa: F401
+    Mount,
+    RestaurantLicences,
+    Signboards,
+    SignText,
+    Trade,
+    _signboards,
+)
 from pipeline.config_blocks.signs import (  # noqa: F401
     _SIGN_POLE_ROLES,
     _SIGN_ROLES,
@@ -957,6 +964,11 @@ def load_config(path: Path | None = None) -> Config:
         _check_tiled_source_exists(city, city.paths.source, f"{path}:paths.source")
     if city.signboards is not None:
         _check_source_exists(city, city.signboards.source, f"{path}:signboards.source")
+        text = city.signboards.text
+        if text is not None and text.licences is not None:
+            _check_source_exists(
+                city, text.licences.source, f"{path}:signboards.text.licences.source"
+            )
     if city.bus_routes is not None:
         for index, route_set in enumerate(city.bus_routes.sets):
             _check_source_exists(city, route_set.source, f"{path}:bus_routes.sets[{index}].source")

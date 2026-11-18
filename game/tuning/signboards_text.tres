@@ -1,0 +1,11 @@
+[gd_resource type="ShaderMaterial" format=3]
+
+[ext_resource type="Shader" path="res://assets/shaders/signboards_text.gdshader" id="1_signboards_text"]
+
+[resource]
+resource_name = "signboards_text"
+render_priority = 0
+shader = ExtResource("1_signboards_text")
+shader_parameter/roughness_value = 0.6
+shader_parameter/cut = 0.5
+shader_parameter/ink_glow = 2.0

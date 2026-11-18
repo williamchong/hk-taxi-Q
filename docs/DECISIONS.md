@@ -3631,9 +3631,9 @@ gone.
 
 ## `Q260` — Signboards come from the Buildings Department's register, coloured from their photos
 
-**Status.** 🟡 Step 1 built 2026-11-19 (`P3-103`) on the user's plan: coloured boards without text
-first, the colour surveyed. Owed: the user's look day and night, the handset, step 2 (generic
-trade-name faces), step 3 (the screens). Canopies come later and apart. Checklist in
+**Status.** 🟡 Steps 1 and 2 built 2026-11-19 (`P3-103`) on the user's plan: coloured boards, the
+colour surveyed, then generic trade names. Owed: the user's look day and night, the handset, step 3
+(the screens). Canopies come later and apart. Checklist in
 `.claude/rules/signboards.md`.
 
 - **Source.** BD's Legal / Validated Signboards (`bd_rcd_1629267205232_53467`, `BDLSMW`): a point,
@@ -3666,3 +3666,19 @@ trade-name faces), step 3 (the screens). Canopies come later and apart. Checklis
   (+580,060, 0.5%). `city.json` schema 53.
 - ⚠️ A brand's colour comes through the survey (`LICENSING.md` item 6). The photos are the
   applicant's in part; only one colour a board leaves the build machine.
+- **Step 2, the lettering: generic, never real.** Two picks from 32 auspicious characters and a
+  trade's suffix (`金興茶餐廳`), seeded by the board's id. The trade is weighted by mount (a pawn's
+  `大押` only on a blade, a group's name only on a roof), by a FEHD restaurant licence within 15 m
+  (food ×8 there, ×0.25 elsewhere; 959 of Wan Chai's 2,031 boards are near one) and by street
+  (Lockhart Road's bars, authored). FEHD's data names each licensee; only the position is read.
+- Set in the committed brush subset (`TaxiAceBrush-Medium`, +54 KB for the 95 characters), one
+  coverage cell a character in a 512 × 1024 atlas, its own primitive a cell on
+  `signboards_text.gdshader`: the ink rides `COLOR_0` (the one of four with the most WCAG
+  contrast against the board), an alpha scissor cuts the glyph, and it burns at night with its
+  board. A board taller than 1.3 × its width is lettered top to bottom; a blade on both faces.
+- Cost: the street viewpoint 633,497 → 641,767 primitives, 113 → 118 draws; Wan Chai's 20,120
+  lettering triangles; web PCK 108,498,072 → 109,316,536 bytes (+818,464, the atlas, the
+  lettering and both fonts' new characters); `city.json` schema 54 for the atlas key. FEHD joins
+  the credits.
+- ⚠️ Owed: the atlas imports with no mipmaps (as the signs' does), so a far glyph can shimmer
+  under the scissor; and each region ships its own identical atlas (70 KB, 0.5 MP of memory).

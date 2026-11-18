@@ -187,7 +187,7 @@ checklist goes in a rule file, never back here: `check.sh` refuses a root `CLAUD
 | `backdrop` | `pipeline/backdrop.py`, the `backdrop` block (`sea_reach_m`, `triangle_cap`, `min_height_m`, `ground_close_m`, `bands`), a `far_only` region, `backdrop.tres`, `far_view.tres`, `far_shore.gdshaderinc`, the drive camera's `far`, `verify_backdrop.gd`, `regions.json`'s `far` |
 | `basemap` | `pipeline/basemap.py`, `pipeline/shore.py`, the `basemap` block (`seal_m`, `water_level_m`, `seabed_m`, `shoreline.hard_types`, `quay_material`, `land_*`, `water_material`, `park_material`), `shore.cut_sea` and `buildings.paint_parks`, `water.tres`, `harbour_land.tres`, the `Water` node |
 | `paths` | `pipeline/paths.py`, the `paths` block (`widths_m`, `lift_m`, `sag_m`, `max_grade_pct`, `kerb_clear_m`), `materials.path_edging`, `paths.tres`, `verify_paths.gd`, the ground or the carriageway region a line is cut by |
-| `signboards` | `pipeline/signboards.py`, the `signboards` block (`mounts`, `palette`, `facing_weight_m`, `road_base_m`), `tools/signboard_colour.py`, `signboards.gdshader` / `.tres`, `verify_signboards.gd`, the shipped walls a board snaps to |
+| `signboards` | `pipeline/signboards.py`, `signboard_text.py`, the `signboards` block (`mounts`, `palette`, `facing_weight_m`, `road_base_m`, `text:`), `tools/signboard_colour.py`, `signboards*.gdshader` / `.tres`, `verify_signboards.gd`, the shipped walls a board snaps to |
 
 ⚠️ **Three changes reach past their own rule.** A **widening** (`surface.floor_default_m`, any
 `roads.surface` width) moves the drawn kerb, so it owes `clearance`, `carriageway`, `railings`,

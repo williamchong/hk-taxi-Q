@@ -163,6 +163,7 @@ const SHADERS: Dictionary = {
 ## coverage, because between them that is the only way to see it.
 const TEXTURED: Dictionary = {
 	"signs_text": {"material": "res://tuning/signs_text.tres", "uniform": "glyph_atlas"},
+	"signboards_text": {"material": "res://tuning/signboards_text.tres", "uniform": "glyph_atlas"},
 }
 
 ## The vehicle door (`P5-23`, `Q124`). A body arrives with one material slot
