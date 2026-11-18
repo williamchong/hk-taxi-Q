@@ -103,7 +103,7 @@ Phase 3 — `B2` and the road
 - `P3-87` 🟡 Pressed panels. `P3-88` 🟡 Tram doors and lamps.
 - `P3-100` 🟡 The far shore (`Q249`): 278 Kowloon blocks down to 56.0 m in 5,626 triangles and 2
   draws, +130 KB of PCK, the camera's `far` still 400 m — density 5,000 and the dark night
-  skyline the user's picks — owed: the handset's frame time.
+  skyline the user's picks; iPhone Air at its 120 fps cap with it and without. Nothing owed.
 - `P3-101` 🟡 The waterfront (`Q250`): iB1000 pedestrian lines as ribbons on the ground (20.6 km
   in Wan Chai, 38.9 km in Causeway Bay; +3,576 primitives and +4 draws on the throttle route), the
   ground cut to a vertical quay along 2,776 m of published sea wall and breakwater, and the land
