@@ -470,6 +470,12 @@ class RoadReport:
     ends_over_grade: int = 0
     ends_no_target: int = 0
     touchdown_grade_pct: list[float] = field(default_factory=list)
+    # Off-grade edges the structure covers nowhere, and how many of them
+    # `_bridge_uncovered` drew between the roads at their two ends rather than
+    # on the level's flat offset. The rest keep the offset and are the
+    # population a reader should go and look at.
+    edges_uncovered: int = 0
+    edges_bridged: int = 0
     # `Q24`'s, on the at-grade edges the two counters above never reach.
     #
     # ⚠️ `edges_followed` counts edges that took the path, **not** edges that
@@ -527,6 +533,7 @@ class RoadReport:
         self.ends_over_grade += counts.ends_over_grade
         self.ends_no_target += counts.ends_no_target
         self.touchdown_grade_pct += counts.touchdown_grade_pct
+        self.edges_uncovered += int(counts.uncovered)
         self.vertices_on_structure += counts.on_structure
         self.vertices_structure_bounded += counts.bounded
         self.vertices_followed += counts.followed
@@ -554,6 +561,10 @@ class _Counts:
     ends_over_grade: int = 0
     ends_no_target: int = 0
     touchdown_grade_pct: list[float] = field(default_factory=list)
+    # An off-grade edge `_deck_heights` found no usable structure under at all,
+    # so its heights are the level's flat offset. `build_region` collects it for
+    # `_bridge_uncovered`.
+    uncovered: bool = False
     on_structure: int = 0
     # `Q19`'s counter. Kept apart from `on_structure` rather than folded in, for
     # the reason the two flags are kept apart: one number covering both would
@@ -1129,16 +1140,23 @@ def build_region(
     # against the wrong edge: 35 → 11 in Causeway Bay, with nothing raised.
     levels = _levels_at_node(item.edge for item in pending)
     every_edge: list[Edge] = []
+    uncovered: set[int] = set()
     for item in pending:
         edge, counts = _measured(
             item, surfaces, city.deck_height_m(item.edge.elevation_level), levels
         )
         every_edge.append(edge)
+        if counts.uncovered:
+            uncovered.add(edge.id)
         if edge.foreign is None:
-            report.edges.append(edge)
             report.add(counts)
-        else:
-            report.foreign_edges.append(edge)
+    if surfaces.deck is not None and uncovered:
+        for i, bounded in _bridge_uncovered(every_edge, uncovered, surfaces.deck).items():
+            if every_edge[i].foreign is None:
+                report.edges_bridged += 1
+                report.vertices_structure_bounded += bounded
+    for edge in every_edge:
+        (report.edges if edge.foreign is None else report.foreign_edges).append(edge)
     report.stations_beyond_reach = sum(
         _outside(np.asarray(edge.polyline)[:, [0, 2]], read_low, read_high) for edge in report.edges
     )
@@ -1978,6 +1996,8 @@ def _deck_heights(
     Only an edge the structure does not cover **anywhere** falls back to the
     flat offset. That is `ISLAND EASTERN CORRIDOR`'s stub, whose every sample
     the terrain gate refuses, and it is the case the offset is still right for.
+    An uncovered edge with a measured road at **both** ends is redrawn between
+    them afterwards by `_bridge_uncovered` (`Q257`); this function only flags it.
 
     `on_structure` follows the claim each station's height makes. Where the deck
     is held across a hole by interpolation those stations *are* on the deck —
@@ -2006,6 +2026,7 @@ def _deck_heights(
     counts.gated = int(under.sum())
     counts.sampled = int(usable.sum())
     if not usable.any():
+        counts.uncovered = True
         return fallback, np.zeros(len(plan), dtype=bool)
 
     # Along the edge rather than by station index: `resample` inserts stations
@@ -2211,6 +2232,63 @@ def _lifted_heights(
     return np.where(on_structure, terrain + raised + deck.thresholds.clearance_m, fallback), (
         on_structure
     )
+
+
+def _bridge_uncovered(edges: list[Edge], uncovered: set[int], deck: _Deck) -> dict[int, int]:
+    """Off-grade edges with no structure under them, drawn between the roads at their ends.
+
+    `_deck_heights` puts an off-grade edge the structure covers **nowhere** on
+    the level's flat offset, `terrain + 6.0 m` at level 1. That is right for
+    `ISLAND EASTERN CORRIDOR`'s stub, which has nothing measured at its far end
+    to meet. It is wrong for a short link that the source labels level 1 and that
+    really lies on the ground between two roads with heights of their own.
+    `TAI HANG ROAD`'s `e57` and `e59` in Causeway Bay run from the end of
+    `MORETON TERRACE FLYOVER` at y 12.0 to the at-grade street at y 13.3, and
+    the offset drew them at 16.3-19.3 m: a slab 4.3-6.0 m in the air at both
+    ends, which a player reported as a road that becomes a disconnected spike.
+
+    An end's target is the highest end, at that node, of an edge whose height
+    was measured: anything not itself uncovered. Both ends need a target, so an
+    edge open at one end keeps the offset (the corridor stub). The ribbon is
+    linear between the two targets along the plan, and it is refused, keeping
+    the offset, over `touchdown_max_grade_pct`, for `_descend`'s reason: a grade
+    no road climbs is evidence the edge is not a link between those two roads.
+
+    Edits `edges` in place and returns each bridged id with the change in its
+    `structure_bounded` count, which the report already tallied off the offset.
+    """
+    tops: dict[int, float] = {}
+    for edge in edges:
+        if edge.id in uncovered:
+            continue
+        for node, point in ((edge.from_node, edge.polyline[0]), (edge.to_node, edge.polyline[-1])):
+            tops[node] = max(tops.get(node, point[1]), point[1])
+
+    bridged: dict[int, int] = {}
+    for edge_id in sorted(uncovered):
+        edge = edges[edge_id]
+        start, end = tops.get(edge.from_node), tops.get(edge.to_node)
+        if start is None or end is None:
+            continue
+        plan = np.asarray(edge.polyline)[:, [0, 2]]
+        along = plan_lengths_2d(plan)
+        length = float(along[-1])
+        if length <= 0.0:
+            continue
+        if abs(end - start) / length * 100.0 > deck.thresholds.touchdown_max_grade_pct:
+            continue
+        y = start + (end - start) * along / length
+        bounded = _structure_bounded(deck, plan, y)
+        edges[edge_id] = replace(
+            edge,
+            polyline=[
+                (float(point[0]), float(height), float(point[2]))
+                for point, height in zip(edge.polyline, y, strict=True)
+            ],
+            structure_bounded=[bool(b) for b in bounded],
+        )
+        bridged[edge_id] = int(bounded.sum()) - sum(edge.structure_bounded)
+    return bridged
 
 
 def _node_heights(count: int, edges: Iterable[Edge]) -> list[float]:
@@ -2884,6 +2962,13 @@ def main(argv: list[str] | None = None) -> int:
             len(report.touchdown_grade_pct),
             median,
             worst,
+        )
+    if report.edges_uncovered:
+        log.info(
+            "  %d off-grade edges have no structure under them; %d drawn between the roads at "
+            "their ends, the rest on the level's flat offset",
+            report.edges_uncovered,
+            report.edges_bridged,
         )
     if report.edges_followed:
         log.info(

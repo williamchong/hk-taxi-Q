@@ -3572,3 +3572,20 @@ share `twilight.tres`, a rose horizon; a shift never sees the 06:15 dawn.
 - **Platforms**: Android `permissions/internet` on (install-time, no dialog). iOS and macOS privacy manifests declare Product Interaction, not linked, not tracking, purpose Analytics (bit `1`, read off the 4.7.2 binary's list order); `tracking_enabled` stays off, so no ATT prompt. Web: nothing; ad blockers will drop some events, and a reverse proxy is deferred.
 - `verify_menu` holds the PRIVACY switch's save both ways and the add-on's licence carried whole; each mutation-checked (the setter forced true; the notice cut to 40 characters).
 - Live 2026-11-18: an editor boot with `--analytics=on` delivered `Application Installed` / `Opened` / `Backgrounded` to project 746655; `$process_person_profile` false. Those four predate `anonymize_ips` and carry an IP.
+
+## `Q257` — An off-grade edge with no structure under it is drawn between the roads at its ends
+
+**Status.** Closed 2026-11-19 (`pipeline/roads.py::_bridge_uncovered`) on the user's report from
+the drive (a Moreton Terrace road that "becomes a disconnected huge slope spike").
+
+- `_deck_heights` puts an off-grade edge the structure covers nowhere on the level's flat offset.
+  Causeway Bay's TAI HANG ROAD `e57` / `e59` are labelled level 1, have nothing under them, and run
+  from MORETON TERRACE FLYOVER's end (12.0 m) to the at-grade street (13.3 m); the offset drew them
+  at 16.3-19.3 m, a slab 4.3-6.0 m up at both ends.
+- Rule: each end targets the highest end at that node of an edge whose height was measured (never
+  another uncovered edge); with both targets, the ribbon is linear between them along the plan.
+  Refused over `deck.touchdown_max_grade_pct`, as `_descend` refuses. One end open keeps the offset:
+  `ISLAND EASTERN CORRIDOR`'s stub `e425` (Wan Chai) is unchanged.
+- Measured: Causeway Bay 2 uncovered, 2 bridged; nodes 73 / 76 17.68 / 16.29 → 12.02 m;
+  `touchdown_error` steps at node 69 +6.00 → +0.00. Wan Chai: 1 uncovered, 0 bridged, roadgraph
+  byte-identical.

@@ -30,6 +30,7 @@ from pipeline.gltf import MeshData
 from pipeline.roads import (
     ROADGRAPH_SCHEMA,
     Edge,
+    _bridge_uncovered,
     _Counts,
     _Deck,
     _deck_heights,
@@ -1083,6 +1084,7 @@ class TestDeckHeights:
         assert counts.sampled == 0
         np.testing.assert_allclose(y, 6.0)
         assert not on_structure.any(), "the flat offset is not a deck"
+        assert counts.uncovered, "and it is flagged for `_bridge_uncovered`"
 
     def test_structure_under_the_terrain_is_refused(self) -> None:
         """A deck cannot sit below the ground under it. `e425` samples 8.2 m
@@ -1110,6 +1112,79 @@ class TestDeckHeights:
         counts = _Counts()
         _deck_heights(deck, plan, terrain, terrain + 6.0, (False, False), counts)
         assert counts.gated == 0
+
+
+class TestBridgeUncovered:
+    """An off-grade edge with no structure under it, between two measured roads.
+
+    `TAI HANG ROAD`'s `e57` in Causeway Bay: labelled level 1, nothing under it,
+    and drawn on the +6.0 m offset between a flyover end at 12.0 m and the street
+    at 13.3 m, a slab floating 4-6 m above both.
+    """
+
+    def _edge(self, edge_id: int, nodes: tuple[int, int], ys: list[float], level: int) -> Edge:
+        xs = np.linspace(0.0, 30.0, len(ys)) + 100.0 * edge_id
+        return Edge(
+            id=edge_id,
+            source_id=edge_id,
+            from_node=nodes[0],
+            to_node=nodes[1],
+            polyline=[(float(x), y, 0.0) for x, y in zip(xs, ys, strict=True)],
+            on_structure=[False] * len(ys),
+            structure_bounded=[False] * len(ys),
+            direction="forward",
+            lanes=2,
+            width_m=6.4,
+            speed_limit_kph=50,
+            bus_lane=False,
+            tram_tracks=False,
+            elevation_level=level,
+            road_name={"en": None, "zh": None},
+        )
+
+    def _deck(self) -> _Deck:
+        return _deck(*_sheet(5000.0, 5020.0, 4.0, 4.0))
+
+    def test_a_link_between_two_measured_roads_is_drawn_between_them(self) -> None:
+        edges = [
+            self._edge(0, (0, 1), [12.0, 12.0], level=1),
+            self._edge(1, (1, 2), [17.7, 18.5, 19.3, 19.3], level=1),
+            self._edge(2, (2, 3), [13.3, 14.0], level=0),
+        ]
+        assert list(_bridge_uncovered(edges, {1}, self._deck())) == [1]
+        np.testing.assert_allclose(
+            [p[1] for p in edges[1].polyline], [12.0, 12.433, 12.867, 13.3], atol=1e-3
+        )
+        assert [p[0] for p in edges[1].polyline] == pytest.approx([100.0, 110.0, 120.0, 130.0])
+
+    def test_an_edge_open_at_one_end_keeps_the_offset(self) -> None:
+        """`ISLAND EASTERN CORRIDOR`'s stub: nothing measured at its far end."""
+        edges = [
+            self._edge(0, (0, 1), [12.0, 13.0], level=1),
+            self._edge(1, (1, 2), [5.5, 5.5], level=0),
+        ]
+        assert _bridge_uncovered(edges, {0}, self._deck()) == {}
+        assert [p[1] for p in edges[0].polyline] == [12.0, 13.0]
+
+    def test_another_uncovered_edge_is_not_a_target(self) -> None:
+        """`e57` and `e59` share node 69; each must land on the street there,
+        not on the other's offset."""
+        edges = [
+            self._edge(0, (0, 1), [12.0, 12.0], level=1),
+            self._edge(1, (1, 2), [18.0, 19.3], level=1),
+            self._edge(2, (3, 2), [17.0, 19.3], level=1),
+        ]
+        assert _bridge_uncovered(edges, {1, 2}, self._deck()) == {}
+        assert [p[1] for p in edges[1].polyline] == [18.0, 19.3]
+
+    def test_a_grade_no_road_climbs_is_refused(self) -> None:
+        edges = [
+            self._edge(0, (0, 1), [2.0, 2.0], level=0),
+            self._edge(1, (1, 2), [8.0, 8.0], level=1),
+            self._edge(2, (2, 3), [12.0, 12.0], level=0),
+        ]
+        assert _bridge_uncovered(edges, {1}, self._deck()) == {}
+        assert [p[1] for p in edges[1].polyline] == [8.0, 8.0]
 
 
 class TestDescend:

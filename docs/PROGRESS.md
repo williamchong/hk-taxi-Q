@@ -240,6 +240,8 @@ change. Closed questions are not listed here: see the headings in `DECISIONS.md`
   0.62 m overlap strip (`Q129`). The street borrow for unread widths (`Q127`).
 - 52 `RM1001` refusals need coverage-based hosting (`Q118`).
 - MARSH ROAD's 0.65 m deck face needs a node-level descent pass (`Q90`).
+- `ISLAND EASTERN CORRIDOR`'s stub `e425` still stands +6.0 m over node 388: an uncovered edge open
+  at one end keeps the flat offset (`Q257`).
 - 9,779 triangles a run hit `MAX_SUBDIVISIONS` in `clearance` (`Q51`).
 - Speed-limit signs (73) on hold (`Q65`); deviation boards ship on an ungraded assumption (`Q66`);
   the sign survey's plate box and `_plate_box` disagree on 10 of 21 faces (`Q68`).
