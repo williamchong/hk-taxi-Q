@@ -109,8 +109,8 @@ Phase 3 — `B2` and the road
   the dark skyline) — owed: the handset at night. **A far version per region** (`Q249` amended):
   every region ships its own, Kowloon is the far-only `tsim_sha_tsui`, a far version is skipped
   inside 400 m and hidden past 8 km (`far_view.tres`); facing the harbour from Expo Drive East
-  +15,834 primitives and +7 draws, facing away +5,264 and +2 — owed: the handset's frame time and
-  the PCK.
+  +15,834 primitives and +7 draws, facing away +5,264 and +2, +333 KB of web PCK — owed: the
+  handset's frame time.
 - `P3-101` 🟡 The waterfront (`Q250`): iB1000 pedestrian lines as ribbons on the ground (20.6 km
   in Wan Chai, 38.9 km in Causeway Bay; +3,576 primitives and +4 draws on the throttle route), the
   ground cut to a vertical quay along 2,776 m of published sea wall and breakwater, and the land
