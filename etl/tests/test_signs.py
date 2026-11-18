@@ -65,6 +65,7 @@ from pipeline.signs import (
     _record_semantics,
     _register,
     _turn_classes,
+    disc,
     facing_from_side,
     is_text_mesh,
     layer_polygons,
@@ -482,6 +483,19 @@ class TestWhatIsBuiltIsWoundRight:
             mesh.normals[sides, 2] * mesh.positions[sides, 2]
         )
         assert (outward > 0.0).all()
+
+    def test_the_pole_stands_on_the_disc_corners_in_world_x_and_z(self, spec):
+        """`meshbuild.strut` seeded `-Z` lays the ring's `u` on world `X`, so the
+        pole stands on exactly the corners it had when it mapped `disc` straight
+        onto `(X, Z)` — the library pole, and every post stood from it, did not
+        turn when the prism was shared with the lamps."""
+        builder = ColouredBuilder(SIGNS_MATERIAL)
+        _draw_pole(builder, spec, 0.0, 0.0, 0.0, 3.0)
+        mesh = builder.build("signs")
+        assert mesh is not None
+        corners = {tuple(np.round(p[[0, 2]], 9)) for p in mesh.positions}
+        ring = {tuple(np.round(p, 9)) for p in disc(spec.pole_radius_m, spec.pole_sides)}
+        assert corners == ring
 
     def test_the_material_is_the_contract_name(self, spec):
         """The string `generated_scene_import.gd` dispatches the shader on."""

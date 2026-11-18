@@ -11,8 +11,9 @@ document (`signal_heads_placements.json`), the shape every prop library takes
 
 **The geometry is `P3-17`'s, ported** (`_draw_post` / `_draw_head` at
 `2415688^`), with its two recorded defects kept fixed: the post ring is
-REVERSED (`signs._draw_pole`'s inward-wound prism), and the head stands IN
-FRONT of the post, its back face on the post's surface, not 0.24 m behind it.
+REVERSED (`disc` laid straight onto world `X`/`Z`; `meshbuild.strut`'s frame
+needs no reversal), and the head stands IN FRONT of the post, its back face on
+the post's surface, not 0.24 m behind it.
 
 **The lens circuit rides `TEXCOORD_0`**: `UV.x` is 0 on the housing and `k + 1`
 on lens `k` of `HEAD_LENSES` (red, amber, green), which `signal_head.gdshader`

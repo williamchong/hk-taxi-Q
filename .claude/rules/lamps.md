@@ -31,8 +31,9 @@ The stage grades itself: every failure renders as a well-drawn lamp post or as n
   stand. Do not iterate the push (`Q78`, measured on the signs: worst shift 5.52 → 16.77 m).
 - No `arms_against_kerb` counter: the arm is derived from the kerb side, so it reads 0 by
   construction (`Q72`). `lanterns_past_centreline` is reachable by raising `arm_reach_m`.
-- `lamps._strut`'s prism ring is not reversed, unlike `signs._draw_pole`'s: a bracket arm is not
-  vertical. Copying the reversal inverted 25,116 of 35,880 triangles.
+- Columns, arms and sign poles are `meshbuild.strut`, whose frame never reverses its ring; only a
+  ring laid straight onto world `X`/`Z` must (`make_signal_heads._draw_post`). Copying that
+  reversal into the strut inverted 25,116 of 35,880 triangles.
 - `shift_m` is recorded over refusals too (`n` > `drawn`, `Q58`). The outward-only clamp (`Q78`)
   applies here and not in `railings.py`.
 - A widening moves the drawn kerb and every column. Quote both spacing distributions: a refusal

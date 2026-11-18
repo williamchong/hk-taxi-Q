@@ -219,7 +219,7 @@ def _facing_away(wall: MeshData, points: np.ndarray) -> int:
     the geometry was built reads 0 by construction and certifies nothing — `Q72`'s
     tautology, which passed a whole region of signs facing the wrong way.
 
-    ⚠️ It is reachable: `lamps._strut` shipped 25,116 of 35,880 triangles facing
+    ⚠️ It is reachable: the lamps' first column shipped 25,116 of 35,880 triangles facing
     away and `facing_away` is what found it, before the asset was ever looked at.
     """
     centroids = wall.triangle_centroids()

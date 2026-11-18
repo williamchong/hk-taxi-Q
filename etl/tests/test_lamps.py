@@ -9,9 +9,7 @@ that no column stands in the road, and the partitions that have to close.
 
 🔴 **The winding tests are the ones that earned their place.** This stage
 shipped **25,116 of 35,880** triangles facing away on its first run, because it
-inherited the ring reversal that `signs._draw_pole` and `signals._draw_post`
-both call "the whole correctness of this function" — and which is wrong here,
-since `_strut` builds its own frame instead of mapping onto world `X`/`Z`.
+inherited a ring reversal that `meshbuild.strut`'s own frame makes wrong.
 """
 
 from __future__ import annotations
@@ -37,12 +35,12 @@ from pipeline.lamps import (
     _Placed,
     _register,
     _spacing_m,
-    _strut,
 )
-from pipeline.meshbuild import ColouredBuilder
+from pipeline.meshbuild import ColouredBuilder, strut
 from pipeline.placements import PLACEMENT_DP, placement, stood_positions
 from pipeline.polyline import bearing_deg
 from pipeline.railings import facing_away
+from pipeline.signs import disc
 from tests.helpers import CITY_YAML
 
 # The shipped block's shape with the region's own values, so a test that pins a
@@ -300,17 +298,16 @@ class TestTheMeshFacesOutward:
         return builder.build("test")
 
     def test_reversing_the_prism_ring_would_invert_most_of_it(self, spec):
-        """🔴 **The regression this file exists for.** `signs._draw_pole` and
-        `signals._draw_post` both reverse their ring and both are right to;
-        inheriting that here inverted 70% of the layer. This pins the direction
-        rather than the comment."""
+        """🔴 **The regression this file exists for.** Reversing the ring, as a
+        pole mapped straight onto world `(X, Z)` must, inverted 70% of the layer
+        on its first run. This pins the direction rather than the comment."""
         builder = ColouredBuilder(LAMPS_MATERIAL)
-        _strut(
+        strut(
             builder,
-            spec,
             np.array([0.0, 0.0, 0.0]),
             np.array([0.0, 9.0, 0.0]),
-            spec.column_radius_m,
+            disc(spec.column_radius_m, spec.column_sides),
+            spec.column_material.colour,
             cap_end=True,
             seed=np.array([0.0, 1.0, 0.0]),
         )

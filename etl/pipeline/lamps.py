@@ -134,7 +134,7 @@ from pipeline.documents import read_document, write_document
 from pipeline.drawnroad import Ribbon, drawn_carriageway, kerbed_ribbons, nearside, ribbons
 from pipeline.fetch import source_reads
 from pipeline.gltf import MeshData
-from pipeline.meshbuild import ColouredBuilder
+from pipeline.meshbuild import ColouredBuilder, strut
 from pipeline.placements import Placement, placement, stand_library
 from pipeline.polyline import Segments, Snap, bearing_deg
 from pipeline.railings import facing_away
@@ -468,88 +468,6 @@ def read_lamps(
 # the sign livery has to ride the vertex because a plate is four colours in one
 # draw call, and a lamp post is not. Its colour comes out of the `materials:`
 # table instead, where `_check_reflectance` grades it.
-
-
-def _strut(
-    builder: ColouredBuilder,
-    spec: Lamps,
-    start: np.ndarray,
-    end: np.ndarray,
-    radius: float,
-    *,
-    cap_end: bool,
-    seed: np.ndarray,
-) -> None:
-    """A closed prism between two points in world space.
-
-    `seed` orients the ring — which of its corners faces which way. ⚠️ **The
-    column passes its arm as the seed since `P5-3`, and that is load-bearing.**
-    A library column is drawn once with its arm north and stood at the bearing
-    of the arm it was given, so every corner of its ring has to turn with the
-    arm too; seeded from world `X`, the ring stayed axis-aligned in the merged
-    build and the stood library differed from it by up to 30° of ring — its
-    corners **46.6 mm** from the merged build's on the 90 mm column radius,
-    measured over all 892 columns (`Q115`), invisible from the road and not
-    identical. `tests/test_lamps.py` pins the library against the in-place
-    draw, which is the ring as it turns with the arm.
-
-    `signs._draw_pole` generalised off the vertical, because a bracket arm is the
-    same object lying over. The column passes `start` at the deck and `end` at
-    its top; the arm passes two points that differ in all three ordinates.
-
-    ⚠️ **No cap at `start`, ever.** For the column that end meets the footway and
-    nothing sees under it; for the arm it is buried inside the column. `cap_end`
-    is what closes the far end, and the arm does not need it either — the lantern
-    sits on it.
-
-    🔴 **THE RING IS NOT REVERSED HERE, AND THAT IS THE OPPOSITE OF WHAT
-    `signs._draw_pole` DOES, AND THE REMOVED `signals._draw_post` DID (`Q76`).** Both reverse
-    it, both carry a paragraph saying the reversal "is the whole correctness of
-    this function", and copying that paragraph across is exactly what this
-    function did first: it shipped **25,116 of 35,880** triangles facing away.
-
-    The reason the fix does not transfer is that those two spell no frame. They
-    map `disc`'s `(u, v)` straight onto world `(X, Z)` and wind the quad in an
-    order that then needs the ring flipped. This one builds an explicit frame
-    with `u x v == axis` — it has to, because a bracket arm is not vertical and
-    there is no world plane to borrow — and in that frame a counter-clockwise
-    ring gives `(o1 - o0) x axis` along `+outward`, which is what the quad below
-    is wound for. Reversing it inverts every side face of every column and arm
-    in the city.
-
-    ⚠️ **So "inherit the recorded defect's fix" is itself a way to ship the
-    defect.** What settled it was `facing_away`, on the first run, before the
-    asset was ever looked at — which is the whole argument for that counter.
-    """
-    axis = end - start
-    length = float(np.linalg.norm(axis))
-    if length <= 0.0:
-        return
-    axis = axis / length
-    # Any vector not parallel to the axis gives a frame. The arm seeds from `_UP`
-    # and an arm steeper than ~63° would be nearly parallel to it, so the
-    # fallback is picked against the axis rather than hoped for.
-    if abs(float(np.dot(seed, axis))) > 0.9:
-        seed = np.array([1.0, 0.0, 0.0])
-    u = np.cross(seed, axis)
-    u = u / float(np.linalg.norm(u))
-    v = np.cross(axis, u)
-
-    ring = disc(radius, spec.column_sides)
-    colour = spec.column_material.colour
-    offsets = [ring[i][0] * u + ring[i][1] * v for i in range(spec.column_sides)]
-    for index in range(spec.column_sides):
-        o0 = offsets[index]
-        o1 = offsets[(index + 1) % spec.column_sides]
-        outward = o0 + o1
-        span = float(np.linalg.norm(outward))
-        if span <= 0.0:
-            continue
-        builder.polygon(
-            np.vstack([start + o0, start + o1, end + o1, end + o0]), outward / span, colour
-        )
-    if cap_end:
-        builder.polygon(np.vstack([end + o for o in offsets]), axis, colour)
 
 
 def _lantern(
@@ -964,7 +882,7 @@ def _merge(placements: list[_Placed], merge_m: float, report: LampReport) -> lis
 # `bearing_deg(post.arm)` about `Y` and a move — the frame `gltf.placed_positions`
 # and `GeneratedLandmarks.placement_of` both undo.
 _LIBRARY_ARM = np.array([0.0, -1.0])
-# The bracket arm's ring seed; the column's is its own arm (`_strut`).
+# The bracket arm's ring seed; the column's is its own arm (`meshbuild.strut`).
 _UP = np.array([0.0, 1.0, 0.0])
 
 
@@ -988,9 +906,26 @@ def _draw_lamp(builder: ColouredBuilder, spec: Lamps, post: _Placed) -> None:
     forward = np.array([post.arm[0], 0.0, post.arm[1]])
     end = top + post.arm_reach_m * forward - np.array([0.0, spec.arm_drop_m, 0.0])
 
-    # The column's ring turns with its arm — see `_strut`'s `seed`.
-    _strut(builder, spec, base, top, spec.column_radius_m, cap_end=True, seed=forward)
-    _strut(builder, spec, top, end, spec.arm_radius_m, cap_end=False, seed=_UP)
+    # The column's ring turns with its arm — see `meshbuild.strut`'s `seed`.
+    colour = spec.column_material.colour
+    strut(
+        builder,
+        base,
+        top,
+        disc(spec.column_radius_m, spec.column_sides),
+        colour,
+        cap_end=True,
+        seed=forward,
+    )
+    strut(
+        builder,
+        top,
+        end,
+        disc(spec.arm_radius_m, spec.column_sides),
+        colour,
+        cap_end=False,
+        seed=_UP,
+    )
     _lantern(builder, spec, end, forward)
 
 

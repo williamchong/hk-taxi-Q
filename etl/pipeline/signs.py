@@ -171,7 +171,7 @@ from pipeline.drawnroad import Ribbon, drawn_carriageway, kerbed_ribbons
 from pipeline.fetch import cached_source, source_reads
 from pipeline.gltf import MeshData, Texture
 from pipeline.mesh import select_triangles
-from pipeline.meshbuild import MIN_TWICE_AREA_M2, ColouredBuilder
+from pipeline.meshbuild import MIN_TWICE_AREA_M2, ColouredBuilder, strut
 from pipeline.placements import placement, stand_library
 from pipeline.polyline import (
     Segments,
@@ -1532,36 +1532,20 @@ def _draw_plate(
 def _draw_pole(
     builder: ColouredBuilder, spec: Signs, x: float, z: float, base_y: float, top_y: float
 ) -> None:
-    """The post, as a closed prism with a cap.
+    """The post, as a closed prism with a cap: `meshbuild.strut` stood upright.
 
     No collider, and no bottom cap: the pole meets the footway and nothing sees
-    under it.
+    under it. Seeded `-Z`, the ring's `u` lies on world `X`.
     """
-    # ⚠️ **Reversed, and the reversal is the whole correctness of this function.**
-    # `disc` winds counter-clockwise in `(u, v)`, which is what a *plate* wants
-    # once `plate_frame` maps it — but here `u` and `v` become world `X` and
-    # `Z`, and a ring counter-clockwise in `(X, Z)` has its side quads wound
-    # inward and its cap wound at the ground. The first build shipped exactly
-    # that: 3,200 triangles, every pole triangle in the region, facing away with
-    # everything else correct — `Q58`'s tramway defect in miniature, and caught
-    # by `facing_away` rather than by looking at it.
-    ring = disc(spec.pole_radius_m, spec.pole_sides)[::-1]
-    grey = spec.colours[SIGN_BACK_COLOUR]
-    centre = np.array([x, 0.0, z])
-    for index in range(spec.pole_sides):
-        u0 = ring[index]
-        u1 = ring[(index + 1) % spec.pole_sides]
-        a = centre + np.array([u0[0], base_y, u0[1]])
-        b = centre + np.array([u1[0], base_y, u1[1]])
-        c = centre + np.array([u1[0], top_y, u1[1]])
-        d = centre + np.array([u0[0], top_y, u0[1]])
-        outward = np.array([u0[0] + u1[0], 0.0, u0[1] + u1[1]])
-        length = float(np.linalg.norm(outward))
-        if length <= 0.0:
-            continue
-        builder.polygon(np.vstack([a, b, c, d]), outward / length, grey)
-    cap = np.vstack([centre + np.array([u[0], top_y, u[1]]) for u in ring])
-    builder.polygon(cap, np.array([0.0, 1.0, 0.0]), grey)
+    strut(
+        builder,
+        np.array([x, base_y, z]),
+        np.array([x, top_y, z]),
+        disc(spec.pole_radius_m, spec.pole_sides),
+        spec.colours[SIGN_BACK_COLOUR],
+        cap_end=True,
+        seed=np.array([0.0, 0.0, -1.0]),
+    )
 
 
 # --------------------------------------------------------------------------

@@ -332,3 +332,61 @@ def prism(
         plan = np.asarray(triangle.exterior.coords)[:3, :2]
         heights = floor_of(plan) + rise_m
         face(builder, np.column_stack([plan[:, 0], heights, plan[:, 1]]), top, _UP)
+
+
+def strut(
+    builder: ColouredBuilder,
+    start: np.ndarray,
+    end: np.ndarray,
+    ring: np.ndarray,
+    colour: tuple[int, int, int],
+    *,
+    cap_end: bool,
+    seed: np.ndarray,
+) -> None:
+    """A closed prism between two points in world space, of `ring`'s section.
+
+    `ring` is counter-clockwise in its own `(u, v)` (`signs.disc`), and it is laid
+    in a frame with `u x v == axis`, so every side quad faces out and the cap at
+    `end` faces along the axis whatever the strut's lean. A sign pole is this
+    upright, a lamp column too, and a bracket arm the same lying over.
+
+    ⚠️ **Never reverse the ring.** A pole that maps the ring straight onto world
+    `(X, Z)` mirrors it and has to; this frame does not, and the lamps' first
+    build copied a pole's reversal and shipped 25,116 of 35,880 triangles facing
+    away. `facing_away` caught it before anybody looked.
+
+    `seed` orients the ring — which of its corners faces which way — and is
+    load-bearing: a lamp column passes its arm, so a library column stood at its
+    arm's bearing has the merged build's corners (`Q115`). An upright strut
+    seeded `-Z` lays `u` on world `X`.
+
+    No cap at `start`, ever: a pole and a column meet the footway there, and an
+    arm is buried in its column.
+    """
+    axis = end - start
+    length = float(np.linalg.norm(axis))
+    if length <= 0.0:
+        return
+    axis = axis / length
+    # Any vector not parallel to the axis gives a frame. An arm seeds from up
+    # and one steeper than ~63° would be nearly parallel to it, so the fallback
+    # is picked against the axis rather than hoped for.
+    if abs(float(np.dot(seed, axis))) > 0.9:
+        seed = np.array([1.0, 0.0, 0.0])
+    u = np.cross(seed, axis)
+    u = u / float(np.linalg.norm(u))
+    v = np.cross(axis, u)
+
+    offsets = [a * u + b * v for a, b in ring]
+    for index, o0 in enumerate(offsets):
+        o1 = offsets[(index + 1) % len(offsets)]
+        outward = o0 + o1
+        span = float(np.linalg.norm(outward))
+        if span <= 0.0:
+            continue
+        builder.polygon(
+            np.vstack([start + o0, start + o1, end + o1, end + o0]), outward / span, colour
+        )
+    if cap_end:
+        builder.polygon(np.vstack([end + o for o in offsets]), axis, colour)
