@@ -787,15 +787,22 @@ func _parse_args() -> bool:
 					"sound",
 					"controls",
 					"display",
-					"language"
+					"language",
+					"privacy"
 				]
 				if not pages.has(value):
 					_fail(
 						(
-							"--menu-page=%s is not home, play, guide, options, credits, notices, report, record, pause, sound, controls, display or language"
+							"--menu-page=%s is not home, play, guide, options, credits, notices, report, record, pause, sound, controls, display, language or privacy"
 							% value
 						)
 					)
+					return false
+			"--analytics":
+				# `Analytics.allowed` reads this one itself (`Q256`): `on` lets
+				# an editor build send to PostHog, `off` stops any build.
+				if value != "on" and value != "off":
+					_fail("--analytics=%s is not on or off" % value)
 					return false
 			"--menu-sample":
 				# `start_menu.gd` shows a filled 成績表 only on `on`, so a typo

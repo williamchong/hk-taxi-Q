@@ -98,6 +98,9 @@ passwords, provisioning profiles, signing identities or the App Store Team ID in
 | `storyboard/image_scale_mode` (iOS) | `2` (Scale to Fit) | Matches the boot splash's fit, so the taxi does not shrink at the hand-over (`Q209`) |
 | `application/export_project_only`, `app_store_team_id` (iOS) | `false`, empty | `tools/ios.sh` sets both for the length of an export and restores the file |
 | `variant/thread_support` (web) | `true` | The host must serve cross-origin isolation headers |
+| `include_filter` (all four) | `addons/posthog/LICENSE` | A file with no resource type; `EngineNotices` reads it into ENGINE NOTICES (`Q256`) |
+| `permissions/internet` (Android) | `true` | `Analytics` (`Q256`). An install-time permission: no dialog |
+| `privacy/collected_data/product_interaction` (macOS, iOS) | collected, not linked, not tracking, purpose Analytics (`1`) | The privacy manifest for `Analytics` (`Q256`). `privacy/tracking_enabled` stays `false`: no ATT prompt |
 
 The shader baker fails silently (unbaked PCK, exit 0) on a `--headless` export, which has no GPU,
 and without Apple's Metal toolchain (`xcodebuild -downloadComponent MetalToolchain`). A baked PCK
@@ -685,6 +688,7 @@ declared `bounds`.
 | `ParkedLayer` | The parked roster by the hour, re-stood only out of view (`Q161`) |
 | `FareSystem` | The fare loop (`fares.tres`); `FareMeter` charges TD's tariff (`tariff.tres`); `SkillTracker`, `NearMiss`, `StyleCombo` (`skills.tres`); `SessionTally`. `.claude/rules/fares.md` |
 | `Hud`, `StartMenu` | Speed, street plate, wrong-way sign, minimap, meter, tip clock, callout, `TouchSticks`, `PauseButton`; menu pages from `menu.tres` and `menu_text.json`, `LoadingCover`, `ShaderWarmup`, `LedgerCard`. `.claude/rules/hud.md` |
+| `Analytics` | Anonymous events to PostHog through the vendored `addons/posthog/` (`PostHog` autoload, `analytics.tres`, `Q256`). Started by `Main` on a player's run only; never in an editor build without `--analytics=on`. Events: the SDK's `Application Installed` / `Updated` / `Opened` / `Backgrounded`; `run_started` (`mode`, `continued`), `fare_delivered` / `fare_bailed` (`kind`, `banked_hkd`, `tip_hkd`, `skills`), `run_ended` (`mode`, `finished`, `total_hkd`, `deliveries`, `bails`, `new_best`). No profiles, no flags, no exceptions, IP discarded server-side. `Settings.analytics_on` is the PRIVACY switch |
 | Audio | No director: `TaxiAudio`, `TaxiHorn`, `TaxiDoor`, `TaxiHire`, the tram bell and traffic horns play their own. `DriveMusic` plays the driving music, by the rig's hour and the combo's count (`Q246`). Buses `SFX`, `Engine`, `Cabin`, `Music` under `Master` with a compressor (`default_bus_layout.tres`). `.claude/rules/audio.md` |
 
 Rules:
@@ -823,7 +827,8 @@ tools/export.sh [macos|web|android|ios]             # default: macos + web
 
 ## Constraints
 
-1. No runtime network calls.
+1. No runtime network calls, except `Analytics`' anonymous events to PostHog (`Q256`). Nothing
+   waits on them and a player can switch them off.
 2. No engine-specific formats out of the ETL: glTF, PNG and JSON only.
 3. Hong Kong facts live in `etl/config/hong_kong.yaml` or `etl/pipeline/hongkong.py`, one home each
    (`Q100`).

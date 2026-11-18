@@ -100,7 +100,7 @@ Owed: three frames at `--debug-view=off` — boarding at the boot stand, carryin
 
 Owed: a frame at `--menu=on --seconds=3 --shots=2 --debug-view=off` in each language (`--lang=zh`,
 `--lang=en`), and a default `drive.sh` run showing the car drives from tick one. Pages:
-`--menu-page=home|play|guide|options|sound|controls|display|language|credits|notices|record|report|pause`;
+`--menu-page=home|play|guide|options|sound|controls|display|language|privacy|credits|notices|record|report|pause`;
 `--menu-sample=on` fills the 成績表; `--mode=free` shoots free mode's REPORT; CONTROLS needs
 `--touch=on`; shoot `pause` at `--debug-view=minimal`. A standing shot must sway or the capture
 stalls. A run naming either flag saves no record.

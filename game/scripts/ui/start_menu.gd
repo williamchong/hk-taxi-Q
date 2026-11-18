@@ -18,7 +18,7 @@ extends CanvasLayer
 ## mid-fare would never hear the fare's signals already sent.
 ##
 ## **OPTIONS is a list of groups, a page each** (`Q223`, the user's pick):
-## SOUND, CONTROLS, DISPLAY, LANGUAGE. A group with nothing in it for this
+## SOUND, CONTROLS, DISPLAY, LANGUAGE, PRIVACY. A group with nothing in it for this
 ## device and this menu is not listed (`_groups`), and a list of one is
 ## skipped for its page.
 ##
@@ -99,7 +99,8 @@ enum Page {
 	SOUND,
 	CONTROLS,
 	DISPLAY,
-	LANGUAGE
+	LANGUAGE,
+	PRIVACY
 }
 
 ## OPTIONS' groups in the order listed, each with the key of its name.
@@ -108,6 +109,7 @@ const GROUPS: Dictionary[Page, String] = {
 	Page.CONTROLS: "controls",
 	Page.DISPLAY: "display",
 	Page.LANGUAGE: "language",
+	Page.PRIVACY: "privacy",
 }
 
 
@@ -306,7 +308,7 @@ func shot() -> MenuShot:
 	match _page:
 		Page.PLAY:
 			return _profile.shot_play
-		Page.OPTIONS, Page.SOUND, Page.CONTROLS, Page.DISPLAY, Page.LANGUAGE:
+		Page.OPTIONS, Page.SOUND, Page.CONTROLS, Page.DISPLAY, Page.LANGUAGE, Page.PRIVACY:
 			return _profile.shot_options
 		Page.CREDITS, Page.GUIDE, Page.NOTICES, Page.RECORD:
 			return _profile.shot_sheet
@@ -352,8 +354,10 @@ func _groups() -> Array[Page]:
 	# desk has nothing to show here.
 	if phone or not pausing:
 		groups.append(Page.DISPLAY)
+	# The language and the usage events (`Q256`) are the boot menu's alone.
 	if not pausing:
 		groups.append(Page.LANGUAGE)
+		groups.append(Page.PRIVACY)
 	return groups
 
 
@@ -480,6 +484,8 @@ func _group(group: Page) -> Control:
 			_display(column)
 		Page.LANGUAGE:
 			_languages(column)
+		Page.PRIVACY:
+			_privacy(column)
 	column.add_child(_gap("Gap", _profile.button_gap_px))
 	_button(column, "Back", "back", _show.bind(_back_of(group)))
 	# The focus lands on the first choice that is one: a current choice is a
@@ -527,6 +533,28 @@ func _languages(column: VBoxContainer) -> void:
 		],
 		0 if _language == Locale.CHINESE else 1
 	)
+
+
+## Whether anonymous usage events are sent (`Q256`): on or off, through
+## `Analytics`, which saves the pick and tells the client.
+func _privacy(column: VBoxContainer) -> void:
+	_choices(
+		column,
+		"Analytics",
+		"analytics",
+		[
+			["On", "sound_on", _pick_analytics.bind(true)],
+			["Off", "sound_off", _pick_analytics.bind(false)],
+		],
+		0 if Settings.analytics_on() else 1
+	)
+
+
+func _pick_analytics(on: bool) -> void:
+	if on == Settings.analytics_on():
+		return
+	Analytics.set_enabled(on)
+	_relabel.call_deferred()
 
 
 ## What is drawn: a phone's frame cap (`Q223`), and the hour (`Q160`) —

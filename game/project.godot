@@ -26,6 +26,7 @@ run/max_fps.mobile=60
 DebugHud="*res://scripts/ui/debug_hud.gd"
 InputRouter="*res://scripts/input/input_router.gd"
 BeamBudget="*res://scripts/vehicle/beam_budget.gd"
+PostHog="*res://addons/posthog/posthog.gd"
 
 [debug]
 

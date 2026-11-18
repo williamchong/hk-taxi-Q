@@ -21,6 +21,7 @@ const KEY_STEER_ON_RIGHT: String = "steer_on_right"
 const KEY_ANCHOR: String = "anchor"
 const KEY_WHEEL: String = "wheel"
 const KEY_FRAME_CAP: String = "frame_cap"
+const KEY_ANALYTICS: String = "analytics"
 ## The frame caps a phone is offered (`Q223`): the project's own 60
 ## (`application/run/max_fps.mobile`) and half of it, which is a whole number
 ## of a 60 Hz panel's refreshes and so paces evenly where 40 or 45 would not.
@@ -184,6 +185,16 @@ static func frame_cap(offered: PackedInt32Array = FRAME_CAPS) -> int:
 
 static func set_frame_cap(fps: int) -> void:
 	_write(KEY_FRAME_CAP, fps)
+
+
+## Whether anonymous usage events are sent (`Q256`). On where none was ever
+## saved; `Analytics.set_enabled` is the writer, since it also tells the client.
+static func analytics_on() -> bool:
+	return bool(_read().get_value(SECTION, KEY_ANALYTICS, true))
+
+
+static func set_analytics_on(on: bool) -> void:
+	_write(KEY_ANALYTICS, on)
 
 
 ## The best shift's total in HK$ (`Q162`), 0 before the first.

@@ -181,6 +181,9 @@ Phase 4–6
 - `P5-8` ⬜ Content — behind `P3-9`, `Q6`. `P5-14` ⬜ Textures as an option on tiles.
 - `P6-1` 🟡 Start menu, options, credits, pause — owed: Android's back button (`P0-3b`).
 - `P6-2` 🟡 Saved run and CONTINUE (`Q253`) — owed: a handset kill mid-fare and its resume.
+- `P6-3` 🟡 Anonymous usage events to PostHog (`Q256`) — owed: a played run's `run_started` /
+  `fare_*` / `run_ended` seen in PostHog, a device run on iOS, Android and the itch.io build, the
+  App Store privacy label and Play's Data Safety form, a privacy policy URL, and the PCK delta.
 
 ---
 

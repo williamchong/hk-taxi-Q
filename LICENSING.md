@@ -11,6 +11,7 @@ down is a licence breach waiting to be discovered by someone else.
 | **Code** — pipeline, engine scripts, tools, config, tuning | `etl/`, `game/scripts/`, `game/scenes/`, `game/tools/`, `game/tuning/`, `tools/` | **GPL-3.0-or-later** — [`LICENSE`](LICENSE) |
 | **Hand-authored assets** — authored hero buildings, vehicles, street furniture, the DCC test fixture, UI, shaders | `game/assets/authored/` (except `fonts/`), `game/assets/shaders/` | **CC BY-SA 4.0** |
 | **Generated city data** — tiles, road surface, road graph, fare nodes, repainted hero meshes | `game/assets/generated/`, `etl/out/` — *gitignored* | **Not licensed by this project.** Governed by the DATA.GOV.HK and CSDI Portal Terms of Use |
+| **Bundled third-party code** — the PostHog Godot SDK 0.1.4 | `game/addons/posthog/` | **MIT**, © 2025 PostHog Inc. — [`LICENSE`](game/addons/posthog/LICENSE), carried whole on ENGINE NOTICES (`Q256`) |
 | **Bundled third-party assets** — the typefaces: the street plate's Kai, the interface's 黑體 and the menu's two brushes | `game/assets/authored/fonts/` | **CC BY 4.0** (the Kai) and **SIL OFL 1.1** (the rest, `Q218`) — not ours, not the government's. [`fonts/LICENSE`](game/assets/authored/fonts/LICENSE) |
 
 > **Not legal advice.** This file records the project's position. `docs/DATA_SOURCES.md`'s legal note
@@ -201,9 +202,10 @@ optional. A bundle is therefore a multi-licence artefact:
 | Authored assets | CC BY-SA 4.0, or the store grant |
 | Generated city data | DATA.GOV.HK / CSDI Portal Terms of Use, with attribution |
 
-**Player count does not consume any government allowance.** The game makes no runtime network calls
-(hard rule 2); the ETL runs once per developer at build time. Distribution is governed by the re-use
-grant above, which sets no volume limit.
+**Player count does not consume any government allowance.** The game's one runtime network call is
+anonymous usage events to PostHog (`Q256`), never to a government service (hard rule 2); the ETL
+runs once per developer at build time. Distribution is governed by the re-use grant above, which
+sets no volume limit.
 
 ---
 

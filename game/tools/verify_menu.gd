@@ -116,6 +116,8 @@ const KEYS: PackedStringArray = [
 	"music",
 	"controls",
 	"display",
+	"privacy",
+	"analytics",
 	"steering",
 	"steering_gentle",
 	"steering_normal",
@@ -480,9 +482,9 @@ func _check_groups() -> void:
 	var pages: Dictionary = StartMenuScript.Page
 	var desk: StartMenuScript = await _menu_for(false, false, false)
 	_expect(
-		desk._shown_groups == [pages.SOUND, pages.DISPLAY, pages.LANGUAGE],
+		desk._shown_groups == [pages.SOUND, pages.DISPLAY, pages.LANGUAGE, pages.PRIVACY],
 		"groups",
-		"a desk lists SOUND, DISPLAY and LANGUAGE"
+		"a desk lists SOUND, DISPLAY, LANGUAGE and PRIVACY"
 	)
 	var list: Control = desk._pages[pages.OPTIONS]
 	_expect(
@@ -512,15 +514,31 @@ func _check_groups() -> void:
 		"groups",
 		"back from a group is the list, and back from the list is HOME"
 	)
+	# PRIVACY's switch saves the usage events' consent (`Q256`); a verify run is
+	# an editor build, so `Analytics` saves it and starts nothing.
+	var was_on: bool = SettingsScript.analytics_on()
+	(desk._pages[pages.PRIVACY].get_node("Analytics/Off/Button") as Button).pressed.emit()
+	await process_frame
+	var off_saved: bool = not SettingsScript.analytics_on()
+	(desk._pages[pages.PRIVACY].get_node("Analytics/On/Button") as Button).pressed.emit()
+	await process_frame
+	_expect(
+		was_on and off_saved and SettingsScript.analytics_on(),
+		"groups",
+		"PRIVACY is on by default, and its OFF and ON are saved"
+	)
 	desk.queue_free()
 
 	# The response is a slid wheel's (`Q251`): CONTROLS offers it under SLIDE.
 	SettingsScript.set_wheel("slide")
 	var phone: StartMenuScript = await _menu_for(true, true, false)
 	_expect(
-		phone._shown_groups == [pages.SOUND, pages.CONTROLS, pages.DISPLAY, pages.LANGUAGE],
+		(
+			phone._shown_groups
+			== [pages.SOUND, pages.CONTROLS, pages.DISPLAY, pages.LANGUAGE, pages.PRIVACY]
+		),
 		"groups",
-		"a phone lists all four"
+		"a phone lists all five"
 	)
 	var steerings: Array[int] = [0]
 	var sides: Array[int] = [0]
@@ -1211,6 +1229,15 @@ func _check_notices() -> void:
 		"notices",
 		"every licence text whole (missing %s)" % ", ".join(unquoted)
 	)
+	# The bundled add-ons' licences (`Q256`): the MIT notice read off the file
+	# the release shipped in, so an add-on cannot ship without it.
+	for addon: String in EngineNoticesScript.ADDONS:
+		var notice: String = FileAccess.get_file_as_string(EngineNoticesScript.ADDONS[addon])
+		_expect(
+			not notice.is_empty() and text.contains(addon) and text.contains(notice.strip_edges()),
+			"notices",
+			"%s's licence carried whole" % addon
+		)
 
 
 ## No language is saved on a first run, and a choice survives a restart: each

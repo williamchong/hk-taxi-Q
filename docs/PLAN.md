@@ -433,7 +433,8 @@ four `InputRouter` signals.
 - **Phase 6 — Production polish:** settings, save/progression, accessibility, localisation QA.
   `P6-1` ✅ the start menu, pause and credits, pulled forward (`Q146`, `Q164`, `Q165`, `Q229`,
   `Q241`); the handset drive of the reset is owed. `P6-2` 🟡 a saved run and CONTINUE: the run in
-  play, fare aboard and all, survives a kill or END (`Q253`).
+  play, fare aboard and all, survives a kill or END (`Q253`). `P6-3` 🟡 anonymous usage events to
+  PostHog with a PRIVACY switch (`Q256`); owed: a device run per store build and the store forms.
 - **Phase 7 — Ship:** free-slice boundary, one-time unlock IAP, store assets, web demo, HK press
   outreach, legal sight-check of landmark depiction.
 

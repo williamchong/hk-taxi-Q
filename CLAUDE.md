@@ -23,8 +23,9 @@ them without explicit instruction from the user.
 1. **Never use the tile-based photogrammetry mesh** for buildings. It has ground gaps, level
    differences, and vehicles baked into the geometry. A prior public attempt found it unsuitable
    for driving. See `docs/DATA_SOURCES.md`.
-2. **ETL is build-time only.** The game makes zero network calls at runtime. Never couple the
-   game to a government API.
+2. **ETL is build-time only.** The game makes no network calls at runtime but one: anonymous
+   usage events to PostHog through `Analytics`, off with the player's PRIVACY switch (`Q256`).
+   Never couple the game to a government API, and never make the game wait on the network.
 3. **Hong Kong is the only city (`Q100`).** Its facts live in **one** place each:
    `etl/config/hong_kong.yaml` for tuning and a publisher's vocabulary (codes, `fields:` role maps,
    bounds, `elevation_levels`), and `etl/pipeline/hongkong.py` for the constants that *are* the city

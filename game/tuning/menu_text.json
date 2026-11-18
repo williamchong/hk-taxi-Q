@@ -114,6 +114,14 @@
       "en": "DISPLAY",
       "zh": "畫面"
     },
+    "privacy": {
+      "en": "PRIVACY",
+      "zh": "私隱"
+    },
+    "analytics": {
+      "en": "SEND ANONYMOUS USAGE STATS",
+      "zh": "傳送匿名使用統計"
+    },
     "steering": {
       "en": "STEERING RESPONSE",
       "zh": "軚盤反應"
@@ -370,8 +378,8 @@
         "zh": "引擎"
       },
       "body": {
-        "en": "Built with Godot Engine and Jolt Physics, both under the MIT licence. The engine's third-party notices are under ENGINE NOTICES.",
-        "zh": "以 Godot Engine 及 Jolt Physics 製作，兩者均按 MIT 授權條款發行。引擎的第三方聲明見「引擎聲明」頁。"
+        "en": "Built with Godot Engine and Jolt Physics, and with the PostHog Godot SDK for anonymous usage stats, all under the MIT licence. Their third-party notices are under ENGINE NOTICES.",
+        "zh": "以 Godot Engine 及 Jolt Physics 製作，並以 PostHog Godot SDK 收集匿名使用統計，三者均按 MIT 授權條款發行。其第三方聲明見「引擎聲明」頁。"
       }
     },
     {

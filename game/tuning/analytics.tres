@@ -1,0 +1,13 @@
+[gd_resource type="Resource" script_class="PostHogConfig" format=3 uid="uid://srcksmk8ikbl"]
+
+[ext_resource type="Script" uid="uid://ba74mew2w0ywm" path="res://addons/posthog/posthog_config.gd" id="1_165ew"]
+
+[resource]
+script = ExtResource("1_165ew")
+api_key = "phc_uR5T7i2MRsfdJnRrmVpbTn6tsTWacBHGhTqF39pXqQv6"
+person_profiles = 2
+preload_feature_flags = false
+send_feature_flag_event = false
+send_default_person_properties_for_flags = false
+capture_exceptions = false
+capture_exceptions_in_editor = false

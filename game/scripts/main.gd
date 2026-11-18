@@ -81,6 +81,9 @@ func _ready() -> void:
 	level.shift_over.connect(_on_shift_over)
 	if not menu_up:
 		return
+	# Only a player's run sends anything (`Q256`); a scripted one never starts it.
+	if _records_run():
+		Analytics.start()
 	_follow_run()
 	if Cmdline.value(StartMenu.PAGE_ARG).to_lower() == "pause":
 		# A frame of the pause is one `drive.sh` run: the drive starts as
@@ -175,12 +178,47 @@ func _on_reset() -> void:
 ## `play`, and the tally was banked as the pause opened.
 func _on_run_ended() -> void:
 	var report: StartMenu.Report = _free_report()
+	# A shift ended early has no REPORT, but its books are still the run's end.
+	if report == null:
+		_track_run_ended(_report_of_run(), DayClock.Mode.SHIFT, false)
+	else:
+		_track_run_ended(report, DayClock.Mode.FREE, false)
 	_release_pause()
 	level.park()
 	_ended = true
 	if is_instance_valid(hud):
 		hud.visible = false
 	_open_menu(report)
+
+
+## The run's end as an event (`Q256`): `finished` is 交更's alone, END from the
+## pause is not. Whole dollars: the cents say nothing a chart needs.
+func _track_run_ended(report: StartMenu.Report, mode: DayClock.Mode, finished: bool) -> void:
+	var properties: Dictionary = {
+		"mode": _mode_name(mode),
+		"finished": finished,
+		"total_hkd": roundi(report.total_hkd),
+		"deliveries": report.deliveries,
+		"bails": report.bails,
+		"new_best": report.new_best,
+	}
+	Analytics.track("run_ended", properties)
+
+
+## A fare's end as an event (`Q256`): delivered or walked, its kind, and what it
+## paid in whole dollars — never where it went.
+func _track_fare(fare: Fare, delivered: bool) -> void:
+	var properties: Dictionary = {
+		"kind": str(Fare.Kind.find_key(fare.kind)).to_lower(),
+		"banked_hkd": roundi(fare.banked_hkd),
+		"tip_hkd": roundi(fare.tip_hkd),
+		"skills": fare.awards.size(),
+	}
+	Analytics.track("fare_delivered" if delivered else "fare_bailed", properties)
+
+
+static func _mode_name(mode: DayClock.Mode) -> String:
+	return str(DayClock.Mode.find_key(mode)).to_lower()
 
 
 ## A free drive's books for its REPORT, or null for a shift ended early, which
@@ -256,6 +294,7 @@ func _on_started(mode: DayClock.Mode) -> void:
 	level.play(mode)
 	if is_instance_valid(hud):
 		hud.visible = true
+	Analytics.track("run_started", {"mode": _mode_name(mode), "continued": false})
 
 
 ## CONTINUE (`Q253`): the saved run HOME read, back where it was left.
@@ -264,6 +303,7 @@ func _on_continued(run: RunSave) -> void:
 	level.continue_run(run)
 	if is_instance_valid(hud):
 		hud.visible = true
+	Analytics.track("run_started", {"mode": _mode_name(run.mode), "continued": true})
 
 
 ## A fresh HUD where the last run's receipt and total are still on its face.
@@ -292,6 +332,7 @@ func _on_shift_over() -> void:
 		return
 	report.new_best = Settings.record_shift(report.total_hkd)
 	report.best_hkd = Settings.best_shift_hkd()
+	_track_run_ended(report, DayClock.Mode.SHIFT, true)
 	_bank_tally(true)
 	# The shift is over: there is nothing left of it to continue.
 	if _records_run():
@@ -345,6 +386,8 @@ func _follow_run() -> void:
 	level.fares.boarded.connect(_save_run.unbind(1))
 	level.fares.delivered.connect(_save_run.unbind(1))
 	level.fares.bailed.connect(_save_run.unbind(1))
+	level.fares.delivered.connect(_track_fare.bind(true))
+	level.fares.bailed.connect(_track_fare.bind(false))
 	var profile: MenuProfile = load(MenuProfile.PATH) as MenuProfile
 	if profile == null or profile.autosave_s <= 0.0:
 		push_warning(
