@@ -41,8 +41,10 @@ travel is full lock the instant a thumb lands. `verify_input.gd` refuses one.
   anchor — never a switch between the two mid-stroke (that was `Q243`'s `spin_enter_deg`, gone).
   - Spun: the wheel turns with the thumb's angle round its middle, full lock at 180° (the bottom),
     so the drawn rim keeps up with the finger. Relative, the thumb lands on twelve o'clock and the
-    wheel takes up from where it was; fixed (`Q239`), the thumb's angle from twelve o'clock is the
-    wheel, as a fixed slide's offset from the middle is. A move through the hub turns nothing.
+    wheel takes up from where it was. A move through the hub turns nothing.
+  - Spun and fixed (`Q239`): a push. Down on the wheel's left, up turns right and down turns
+    left, `steer_travel_px` each way to full lock; along its top it is a slide. The wheel is
+    taken up from where it was, never jumped to the thumb.
   - Slid: the thumb's sideways offset alone, at any height, `steer_travel_px` to full lock.
   - Lower `spin_lock_deg` for a quicker spin (90 is lock at three o'clock); it is also the angle
     the drawn wheel turns at full lock on a slid wheel.

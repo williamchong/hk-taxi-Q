@@ -3463,10 +3463,15 @@ share `twilight.tres`, a rose horizon; a shift never sees the 06:15 dawn.
 
 - CONTROLS' 方向盤 is 轉動 (SPIN) or 滑動 (SLIDE), on the pause's too: `ControlOptions.wheel`,
   `--touch-wheel=spin|slide`, `drive.sh` names spin. 操控位置 now defaults to 固定 (FIXED).
-- Spun: the wheel is the thumb's angle round the wheel's middle over `spin_lock_deg` (180°), so
-  the rim keeps up with the finger. Relative, from twelve o'clock where it landed, added to the
-  wheel it found; fixed, the absolute angle from twelve o'clock, read once off the hub. A move
-  through the hub turns nothing. Fixed used to be slide-only.
+- Spun and relative: the thumb's angle round the wheel's middle over `spin_lock_deg` (180°), from
+  twelve o'clock where it landed, added to the wheel it found; the rim keeps up with the finger.
+  A move through the hub turns nothing.
+- Spun and fixed (the user's follow-up: "push/pull the wheel all the way and back just via
+  vertical movement" left of the control): a PUSH. The landing fixes the way the rim moves
+  clockwise under the thumb (`InputRouter.push_along`: up on the wheel's left, right along its
+  top, a slide's on the hub); the stroke's length along it turns the wheel from where it was,
+  `steer_travel_px` to full lock. An absolute angle (built first) jumped the wheel on landing and
+  could not reach lock by a vertical stroke. Fixed used to be slide-only.
 - Slid: the sideways offset alone, at any height (`Q243`'s slide without its spin).
 - Gone: `spin_enter_deg` and the slide bias. The frame cap was already 60 by default on a phone
   (`Settings.FRAME_CAPS[0]`, `Q223`); a desk stays uncapped.

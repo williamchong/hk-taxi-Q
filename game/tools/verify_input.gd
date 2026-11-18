@@ -1022,47 +1022,45 @@ func _check_anchor() -> void:
 	_lift(FINGER_A, steer_at)
 
 
-## A spun fixed wheel (`Q251`): the thumb's angle from the wheel's twelve
-## o'clock is the wheel, as a slid one's offset from the middle is.
+## A spun fixed wheel (`Q251`): pushed round from where the thumb landed, along
+## the way the rim moves under it there, a slide's travel to full lock — so a
+## thumb down on the wheel's left turns it all the way and back by going up and
+## down. It takes the wheel up from where it is, as a relative one does.
 func _check_fixed_spin(wheel: Vector2, steer_at: Vector2) -> void:
-	var curve: float = _touch.steer_curve
-	var radius: float = _touch.wheel_radius_px
-	var lock: float = _touch.spin_lock_deg
+	var travel: float = _touch.steer_travel_px
 	_use_wheel("spin")
-	var off: Vector2 = steer_at - wheel
-	var from_top: float = rad_to_deg(Vector2.UP.angle_to(off))
-	var landed: float = _touch.shape(clampf(from_top / lock, -1.0, 1.0), curve)
+	var along: Vector2 = _router.push_along(steer_at, wheel)
+	_expect(
+		(
+			_router.push_along(wheel + Vector2(-100.0, 0.0), wheel).is_equal_approx(Vector2.UP)
+			and _router.push_along(wheel + Vector2(0.0, -100.0), wheel).is_equal_approx(
+				Vector2.RIGHT
+			)
+			and _router.push_along(wheel, wheel) == Vector2.RIGHT
+		),
+		"anchor",
+		"the push is up on the wheel's left, right along its top, and a slide's on the hub"
+	)
 	_press(FINGER_A, steer_at)
 	_expect(
-		off.length() > _touch.wheel_hub_px and is_equal_approx(_steer(), landed),
-		"anchor",
-		(
-			"fixed and spun, a thumb down %.0f degrees round steers at once: %.3f"
-			% [from_top, _steer()]
-		)
+		is_zero_approx(_steer()), "anchor", "fixed and spun, a thumb steers nothing where it lands"
 	)
-	# Out to the rim, then round it to three o'clock and up to the top.
-	_move(FINGER_A, wheel + off.normalized() * radius)
-	var at: float = from_top
-	for target: float in [90.0, 0.0]:
-		while not is_equal_approx(at, target):
-			at = move_toward(at, target, 10.0)
-			_move(FINGER_A, wheel + Vector2.UP.rotated(deg_to_rad(at)) * radius)
-		var expect: float = _touch.shape(target / lock, curve)
-		_expect(
-			is_equal_approx(_steer(), expect),
-			"anchor",
-			"fixed and spun, the thumb at %.0f degrees round is %.3f" % [target, _steer()]
-		)
-	# Across the hub in one move, three o'clock to nine: a fixed wheel is where
-	# the thumb is, so nothing the hub swallowed is left behind.
-	_move(FINGER_A, wheel + Vector2(radius, 0.0))
-	_move(FINGER_A, wheel + Vector2(-radius, 0.0))
+	_move(FINGER_A, steer_at + along * travel)
 	_expect(
-		is_equal_approx(_steer(), -_touch.shape(90.0 / lock, curve)),
-		"anchor",
-		"fixed and spun, a thumb flicked across the hub reads where it landed: %.3f" % _steer()
+		is_equal_approx(_steer(), 1.0), "anchor", "a slide's travel along the push is full lock"
 	)
+	_move(FINGER_A, steer_at - along * travel)
+	_expect(
+		is_equal_approx(_steer(), -1.0),
+		"anchor",
+		"and as far back is the other lock, in one stroke"
+	)
+	_move(FINGER_A, steer_at + along.orthogonal() * travel)
+	_expect(is_zero_approx(_steer()), "anchor", "a stroke square to the push turns nothing")
+	_move(FINGER_A, steer_at + along * travel)
+	_lift(FINGER_A, wheel)
+	_press(FINGER_A, steer_at)
+	_expect(is_equal_approx(_steer(), 1.0), "anchor", "a thumb landing on a turned wheel holds it")
 	_lift(FINGER_A, wheel)
 	_roll()
 	_use_wheel("slide")

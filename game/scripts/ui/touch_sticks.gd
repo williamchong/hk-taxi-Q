@@ -35,6 +35,12 @@ const TRACK_SHARE: float = 0.35
 const LOOK_TRACKS: String = "tracks"
 const LOOK_WHEEL_PEDALS: String = "wheel_pedals"
 const LOOK_WHEEL_LEVER: String = "wheel_lever"
+## A spun wheel's arrows (`Q251`): each an arc round the rim from this far off
+## twelve o'clock to `SPIN_ARROW_TO_DEG`, its head pointing on round.
+const SPIN_ARROW_FROM_DEG: float = 12.0
+const SPIN_ARROW_TO_DEG: float = 48.0
+## The straight bars each arc is drawn in.
+const SPIN_ARROW_STEPS: int = 4
 ## The least turn of the wheel worth a redraw, as a share of its lock.
 const WHEEL_TURN_STEP: float = 1.0 / 256.0
 
@@ -52,6 +58,8 @@ var _router: Node = null
 var _steer_drawn := PackedVector2Array()
 var _drive_drawn := PackedVector2Array()
 var _values_drawn := Vector2.ZERO
+## Whether the wheel was drawn spun (`Q251`): a pick over the pause changes it.
+var _spins_drawn: bool = true
 var _mesh: ArrayMesh = null
 
 
@@ -94,10 +102,17 @@ func _process(_delta: float) -> void:
 		snappedf(_router.wheel_turn(), WHEEL_TURN_STEP),
 		_router.accelerate - _router.brake_reverse if drive.size() == 2 else 0.0
 	)
-	if steer != _steer_drawn or drive != _drive_drawn or values != _values_drawn:
+	var spins: bool = _router.wheel_spins()
+	if (
+		steer != _steer_drawn
+		or drive != _drive_drawn
+		or values != _values_drawn
+		or spins != _spins_drawn
+	):
 		_steer_drawn = steer
 		_drive_drawn = drive
 		_values_drawn = values
+		_spins_drawn = spins
 		queue_redraw()
 
 
@@ -167,7 +182,9 @@ func _stick(
 
 
 ## A steering wheel round the thumb: rim, three spokes and the stripe at the
-## top that shows how far it has turned, and a small arrow either side of it.
+## top that shows how far it has turned, and a small arrow either side of it —
+## curved round the rim's top on a spun wheel, out sideways on a slid one
+## (`Q251`).
 func _wheel(
 	points: PackedVector2Array, colours: PackedColorArray, at: Vector2, turn: float, held: bool
 ) -> void:
@@ -178,8 +195,11 @@ func _wheel(
 	_ring(points, colours, at, radius, width, ink)
 	# Kept under a thumb too (`Q228`): the arrows are what teach the gesture.
 	for side: float in [-1.0, 1.0]:
-		var tip: Vector2 = at + Vector2(side * (radius + width * 4.0), 0.0)
-		_chevron(points, colours, tip, Vector2(side, 0.0), width * 2.0, ink)
+		if _spins_drawn:
+			_curved_arrow(points, colours, at, radius + width * 4.0, side, width, ink)
+		else:
+			var tip: Vector2 = at + Vector2(side * (radius + width * 4.0), 0.0)
+			_chevron(points, colours, tip, Vector2(side, 0.0), width * 2.0, ink)
 	if wheel == null:
 		return
 	# The car's own wheel (`CarSpec.steering_wheel`): its horn pad, its spokes.
@@ -195,6 +215,31 @@ func _wheel(
 		var a: Vector2 = at + Vector2.from_angle(top - 0.14) * (radius + width * 0.5)
 		var b: Vector2 = at + Vector2.from_angle(top + 0.14) * (radius + width * 0.5)
 		_bar(points, colours, a, b, width * 2.2, Color(ink, minf(ink.a * 1.6, 1.0)))
+
+
+## An arrow round a circle of `radius` about `at`, clockwise for `side` 1 and
+## anticlockwise for -1: an arc off twelve o'clock and a head on its end.
+static func _curved_arrow(
+	points: PackedVector2Array,
+	colours: PackedColorArray,
+	at: Vector2,
+	radius: float,
+	side: float,
+	width: float,
+	ink: Color
+) -> void:
+	var from: float = deg_to_rad(SPIN_ARROW_FROM_DEG)
+	var to: float = deg_to_rad(SPIN_ARROW_TO_DEG)
+	var last := Vector2.ZERO
+	for i: int in SPIN_ARROW_STEPS + 1:
+		var bearing: float = side * lerpf(from, to, float(i) / SPIN_ARROW_STEPS)
+		var on: Vector2 = at + Vector2.UP.rotated(bearing) * radius
+		if i > 0:
+			_bar(points, colours, last, on, width, ink)
+		last = on
+	var tangent: Vector2 = Vector2.RIGHT.rotated(side * to) * side
+	# A bar's width on, so the head sits clear of the arc's square end.
+	_chevron(points, colours, last + tangent * width, tangent, width * 2.0, ink)
 
 
 ## Two pedals either side of the thumb: the accelerator above it, tall and
