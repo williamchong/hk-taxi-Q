@@ -3405,7 +3405,7 @@ share `twilight.tres`, a rose horizon; a shift never sees the 06:15 dawn.
 
 ## `Q249` — The far shore is built: Kowloon's skyline as one silhouette mesh, drawn past the far plane
 
-**Status.** 🟡 Built 2026-11-18 (`P3-100`) on the user's ask. Owed: the user's pick of the density (frames at 2,000 / 5,000 / 10,000), his call on the unlit night skyline, the handset's frame time. Checklist in `.claude/rules/backdrop.md`.
+**Status.** 🟡 Built 2026-11-18 (`P3-100`) on the user's ask; the density (5,000 of 2,000 / 5,000 / 10,000) and the dark night skyline are the user's picks from frames, the same day. Owed: the handset's frame time. Checklist in `.claude/rules/backdrop.md`.
 
 - A real mesh at its true place, not a sky panorama: iB1000 `Building` footprints over a strip of Kowloon (114.152–114.198 E, 22.2915–22.308 N; 27 more sheets, 922 MB fetched), each extruded to its published `ROOFLEVEL`, tallest first under `triangle_cap`. At 5,000: 278 of 1,146 blocks over 30 m, down to 56.0 m, tallest 460.6 m; 4,976 skyline + 434 shore + 216 sea triangles, 378 KB, 510 m off the frame.
 - **The camera's `far` stays 400 m.** Raising it to 8,000 was measured and refused: `prims` 460–587k → 781–930k (+70%), draws 139–156 → 253–290, the streamed city behind the car entering the frustum. `far_shore.gdshaderinc` squeezes everything past `pin_from_m` (500 m) into the last `pin_band_m` (8 m) of depth instead, in one projective step so depth order holds; `extra_cull_margin` defeats the engine's own cull.
@@ -3415,9 +3415,9 @@ share `twilight.tres`, a rose horizon; a shift never sees the 06:15 dawn.
 - PCK: 105,267,184 → 105,397,204 bytes, +130,020 (0.12%), the web preset exported from a clean tree with `backdrop.glb` out and in; the second export with it repeats to the byte.
 - Only Wan Chai ships it; Causeway Bay is drawn beside it, and a frame from its side of the joined map shows the skyline and the sea. `city.json` schema 50 names `backdrop`.
 - 24-bit depth (Compatibility, the web build) orders the band at about 35 m a step at 1 km. Frames from Expo Drive East under `gl_compatibility` show no artefact, and the web preset, exported from a clean tree and driven in Chrome (WebGL 2) to the same junction, draws the skyline and the sea out to it with no shader error.
-- Unlit at night: the skyline is dark blocks against the sky. Lit windows are not built.
+- Unlit at night, the user's pick over lit windows and over hiding it after dusk: the skyline is dark blocks against the sky.
 - Two costs read off the code in review and closed in `city_layer.gd`, neither measurable on the desktop (frame time is at its 60 fps cap with the layer and without, GPU time not reported). The cull margin put the far shore's box round every lamp, so it is drawn on its own visual layer (`FAR_VISUAL_LAYER`) that a vehicle's beams leave out of `light_cull_mask`. The far sea repeats each frame's own water, so it carries a `sorting_offset` that sorts it as the furthest thing drawn and the copy fails the depth test rather than being shaded first. ⚠️ The opaque sort is in coarse depth layers: the handset's frame time is still the measurement.
-- Colour is three height bands off `materials:` (`Q33`); the default density is 5,000 pending the pick.
+- Colour is three height bands off `materials:` (`Q33`); the density is 5,000, the user's pick.
 
 ## `Q248` — Vehicles are glossy and inked: crowned panels, the painted sky back on paint, black lines and a black outline
 

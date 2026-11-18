@@ -24,8 +24,8 @@ footprints extruded to their published roof, one flat shore slab, and the sea ru
 - `street_far_m`, `pin_band_m`, `pin_from_m` are stated twice — `backdrop.tres` and `water.tres`
   — and `street_far_m` restates the drive camera's `far`. `verify_backdrop.gd` holds all three;
   move them together.
-- `triangle_cap` is a cap, tallest first. The count is the user's pick from frames (2,000 / 5,000 /
-  10,000); `min_height_drawn_m` says how far down it reached.
+- `triangle_cap` is a cap, tallest first. The count, 5,000, is the user's pick from frames (2,000 / 5,000 /
+  10,000), and so is the dark skyline at night; `min_height_drawn_m` says how far down it reached.
 - The shore is a closing of what stands on it (`ground_close_m`), not `basemap.sea_of`: the
   published shoreline over Kowloon has gaps of hundreds of metres and the cut finds no sea.
 - The far sea is a rectangle from the frame's north edge to the strip plus each resident frame's
