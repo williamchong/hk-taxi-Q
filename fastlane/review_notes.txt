@@ -1,5 +1,5 @@
-No account or sign-in is needed, and the game makes no network connection.
+No account or sign-in is needed. The game's only network connection sends anonymous usage events (no personal data, nothing tied to a person); it can be turned off under PRIVACY on the menu, and the game plays fully offline.
 
-To play: tap PLAY, then THE SHIFT or FREE MODE. Drag in the lower-left of the screen to steer, and in the lower-right to accelerate (up) or brake and reverse (down). Drive to a waiting passenger, stop beside them, then follow the arrow to the destination. A shift ends by itself after five minutes of driving.
+To play: tap PLAY, then THE SHIFT or FREE MODE. Drag in the lower-left of the screen to steer, and in the lower-right to accelerate (up) or brake and reverse (down). Drive to a waiting passenger, stop beside them, then follow the arrow to the destination. A shift ends by itself after fourteen minutes of driving.
 
 The city is built from Hong Kong Government open data (DATA.GOV.HK and the CSDI Portal), used under their Terms and Conditions of Use. The required attribution is on the CREDITS & LICENCES page in the menu and in the App Store description.

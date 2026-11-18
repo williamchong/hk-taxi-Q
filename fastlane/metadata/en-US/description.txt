@@ -3,10 +3,10 @@ Hong Kong Taxi Ace is an arcade taxi game on real Hong Kong streets. You drive a
 This is the Island Test Drive Edition: an early build with two districts, about 1.5 square kilometres of Hong Kong Island.
 
 A REAL CITY
-The streets, buildings, flyovers, tram rails, road markings, signs and taxi stands are built from the Hong Kong Government's open map data, not drawn from memory. Hennessy Road, Lockhart Road, Gloucester Road and the Canal Road Flyover are where they should be, with their real names on the street plate. If you know the area, you can find your way without the map.
+The streets, buildings, flyovers, tram rails, road markings, signs and taxi stands are built from the Hong Kong Government's open map data, not drawn from memory. Hennessy Road, Lockhart Road, Gloucester Road and the Canal Road Flyover are where they should be, with their real names on the street plate. If you know the area, you can find your way without the map. Across the harbour, Kowloon's skyline stands on the far shore and lights up at night.
 
 THE SHIFT
-A shift runs from 07:00 to 21:00 in five minutes of driving, and the day turns to night as you go. Passengers hail from taxi stands and from the kerb. The meter charges the real urban taxi tariff, a quick trip earns a tip, and a passenger who runs out of time gets out without paying. Your takings at handover are your score.
+A shift runs from 07:00 to 21:00 in fourteen minutes of driving, and the day turns to night as you go. Passengers hail from taxi stands and from the kerb. The meter charges the real urban taxi tariff, a quick trip earns a tip, and a passenger who runs out of time gets out without paying. Your takings at handover are your score.
 
 DRIVE LIKE AN ACE
 The taxi handles like a real one, with help you never see. You are paid extra for drifts, near misses, fast runs and jumps off the flyovers, and docked for hitting things. Trams, buses, minibuses and cars keep to the rules of the road. You do not have to.
@@ -17,7 +17,8 @@ No clock and no score. Drive around, by day or from day to night.
 ALSO
 • Touch controls for two thumbs: steer on the left, throttle and brake on the right
 • English and Traditional Chinese
-• Plays offline. No account, no ads, and no data is collected
+• Original music that follows the hour and builds as you chain stunts
+• Plays offline. No account and no ads. Anonymous usage stats only, and you can turn them off under PRIVACY
 • Open source: https://github.com/williamchong/hk-taxi-Q
 
 DATA CREDIT
