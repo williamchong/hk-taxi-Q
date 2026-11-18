@@ -822,6 +822,17 @@ class TestLandmarks:
         assert entry["transform"]["rot_y_deg"] == 45.0
         assert entry["name"] == {"en": "Hero", "zh": "主角"}
         assert entry["excluded_bounds"] == self.FOOTPRINT
+        assert entry["afloat"] is False
+
+    def test_an_afloat_hull_ships_the_flag_at_its_elevation(self, region) -> None:
+        """`Q254`: the runtime rocks what the document flags; the config has
+        already put the hull's height at the water level."""
+        landmark = replace(self.hero(region, ()), elevation=1.3, afloat=True)
+        region.city = replace(region.city, landmarks=(landmark,))
+        region.build()
+        [entry] = self.landmarks_document(region)["landmarks"]
+        assert entry["afloat"] is True
+        assert entry["transform"]["pos"][1] == pytest.approx(1.3)
 
     def test_the_excluded_footprint_joins_bounds_game(self, region) -> None:
         """The hero stands where the excluded buildings stood, so the bounds

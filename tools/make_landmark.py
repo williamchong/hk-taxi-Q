@@ -57,13 +57,14 @@ from pipeline.gltf import MeshData, write_glb  # noqa: E402
 # drift on it. See `pipeline/landmarks.py` for why it is ≠ `city_facade`.
 from pipeline.landmarks import LANDMARK_MATERIAL as MATERIAL  # noqa: E402
 from pipeline.mesh import merge  # noqa: E402
-from primitives import Point, box, loft, ring  # noqa: E402
+from primitives import Colour, Point, box, loft, ring  # noqa: E402
 
 LOG = logging.getLogger("make_landmark")
 
 DEFAULT_OUT_DIR = ROOT / "game" / "assets" / "authored" / "landmarks"
 
 CENTRAL_PLAZA_FILE = "central_plaza.glb"
+STAR_FERRY_FILE = "star_ferry.glb"
 
 
 # `hong_kong.yaml:materials` in miniature, on the config's own `Material`
@@ -125,7 +126,32 @@ GOLD_BAND = Material(
     (15.0, 25.0),
 )
 
-PALETTE = (ALUMINIUM, GLASS, CONCRETE, GOLD, GOLD_BAND)
+# The moored ferry's (`P3-102`, `Q254`): the fleet's two-colour livery, green
+# below and white above, and the black rubber of its fenders. Paint colours,
+# not a brand: the hull carries no name, lettering or emblem (`Q42`).
+FERRY_GREEN = Material(
+    "ferry_green",
+    (40, 104, 64),
+    10.7,
+    "gloss marine enamel, mid-dark green, 8-15%",
+    (8.0, 15.0),
+)
+FERRY_WHITE = Material(
+    "ferry_white",
+    (222, 224, 220),
+    74.0,
+    "white marine enamel, weathered, 70-85%",
+    (70.0, 85.0),
+)
+FENDER = Material(
+    "fender_rubber",
+    (38, 38, 40),
+    2.0,
+    "carbon-black rubber fendering, 1-5%",
+    (1.0, 5.0),
+)
+
+PALETTE = (ALUMINIUM, GLASS, CONCRETE, GOLD, GOLD_BAND, FERRY_GREEN, FERRY_WHITE, FENDER)
 
 
 def check_palette() -> None:
@@ -273,8 +299,146 @@ def build_central_plaza(p: CentralPlaza | None = None) -> MeshData:
     )
 
 
+@dataclass(frozen=True)
+class StarFerry:
+    """A double-ended harbour ferry moored at Wan Chai Ferry Pier (`P3-102`).
+
+    Length and beam are Electric Star's (1933): 116 ft overall, 28 ft beam,
+    35.4 x 8.5 m — the fleet's common size; World Star (46 m) and Golden Star
+    (47 m) are the long exceptions. The decks are proportions read off
+    photographs, not a survey: no publisher draws a vessel.
+
+    Local frame: the waterline's centre is the origin, `y = 0` the water
+    plane, and the long axis is z. Both ends are the same, as on the real
+    boats, so the bearing names the hull's line and not a bow. The hull runs
+    `hull_below_m` under the water so the rocking (`tuning/moored.tres`)
+    never lifts a gap into view.
+    """
+
+    length_m: float = 35.4
+    beam_m: float = 8.5
+    hull_below_m: float = 1.0
+    # The double-ended plan: each end's corners cut this far, so the hull
+    # tapers from the full beam to a blunt 2.5 m end.
+    end_cut_m: float = 3.0
+    fender_low_m: float = 0.9
+    fender_high_m: float = 1.3
+    fender_proud_m: float = 0.2
+    deck_m: float = 1.5
+    # The lower saloon, set in from the hull and short of its ends, where the
+    # gangways land on open deck.
+    lower_inset_m: float = 0.35
+    lower_end_m: float = 2.5
+    lower_glass_m: tuple[float, float] = (2.4, 3.3)
+    upper_deck_m: float = 3.9
+    upper_inset_m: float = 0.5
+    upper_end_m: float = 3.5
+    upper_glass_m: tuple[float, float] = (4.5, 5.5)
+    roof_band_m: float = 6.0
+    roof_m: float = 6.2
+    # A wheelhouse over each end, and a mast on each.
+    wheelhouse_from_end_m: float = 6.0
+    wheelhouse_half_x_m: float = 1.4
+    wheelhouse_half_z_m: float = 1.0
+    wheelhouse_glass_m: tuple[float, float] = (6.7, 7.3)
+    wheelhouse_roof_m: float = 7.6
+    mast_top_m: float = 9.6
+    mast_half_m: float = 0.15
+
+
+def build_star_ferry(p: StarFerry | None = None) -> MeshData:
+    """Green hull with a black fender belt, two white saloons with their window
+    bands, a green roof, and a wheelhouse and mast over each end."""
+    p = p or StarFerry()
+    half_x, half_z = p.beam_m / 2.0, p.length_m / 2.0
+
+    def section(y: float, inset: float, end: float, cut: float) -> tuple[Point, ...]:
+        return ring(y, half_x - inset, -half_z + end, half_z - end, cut)
+
+    proud = -p.fender_proud_m
+    hull = loft(
+        [
+            section(-p.hull_below_m, 0.5, 0.8, p.end_cut_m - 0.5),
+            section(p.fender_low_m, 0.0, 0.0, p.end_cut_m),
+            section(p.fender_low_m, proud, proud, p.end_cut_m),
+            section(p.fender_high_m, proud, proud, p.end_cut_m),
+            section(p.fender_high_m, 0.0, 0.0, p.end_cut_m),
+            section(p.deck_m, 0.0, 0.0, p.end_cut_m),
+        ],
+        [FERRY_GREEN.colour, FENDER.colour, FENDER.colour, FENDER.colour, FERRY_GREEN.colour],
+        bottom=FERRY_GREEN.colour,
+        top=FERRY_GREEN.colour,
+        name="star_ferry_hull",
+    )
+
+    window_bands = [FERRY_WHITE.colour, GLASS.colour, FERRY_WHITE.colour]
+
+    def saloon(
+        heights: Sequence[float], bands: list[Colour], inset: float, end: float, name: str
+    ) -> MeshData:
+        cut = p.end_cut_m - end * 0.4
+        return loft(
+            [section(y, inset, end, cut) for y in heights],
+            bands,
+            bottom=None,
+            top=bands[-1],
+            name=name,
+        )
+
+    lower = saloon(
+        (p.deck_m, *p.lower_glass_m, p.upper_deck_m),
+        window_bands,
+        p.lower_inset_m,
+        p.lower_end_m,
+        "star_ferry_lower_saloon",
+    )
+    upper = saloon(
+        (p.upper_deck_m, *p.upper_glass_m, p.roof_band_m, p.roof_m),
+        [*window_bands, FERRY_GREEN.colour],
+        p.upper_inset_m,
+        p.upper_end_m,
+        "star_ferry_upper_saloon",
+    )
+    ends: list[MeshData] = []
+    for side in (-1.0, 1.0):
+        z = side * (half_z - p.wheelhouse_from_end_m)
+        ends.append(
+            loft(
+                [
+                    ring(
+                        y,
+                        p.wheelhouse_half_x_m,
+                        z - p.wheelhouse_half_z_m,
+                        z + p.wheelhouse_half_z_m,
+                        0.3,
+                    )
+                    for y in (p.roof_m, *p.wheelhouse_glass_m, p.wheelhouse_roof_m)
+                ],
+                [FERRY_WHITE.colour, GLASS.colour, FERRY_WHITE.colour],
+                bottom=None,
+                top=FERRY_GREEN.colour,
+                name=f"star_ferry_wheelhouse_{side:+.0f}",
+            )
+        )
+        ends.append(
+            box(
+                (-p.mast_half_m, p.wheelhouse_roof_m, z - p.mast_half_m),
+                (p.mast_half_m, p.mast_top_m, z + p.mast_half_m),
+                FERRY_WHITE.colour,
+                name=f"star_ferry_mast_{side:+.0f}",
+            )
+        )
+    return replace(
+        merge([hull, lower, upper, *ends], name=f"star_ferry{COLLISION_SUFFIX}"),
+        material=MATERIAL,
+    )
+
+
 def build_landmarks() -> list[tuple[str, MeshData]]:
-    return [(CENTRAL_PLAZA_FILE, build_central_plaza())]
+    return [
+        (CENTRAL_PLAZA_FILE, build_central_plaza()),
+        (STAR_FERRY_FILE, build_star_ferry()),
+    ]
 
 
 def write_landmarks(out_dir: Path) -> list[tuple[Path, int, MeshData]]:

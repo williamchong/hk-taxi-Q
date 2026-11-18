@@ -841,6 +841,8 @@ def load_config(path: Path | None = None) -> Config:
     # resolves against a complete table — a material declared after its first use
     # would otherwise fail on document order rather than on being absent.
     table = _MaterialTable(_materials(_require(document, "materials", path), f"{path}:materials"))
+    # Before the landmarks: an `afloat` hull rests at its water level (`Q254`).
+    basemap = _basemap(document.get("basemap"), f"{path}:basemap", table)
 
     city = Config(
         elevation_levels=_elevation_levels(_require(document, "elevation_levels", path), path),
@@ -883,7 +885,7 @@ def load_config(path: Path | None = None) -> Config:
         arrows=_arrows(document.get("arrows"), f"{path}:arrows"),
         signs=_signs(document.get("signs"), f"{path}:signs"),
         lamps=_lamps(document.get("lamps"), f"{path}:lamps", table),
-        basemap=_basemap(document.get("basemap"), f"{path}:basemap", table),
+        basemap=basemap,
         backdrop=_backdrop(document.get("backdrop"), f"{path}:backdrop", table),
         boxjunctions=_boxjunctions(document.get("boxjunctions"), f"{path}:boxjunctions"),
         crossings=_crossings(document.get("crossings"), f"{path}:crossings"),
@@ -902,7 +904,12 @@ def load_config(path: Path | None = None) -> Config:
             document.get("traffic_census"), "detectors", f"{path}:traffic_census"
         ),
         census_detector_days=_census_days(document.get("traffic_census"), f"{path}:traffic_census"),
-        landmarks=_landmarks(document.get("landmarks") or [], f"{path}:landmarks", table),
+        landmarks=_landmarks(
+            document.get("landmarks") or [],
+            f"{path}:landmarks",
+            table,
+            None if basemap is None else basemap.water_level_m,
+        ),
         extra_cas=_extra_cas(document.get("extra_cas"), path),
     )
     _check_regions_lie_within_the_city(city, path)

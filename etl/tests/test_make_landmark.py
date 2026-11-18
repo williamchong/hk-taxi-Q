@@ -33,7 +33,9 @@ import pytest
 from make_landmark import (
     MATERIAL,
     PALETTE,
+    StarFerry,
     build_landmarks,
+    build_star_ferry,
     check_palette,
     write_landmarks,
 )
@@ -120,6 +122,30 @@ class TestImportContract:
                 f"{filename}: base at y {low[1]:.2f} — the plinth continues 1 m "
                 "below the base level the authored position carries"
             )
+
+
+class TestStarFerry:
+    """The moored hull (`Q254`): authored at its waterline, deep enough to rock."""
+
+    def test_the_hull_is_the_cited_size(self) -> None:
+        low, high = build_star_ferry().aabb()
+        p = StarFerry()
+        # The fender stands proud of the 35.4 x 8.5 m hull on every side.
+        assert high[2] - low[2] == pytest.approx(p.length_m + 2 * p.fender_proud_m)
+        assert high[0] - low[0] == pytest.approx(p.beam_m + 2 * p.fender_proud_m)
+
+    def test_the_origin_is_the_waterline_centre(self) -> None:
+        low, high = build_star_ferry().aabb()
+        assert low[1] == pytest.approx(-StarFerry().hull_below_m)
+        assert (low[0] + high[0]) / 2 == pytest.approx(0.0)
+        assert (low[2] + high[2]) / 2 == pytest.approx(0.0)
+
+    def test_the_ends_are_alike(self) -> None:
+        """Double-ended: the hull mirrored end for end is the same set of points."""
+        positions = np.round(build_star_ferry().positions, 4)
+        mirrored = positions * np.array([1.0, 1.0, -1.0])
+        as_set = {tuple(row) for row in positions}
+        assert {tuple(row) for row in mirrored} == as_set
 
 
 class TestPalette:

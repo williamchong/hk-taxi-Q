@@ -20,7 +20,9 @@
 ## only the excluded building itself occupied.
 extends SceneTree
 
+const GeneratedBasemap = preload("res://scripts/city/generated_basemap.gd")
 const GeneratedLandmarks = preload("res://scripts/city/generated_landmarks.gd")
+const Moored = preload("res://scripts/city/moored.gd")
 const Manifest = preload("res://scripts/city/city_manifest.gd")
 const MeshContract = preload("res://tools/mesh_contract.gd")
 const MeshMeasure = preload("res://scripts/city/mesh_measure.gd")
@@ -51,6 +53,17 @@ const PLACEMENT_ALLOWANCE_M: float = 15.0
 ## The material `tools/generated_scene_import.gd` dispatches `landmark_vertex`
 ## to, mirrored from its `SHADERS` table (`P5-28b`).
 const HERO_MATERIAL: String = "res://tuning/landmarks.tres"
+## How far an `afloat` hull's rest may sit off the basemap's water level: the
+## export's own rounding of a position (`round_position`, millimetres).
+const AFLOAT_LEVEL_TOLERANCE_M: float = 0.002
+## How long the motion is sampled, and how often. Two minutes holds many
+## periods of every sine in `moored.tres`; a tenth of a second puts a sample
+## within a fraction of a percent of each peak.
+const AFLOAT_SAMPLE_S: float = 120.0
+const AFLOAT_STEP_S: float = 0.1
+## The share of `heave_m` the sampled heave must reach: a profile left at zero,
+## or a pose that ignored it, stands the hull still.
+const AFLOAT_HEAVE_REACH: float = 0.95
 
 
 func _init() -> void:
@@ -137,6 +150,60 @@ func _check_landmark(manifest: Manifest, entry: Dictionary) -> PackedStringArray
 		)
 
 	problems.append_array(_probe_tiles(manifest, entry, landmark_id))
+	if bool(entry.get("afloat", false)):
+		problems.append_array(_check_afloat(manifest, entry, landmark_id, measured))
+	return problems
+
+
+## An `afloat` hull (`Q254`) rests on the water the basemap draws, moves, and
+## never rocks its waterline into view.
+func _check_afloat(
+	manifest: Manifest, entry: Dictionary, landmark_id: String, measured: AABB
+) -> PackedStringArray:
+	var problems: PackedStringArray = []
+	var basemap: Dictionary = GeneratedBasemap.load_basemap(manifest.basemap_path)
+	var level: Variant = basemap.get("water_level_m")
+	var rest: Transform3D = GeneratedLandmarks.placement_of(entry) as Transform3D
+	if level == null:
+		problems.append("%s: afloat, but the basemap draws no water level" % landmark_id)
+	elif absf(rest.origin.y - float(level)) > AFLOAT_LEVEL_TOLERANCE_M:
+		problems.append(
+			(
+				"%s: afloat at y %.3f, but the water is drawn at %.3f"
+				% [landmark_id, rest.origin.y, float(level)]
+			)
+		)
+	var profile: MooredProfile = Moored.PROFILE
+	var heave_peak: float = 0.0
+	var lift_peak: float = -INF
+	var steps: int = int(AFLOAT_SAMPLE_S / AFLOAT_STEP_S)
+	for step: int in steps + 1:
+		var pose: Transform3D = Moored.pose(profile, step * AFLOAT_STEP_S)
+		heave_peak = maxf(heave_peak, absf(pose.origin.y))
+		# The hull's lowest point after the pose: a positive value is a gap
+		# between the hull and the water plane at y = 0.
+		lift_peak = maxf(lift_peak, (pose * measured).position.y)
+	if heave_peak < profile.heave_m * AFLOAT_HEAVE_REACH or heave_peak <= 0.0:
+		problems.append(
+			(
+				"%s: heaves at most %.3f m against moored.tres's %.3f m"
+				% [landmark_id, heave_peak, profile.heave_m]
+			)
+		)
+	if heave_peak > profile.heave_m + 1e-4:
+		problems.append(
+			(
+				"%s: heaves %.3f m, past moored.tres's %.3f m"
+				% [landmark_id, heave_peak, profile.heave_m]
+			)
+		)
+	if lift_peak >= 0.0:
+		problems.append(
+			(
+				"%s: the rocking lifts the hull's bottom to %.3f m, above the water"
+				% [landmark_id, lift_peak]
+			)
+		)
 	return problems
 
 

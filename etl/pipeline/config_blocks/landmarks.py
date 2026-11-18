@@ -120,6 +120,11 @@ class Landmark:
     # authored-hero budget; a mesh-sourced hero pins its own measured ceiling.
     triangle_budget: int = 8000
     source_paint: SourcePaint | None = None
+    # A hull moored at a pier (`P3-102`, `Q254`): no authored elevation — it
+    # floats at `basemap.water_level_m`, the plane the water is drawn at, so
+    # the sea level has one home (hard rule 3). The runtime rocks it on
+    # `tuning/moored.tres`; the ETL places it at rest.
+    afloat: bool = False
 
 
 # Where a landmark's committed model must live. Game layout rather than city
@@ -142,9 +147,14 @@ LANDMARK_GENERATED_ROOT = "res://assets/generated/landmarks/"
 _PAINT_SURFACES = ("wall", "ribbon", "roof", "base")
 
 
-def _landmarks(entries: list[Any], where: str, table: _MaterialTable) -> tuple[Landmark, ...]:
+def _landmarks(
+    entries: list[Any], where: str, table: _MaterialTable, water_level_m: float | None = None
+) -> tuple[Landmark, ...]:
+    """`water_level_m` is the basemap's, the height an `afloat` hull rests at;
+    None where the city declares no basemap, which an `afloat` entry refuses."""
     landmarks = tuple(
-        _landmark(entry, f"{where}[{index}]", table) for index, entry in enumerate(entries)
+        _landmark(entry, f"{where}[{index}]", table, water_level_m)
+        for index, entry in enumerate(entries)
     )
     seen: dict[str, str] = {}
     stems: dict[str, str] = {}
@@ -163,7 +173,9 @@ def _landmarks(entries: list[Any], where: str, table: _MaterialTable) -> tuple[L
     return landmarks
 
 
-def _landmark(body: dict[str, Any], where: str, table: _MaterialTable) -> Landmark:
+def _landmark(
+    body: dict[str, Any], where: str, table: _MaterialTable, water_level_m: float | None
+) -> Landmark:
     landmark_id = str(_require(body, "id", where))
     asset = str(_require(body, "asset", where))
     paint = (
@@ -208,9 +220,28 @@ def _landmark(body: dict[str, Any], where: str, table: _MaterialTable) -> Landma
             f"{where}:replaces_source_ids must name the stems a mesh-sourced landmark is "
             "extracted from"
         )
-    position = _measures(
-        _require(body, "pos", where), f"{where}:pos", ("easting", "northing", "elevation")
-    )
+    afloat = body.get("afloat", False)
+    if not isinstance(afloat, bool):
+        raise ValueError(f"{where}:afloat is {afloat!r}, expected a boolean")
+    pos = _require(body, "pos", where)
+    if afloat:
+        if paint is not None:
+            raise ValueError(f"{where}: a mesh-sourced landmark is a building and cannot be afloat")
+        if "elevation" in pos:
+            # The water's height is `basemap.water_level_m`; a second number
+            # here would let the hull and the plane disagree (hard rule 3).
+            raise ValueError(
+                f"{where}:pos:elevation is authored, but an afloat landmark rests at "
+                "basemap.water_level_m — leave it out"
+            )
+        if water_level_m is None:
+            raise ValueError(f"{where}:afloat needs a basemap: block — it floats at its water")
+        position = {
+            **_measures(pos, f"{where}:pos", ("easting", "northing")),
+            "elevation": water_level_m,
+        }
+    else:
+        position = _measures(pos, f"{where}:pos", ("easting", "northing", "elevation"))
     budget = body.get("triangle_budget", 8000)
     if not isinstance(budget, int) or isinstance(budget, bool) or budget <= 0:
         raise ValueError(f"{where}:triangle_budget is {budget!r}, expected a positive integer")
@@ -226,6 +257,7 @@ def _landmark(body: dict[str, Any], where: str, table: _MaterialTable) -> Landma
         replaces_source_ids=tuple(str(stem) for stem in replaces),
         triangle_budget=budget,
         source_paint=paint,
+        afloat=afloat,
     )
 
 

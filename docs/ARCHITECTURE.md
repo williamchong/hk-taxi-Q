@@ -592,7 +592,7 @@ node in `region.tscn`: railings a box per placement (`collides`, `Q159`), lamp a
 ### `landmarks.json` — hero building placement
 
 `{schema_version: 2, city_id, region_id, landmarks: [{id, asset, transform: {pos, rot_y_deg},
-name: {en, zh}, replaces_source_ids, excluded_bounds, triangle_budget}]}`.
+name: {en, zh}, replaces_source_ids, excluded_bounds, triangle_budget, afloat}]}`.
 
 Written by `export.py` from the config's `landmarks:` block; placed by `scripts/city/landmarks.gd`.
 
@@ -602,6 +602,10 @@ Written by `export.py` from the config's `landmarks:` block; placed by `scripts/
 - `transform.pos.y` is the base elevation; models are footprint-centred with `y = 0` at the base.
   `rot_y_deg` is a compass bearing; `generated_landmarks.gd::placement_of` is the one conversion.
 - `triangle_budget`: 8,000 by default; a mesh-sourced hero pins its measured count.
+- `afloat` (`Q254`): a hull moored at a pier, authored with no elevation. `pos.y` is
+  `basemap.water_level_m`, the hull at rest; `landmarks.gd` stands a `moored.gd` node there and
+  rocks the model under it on `tuning/moored.tres`. Still schema 2: a reader that ignores the flag
+  places the hull right, only still.
 - Two kinds, separated by licence (`LICENSING.md`). An authored hero (`central_plaza.glb`) is
   committed under `game/assets/authored/landmarks/` (CC BY-SA 4.0) and never in `shipped()`. A
   mesh-sourced hero (HKCEC) is the government mesh repainted by `pipeline/landmarks.py`: gitignored,

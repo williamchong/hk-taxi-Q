@@ -336,6 +336,8 @@ CITY_SCHEMA = 52
 # Schema 2 with the HKCEC repaint: entries carry `triangle_budget`, and the
 # asset set a v1 document describes (all-authored, all-committed) is gone —
 # same argument as `CITY_SCHEMA` 8.
+# Still 2 with `afloat` (`Q254`): a reader that ignores it stands the hull still
+# at its water level, which is placed right, only not rocked.
 LANDMARKS_NAME = "landmarks.json"
 LANDMARKS_SCHEMA = 2
 
@@ -909,6 +911,9 @@ def _landmarks_document(
                 # config data, carried so the ceiling lives with the entry it
                 # grades rather than as an in-engine constant.
                 "triangle_budget": landmark.triangle_budget,
+                # Rocked by the runtime on `tuning/moored.tres` (`Q254`);
+                # `pos.y` is then the basemap's water level, the hull at rest.
+                "afloat": landmark.afloat,
             }
         )
     return {

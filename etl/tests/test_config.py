@@ -1739,7 +1739,8 @@ class TestLandmarks:
         by_id = {landmark.id: landmark for landmark in hong_kong.landmarks}
         assert set(by_id) >= {"hkcec", "central_plaza"}
         for landmark in by_id.values():
-            assert landmark.replaces_source_ids, landmark.id
+            # A moored hull stands beside the city replacing nothing (`Q254`).
+            assert landmark.replaces_source_ids or landmark.afloat, landmark.id
 
         # Central Plaza stays an authored, committed model.
         assert by_id["central_plaza"].asset.startswith("res://assets/authored/landmarks/")
@@ -1816,6 +1817,54 @@ class TestLandmarks:
         for mutate in (strip, drop):
             by_id = {entry.id: entry for entry in load_config(rewrite(mutate)).landmarks}
             assert by_id["central_plaza"].replaces_source_ids == ()
+
+    def test_the_ferry_floats_at_the_basemap_water_level(self, hong_kong) -> None:
+        """`Q254`: an `afloat` hull's height is the water's, never a second number."""
+        ferry = {landmark.id: landmark for landmark in hong_kong.landmarks}["star_ferry"]
+        assert ferry.afloat
+        assert hong_kong.basemap is not None
+        assert ferry.elevation == hong_kong.basemap.water_level_m
+        assert ferry.replaces_source_ids == ()
+
+    @staticmethod
+    def _ferry(doc: dict[str, Any]) -> dict[str, Any]:
+        return next(entry for entry in doc["landmarks"] if entry["id"] == "star_ferry")
+
+    def test_an_afloat_hull_follows_the_water_level(self, rewrite) -> None:
+        def lower(doc: dict[str, Any]) -> None:
+            doc["basemap"]["water_level_m"] = 0.25
+
+        ferry = {entry.id: entry for entry in load_config(rewrite(lower)).landmarks}["star_ferry"]
+        assert ferry.elevation == 0.25
+
+    def test_an_afloat_hull_with_an_elevation_is_rejected(self, rewrite) -> None:
+        def author(doc: dict[str, Any]) -> None:
+            self._ferry(doc)["pos"]["elevation"] = 1.3
+
+        with pytest.raises(ValueError, match="water_level_m"):
+            load_config(rewrite(author))
+
+    def test_an_afloat_flag_that_is_not_a_boolean_is_rejected(self, rewrite) -> None:
+        def slip(doc: dict[str, Any]) -> None:
+            self._ferry(doc)["afloat"] = "yes"
+
+        with pytest.raises(ValueError, match="afloat"):
+            load_config(rewrite(slip))
+
+    def test_a_mesh_sourced_hero_cannot_float(self, rewrite) -> None:
+        def sink(doc: dict[str, Any]) -> None:
+            doc["landmarks"][0]["afloat"] = True
+            del doc["landmarks"][0]["pos"]["elevation"]
+
+        with pytest.raises(ValueError, match="cannot be afloat"):
+            load_config(rewrite(sink))
+
+    def test_an_afloat_hull_without_a_basemap_is_rejected(self, rewrite) -> None:
+        def without(doc: dict[str, Any]) -> None:
+            doc.pop("basemap")
+
+        with pytest.raises(ValueError, match="needs a basemap"):
+            load_config(rewrite(without))
 
     def test_a_replacement_list_that_is_not_a_list_is_rejected(self, rewrite) -> None:
         """Only an absent key defaults to empty; a falsy slip like `0` or
@@ -2858,6 +2907,11 @@ class TestEveryKeyIsRead:
             load_config(rewrite(mutate))
 
 
+def _drop_afloat(doc: dict[str, Any]) -> None:
+    """Remove every `afloat` landmark, which a city without a basemap refuses."""
+    doc["landmarks"] = [entry for entry in doc["landmarks"] if not entry.get("afloat")]
+
+
 class TestBasemapBlock:
     def test_a_reach_past_the_fetch_is_refused(self, rewrite) -> None:
         def far(doc: dict[str, Any]) -> None:
@@ -2878,6 +2932,8 @@ class TestBasemapBlock:
             doc["regions"].pop("tsim_sha_tsui")
             doc["materials"].pop("sea_water")
             doc["materials"].pop("park_grass")
+            # A moored hull floats on that water (`Q254`).
+            _drop_afloat(doc)
 
         assert load_config(rewrite(without)).basemap is None
 
@@ -2886,6 +2942,7 @@ class TestBasemapBlock:
             doc.pop("basemap")
             doc["materials"].pop("sea_water")
             doc["materials"].pop("park_grass")
+            _drop_afloat(doc)
 
         with pytest.raises(ValueError, match="backdrop needs a basemap"):
             load_config(rewrite(without))

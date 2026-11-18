@@ -18,6 +18,7 @@
 extends Node3D
 
 const GeneratedLandmarks = preload("res://scripts/city/generated_landmarks.gd")
+const Moored = preload("res://scripts/city/moored.gd")
 
 ## Which synced region's heroes; "" is `GeneratedRegions.selected()`. Set by
 ## `CityRegions` before the node enters the tree (`P5-9c`).
@@ -55,6 +56,13 @@ func _boot() -> void:
 			push_error("landmark %s has no usable transform" % landmark_id)
 			continue
 		var node: Node3D = packed.instantiate()
+		if bool(entry.get("afloat", false)):
+			# The placement is the hull at rest; `Moored` rocks the model
+			# under it (`Q254`).
+			var moored: Node3D = Moored.new()
+			node.name = "Hull"
+			moored.add_child(node)
+			node = moored
 		node.name = landmark_id
 		node.transform = placement as Transform3D
 		add_child(node)

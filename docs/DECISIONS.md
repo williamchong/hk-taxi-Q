@@ -3446,7 +3446,7 @@ share `twilight.tres`, a rose horizon; a shift never sees the 06:15 dawn.
 - ⚠️ Out there a natural shore is a wall too — no terrain is read, so nothing slopes. ⚠️ Authored: `land_within_m` (the frame also holds the hillside) and the slab's flatness. ⚠️ The two frames overlap, so the land between them is drawn by both; from the air the slab stops 250 m inland against bare background.
 - PCK: 105,449,332 → 107,482,328 bytes, +2,032,996 (1.9%), the web preset exported from a clean worktree before and after; the two `paths.glb` are 2.15 MB of it on disk. `tools/check.sh` exits 0 in that worktree.
 - A ground row's box grows to hold what the cut made of it (`buildings._hold`): the seabed is under every sheet's terrain, and a point cut into a triangle spanning two sheets carries its nearest corner's row. `verify_tiles.gd` found it — 8 vertices 13 m east of their sheet's box.
-- Not built: a moored Star Ferry at the pier (the user's suggestion, an authored asset).
+- A moored Star Ferry at the pier (the user's suggestion): built as `Q254`.
 
 ## `Q248` — Vehicles are glossy and inked: crowned panels, the painted sky back on paint, black lines and a black outline
 
@@ -3530,3 +3530,16 @@ share `twilight.tres`, a rose horizon; a shift never sees the 06:15 dawn.
 - A shift saved past 交更 with its last passenger aboard closes again on its first tick; nothing special-cased.
 - No confirmation when PLAY replaces a save: picking a new run is the choice.
 - CONTINUE and PLAY share PLAY's row as two half-width choices, the run's line under them: HOME grows up from the bottom, and a whole row for CONTINUE pushed the title off a 1368x630 handset.
+
+## `Q254` — A Star Ferry is moored at Wan Chai Ferry Pier and rocks on its own swell
+
+**Status.** 🟡 Built 2026-11-18 (`P3-102`) on the user's ask ("a star ferry parked near wanchai pier that move slightly according to wave"; Wan Chai alone, his call). Owed: his look and the amplitude pick, whether the hull berths end-on (assumed) or alongside, the PCK, a night frame (the windows are not lit).
+
+- **Through the landmark door, not a new stage.** `star_ferry.glb` is authored by `tools/make_landmark.py` (`StarFerry`, 348 triangles, its own collider) and placed by the `landmarks:` block. It replaces nothing (`P5-10`).
+- **Flat vertex colour on `landmarks.tres`, not the vehicle shader.** `vehicle_body.gdshader` is sized to a car: crown over 3 m, `INK_SPAN_M` 16 m "longer than any vehicle", per-car instance uniforms. A 35 m hull would need each one reopened.
+- **Size**: Electric Star's 116 x 28 ft, 35.4 x 8.5 m, the fleet's common size (World Star 46 m and Golden Star 47 m are the exceptions). Green below, white above, black fender belt, a wheelhouse and mast over each end. No name, lettering or emblem (`Q42`).
+- **Placement, from iB1000 11-SW-10C**: the pier is block 1810133737 (BUILDINGNAME 1810037446, 灣仔渡輪碼頭), a 27 m finger whose seaward face bears 83.8°. The hull lies end-on to it on bearing 353.8°, 0.5 m of water off the fender: game (429.96, 1.3, 13.56).
+- **`afloat`** (`landmarks.json` still schema 2): an afloat entry authors no elevation; the config puts it at `basemap.water_level_m`, so the sea level keeps one home (hard rule 3). Refused: an authored elevation, a mesh-sourced hero afloat, an afloat entry with no basemap.
+- **The motion is its own swell, not the water shader's chop.** The chop's 6 m crests average to almost nothing over 35 m. `moored.gd` sums three sines on `moored.tres`: heave 0.08 m at 5.3 s, roll 1.2° at 6.7 s, pitch 0.35° at 4.1 s — a mast top moves ~20 cm. It runs through a pause, as the water's `TIME` does. Visual only: `moored.gd` lifts the model's static body out of the hull onto itself, so the collider stays at rest and Jolt is never handed a moving static body.
+- `verify_landmarks.gd` holds an afloat entry to the basemap's water level (2 mm), the heave to within 95–100% of `heave_m`, and the hull's bottom under the water at the worst pose over 120 s. Each check mutation-checked: no heave, the hull lifted 2 m, the document's y at 2.3 m.
+
