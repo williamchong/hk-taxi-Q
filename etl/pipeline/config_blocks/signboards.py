@@ -25,6 +25,7 @@ _MARGINS = (
     "facing_weight_m",
     "frame_darken",
     "survey_min_share",
+    "screen_lift_m",
 )
 
 
@@ -156,6 +157,11 @@ class Signboards:
     cell_m: float
     # The lettering, or None for plain boards.
     text: SignText | None = None
+    # Boards that are screens (step 3), by published id: the register does not
+    # say which, so each is authored. A screen is drawn on its lit face
+    # `screen_lift_m` off it, and not lettered.
+    screens: tuple[str, ...] = ()
+    screen_lift_m: float = 0.0
 
 
 def _signboards(body: Any, where: str) -> Signboards | None:
@@ -193,8 +199,12 @@ def _signboards(body: Any, where: str) -> Signboards | None:
         if margins[name] > 1.0:
             raise ValueError(f"{where}:{name} is a share, got {margins[name]}")
     survey = body.get("colour_survey")
+    raw_screens = body.get("screens") or []
+    if not isinstance(raw_screens, list) or not all(isinstance(i, (int, str)) for i in raw_screens):
+        raise ValueError(f"{where}:screens must be a list of board ids, got {raw_screens!r}")
     return Signboards(
         text=_text(body.get("text"), f"{where}:text"),
+        screens=tuple(str(ident) for ident in raw_screens),
         source=str(_require(body, "source", where)),
         fields=_fields(body, where, _ROLES),
         mounts=mounts,

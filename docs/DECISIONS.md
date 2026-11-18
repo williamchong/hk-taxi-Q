@@ -3631,9 +3631,9 @@ gone.
 
 ## `Q260` — Signboards come from the Buildings Department's register, coloured from their photos
 
-**Status.** 🟡 Steps 1 and 2 built 2026-11-19 (`P3-103`) on the user's plan: coloured boards, the
-colour surveyed, then generic trade names. Owed: the user's look day and night, the handset, step 3
-(the screens). Canopies come later and apart. Checklist in
+**Status.** 🟡 Steps 1–3 built 2026-11-19 (`P3-103`) on the user's plan: coloured boards, the
+colour surveyed, generic trade names, then the screens. Owed: the user's look day and night, the
+handset, the screens' heights. Canopies are a later task. Canopies come later and apart. Checklist in
 `.claude/rules/signboards.md`.
 
 - **Source.** BD's Legal / Validated Signboards (`bd_rcd_1629267205232_53467`, `BDLSMW`): a point,
@@ -3682,3 +3682,12 @@ colour surveyed, then generic trade names. Owed: the user's look day and night, 
   the credits.
 - ⚠️ Owed: the atlas imports with no mipmaps (as the signs' does), so a far glyph can shimmer
   under the scissor; and each region ships its own identical atlas (70 KB, 0.5 MP of memory).
+- **Step 3, the screens: authored, generic.** The register does not say which board is a screen, so
+  `screens:` names two by `OBJECTID`: 2297, East Point Centre's 73.45 × 20.7 m board over Hennessy
+  Road, and 1934, the 12 × 11.32 m board facing Russell Street at Times Square (a candidate, the
+  user's to confirm). Each is drawn as a quad on its lit face with UVs in metres, its own primitive
+  on `signboards_screen.gdshader`: a drifting colour field cut to a new slide every 7 s, seen
+  through a 0.3 m LED grid that fades where an LED is under a pixel. No texture, no brand. It emits
+  by day (1.2) and more at night (2.2). A screen is not lettered.
+- ⚠️ A screen's height is a wall board's authored 3 m base, so Times Square's sits at street level
+  where the real one stands higher up the façade. A per-screen base is owed with the user's pick.

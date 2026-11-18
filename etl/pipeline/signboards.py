@@ -75,6 +75,9 @@ SIGNBOARDS_MESH_NAME = "signboards"
 # The glTF material the engine's importer dispatches on — `SHADERS` in
 # `game/tools/generated_scene_import.gd` holds the other end.
 SIGNBOARDS_MATERIAL = "signboards"
+# The screens (step 3): their own primitive on `signboards_screen.gdshader`.
+SCREEN_MESH_NAME = "signboards_screen"
+SCREEN_MATERIAL = "signboards_screen"
 # Where `tools/signboard_colour.py` writes under the sources tree: a stage name,
 # on `buildings.HUE_SOURCE_ID`'s terms.
 COLOUR_SOURCE_ID = "signboard_colour"
@@ -153,6 +156,8 @@ class SignboardReport:
     text_atlas_px: int = 0
     text_atlas_bytes: int = 0
     text_triangles: int = 0
+    # Boards drawn as screens (`screens:`), and none lettered.
+    screens: int = 0
 
 
 # --------------------------------------------------------------------------
@@ -567,7 +572,7 @@ def colour_of(
 # --------------------------------------------------------------------------
 
 
-def box(item: Placed, spec: Signboards) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+def box(item: Placed, spec: Signboards) -> signboard_text.Box:
     """The board as a box: its centre in plan, its two plan half-axes (across
     its face, through its face) and its height range."""
     board = item.board
@@ -622,16 +627,47 @@ def draw(builder: ColouredBuilder, item: Placed, spec: Signboards) -> None:
         face(builder, cap, frame, np.array([0.0, up, 0.0]))
 
 
+def _built(
+    builders: dict[Cell, signboard_text.QuadBuilder],
+    name: str,
+    material: str,
+    texture: Texture | None,
+) -> list[MeshData]:
+    return [
+        mesh
+        for cell in sorted(builders)
+        if (mesh := builders[cell].build(cell_name(name, cell), material, texture)) is not None
+    ]
+
+
+def screen(builder: signboard_text.QuadBuilder, item: Placed, spec: Signboards) -> None:
+    """The screen on the board's lit face (both faces of a blade), `screen_lift_m`
+    off it. Its UVs are metres across and down the face, so the shader's LED
+    pitch is the same on every screen; `COLOR_0`'s red is a seed from the id,
+    so two screens do not show the same frame."""
+    board = box(item, spec)
+    _, across, _, (low, high) = board
+    digest = hashlib.blake2b(item.board.ident.encode("utf-8"), digest_size=1).digest()
+    rgba = (digest[0], 0, 0, LIT_ALPHA)
+    width, height = 2.0 * float(np.linalg.norm(across)), high - low
+    size, cell = (width, height), (0.0, 0.0, width, height)
+    up = np.array([0.0, 1.0, 0.0])
+    for middle, out in signboard_text.faces(board, item.board.mount.mount, spec.screen_lift_m):
+        builder.quad(middle, np.cross(up, out), up, size, cell, rgba)
+
+
 def build_meshes(
     spec: Signboards, placed: list[Placed], atlas: signboard_text.Atlas | None = None
-) -> tuple[list[MeshData], list[MeshData]]:
-    """The boards, and their lettering, a mesh each a plan cell.
+) -> tuple[list[MeshData], list[MeshData], list[MeshData]]:
+    """The boards, their lettering and the screens, a mesh each a plan cell.
 
-    The lettering is its own primitive: it needs `TEXCOORD_0` and a texture,
-    and the boards need neither (`verify_signs.gd`'s reason for the signs).
+    The lettering and the screens are their own primitives: they need
+    `TEXCOORD_0` and their own shaders, and the boards need neither
+    (`verify_signs.gd`'s reason for the signs).
     """
     cells: dict[Cell, ColouredBuilder] = {}
-    letters: dict[Cell, signboard_text.TextBuilder] = {}
+    letters: dict[Cell, signboard_text.QuadBuilder] = {}
+    screens: dict[Cell, signboard_text.QuadBuilder] = {}
     for item in placed:
         cell: Cell = (
             math.floor(item.foot[0] / spec.cell_m),
@@ -640,32 +676,30 @@ def build_meshes(
         if cell not in cells:
             cells[cell] = ColouredBuilder(SIGNBOARDS_MATERIAL)
         draw(cells[cell], item, spec)
-        if atlas is None or spec.text is None or not item.name:
-            continue
-        signboard_text.letter(
-            letters.setdefault(cell, signboard_text.TextBuilder()),
-            spec.text,
-            atlas,
-            item.name,
-            (*signboard_text.ink(spec.text, item.colour), LIT_ALPHA),
-            item.board.mount.mount,
-            box(item, spec),
-        )
+        if item.board.ident in spec.screens:
+            screen(screens.setdefault(cell, signboard_text.QuadBuilder()), item, spec)
+        elif atlas is not None and spec.text is not None and item.name:
+            signboard_text.letter(
+                letters.setdefault(cell, signboard_text.QuadBuilder()),
+                spec.text,
+                atlas,
+                item.name,
+                (*signboard_text.ink(spec.text, item.colour), LIT_ALPHA),
+                item.board.mount.mount,
+                box(item, spec),
+            )
     meshes = [
         mesh
         for cell in sorted(cells)
         if (mesh := cells[cell].build(cell_name(SIGNBOARDS_MESH_NAME, cell))) is not None
     ]
-    if atlas is None:
-        return meshes, []
-    texture = Texture(data=atlas.png, mime_type="image/png", uri=signboard_text.TEXT_ATLAS_NAME)
-    lettering = [
-        mesh
-        for cell in sorted(letters)
-        if (mesh := letters[cell].build(cell_name(signboard_text.TEXT_MESH_NAME, cell), texture))
-        is not None
-    ]
-    return meshes, lettering
+    lettering: list[MeshData] = []
+    if atlas is not None:
+        texture = Texture(data=atlas.png, mime_type="image/png", uri=signboard_text.TEXT_ATLAS_NAME)
+        lettering = _built(
+            letters, signboard_text.TEXT_MESH_NAME, signboard_text.TEXT_MATERIAL, texture
+        )
+    return meshes, lettering, _built(screens, SCREEN_MESH_NAME, SCREEN_MATERIAL, None)
 
 
 # --------------------------------------------------------------------------
@@ -714,7 +748,7 @@ def build_region(
         licences = signboard_text.read_licences(
             city, spec.text, region_id, transform, sources_root=sources_root
         )
-        name_boards(spec.text, placed, licences, report)
+        name_boards(spec.text, spec.screens, placed, licences, report)
     stack(spec, placed, read_carriageway_region(out_dir, region_id).whole, report)
     for item in placed:
         report.drawn_by_mount[item.board.mount.mount] = (
@@ -722,15 +756,16 @@ def build_region(
         )
     report.drawn = len(placed)
 
-    meshes, lettering = build_meshes(spec, placed, atlas)
+    meshes, lettering, screens = build_meshes(spec, placed, atlas)
+    report.screens = sum(item.board.ident in spec.screens for item in placed)
     report.cells = len(meshes)
     report.triangles = sum(len(mesh.triangles) for mesh in meshes)
     report.vertices = sum(len(mesh.positions) for mesh in meshes)
     report.text_triangles = sum(len(mesh.triangles) for mesh in lettering)
-    report.facing_away = sum(facing_away(mesh) for mesh in [*meshes, *lettering])
+    report.facing_away = sum(facing_away(mesh) for mesh in [*meshes, *lettering, *screens])
     _clear(out_dir)
     if meshes:
-        report.bytes = write_glb(out_dir / SIGNBOARDS_NAME, [*meshes, *lettering])
+        report.bytes = write_glb(out_dir / SIGNBOARDS_NAME, [*meshes, *lettering, *screens])
     if lettering and atlas is not None:
         report.text_atlas_px = atlas.pixels
         report.text_atlas_bytes = len(atlas.png)
@@ -740,12 +775,15 @@ def build_region(
 
 def name_boards(
     text: SignText,
+    screens: tuple[str, ...],
     placed: list[Placed],
     licences: shapely.STRtree | None,
     report: SignboardReport,
 ) -> None:
     """Each board's generic name, from its mount, a licence nearby and its street."""
     for item in placed:
+        if item.board.ident in screens:
+            continue
         near = signboard_text.licensed(text, licences, item.foot)
         name, trade = signboard_text.pick_name(
             text, item.board.ident, item.board.mount.mount, item.board.facing, near
@@ -813,6 +851,8 @@ def _write_manifest(out_dir: Path, city: Config, region_id: str, report: Signboa
         "text_atlas_px": report.text_atlas_px,
         "text_atlas_bytes": report.text_atlas_bytes,
         "text_triangles": report.text_triangles,
+        # The authored screens drawn (step 3).
+        "screens": report.screens,
     }
     return write_document(out_dir / SIGNBOARDS_MANIFEST_NAME, document)
 

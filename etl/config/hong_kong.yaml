@@ -3857,6 +3857,13 @@ signboards:
   survey_min_share: 0.25
   survey_lightness: [12.0, 90.0]
   cell_m: 300.0
+  # The boards that are screens (`P3-103` step 3), by OBJECTID: the register
+  # does not say which, so each is authored. Drawn as an animated LED face,
+  # generic and unbranded, and never lettered. 2297: East Point Centre's
+  # 73.45 x 20.7 m board over Hennessy Road, above SOGO. 1934: the 12 x 11.32 m
+  # board facing Russell Street at Times Square.
+  screens: [2297, 1934]
+  screen_lift_m: 0.03
   # The lettering (`P3-103` step 2): a generic shop name, never a real one,
   # seeded by the board's id. Two picks from `prefixes` and a trade's suffix,
   # the trade weighted by mount, by a restaurant licence nearby and by street.

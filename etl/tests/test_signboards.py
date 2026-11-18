@@ -28,6 +28,7 @@ from pipeline.signboards import (
     build_meshes,
     colour_of,
     facing_streets,
+    name_boards,
     palette_colour,
     photo_url,
     sized,
@@ -228,8 +229,8 @@ def test_every_face_is_wound_the_way_it_is_lit_and_only_the_faces_glow(spec, kin
         item = _place(spec, normal_wall)
         stack(spec, [item], NOWHERE, SignboardReport())
         item.colour = (200, 16, 46)
-        (mesh,), lettering = build_meshes(spec, [item])
-        assert lettering == []
+        (mesh,), lettering, screens = build_meshes(spec, [item])
+        assert lettering == [] and screens == []
         assert facing_away(mesh) == 0
         assert len(mesh.triangles) == 12
         lit = mesh.colours[mesh.triangles[:, 0], 3] == LIT_ALPHA
@@ -295,6 +296,7 @@ def test_a_blown_out_photo_is_clamped_into_the_lightness_bounds(spec) -> None:
         (lambda b: b["text"]["streets"].update({"X ROAD": {"bakery": 2.0}}), "bakery"),
         (lambda b: b["text"].update(name_chars=0), "name_chars"),
         (lambda b: b["text"].update(fill=1.5), "fill"),
+        (lambda b: b.update(screens="2297"), "screens"),
     ],
 )
 def test_block_refuses(mutate, message: str) -> None:
@@ -387,7 +389,7 @@ def test_the_lettering_faces_out_of_its_board_and_stays_on_it(spec, kind, sizes,
     item.colour = (200, 16, 46)
     item.name = "金興茶餐廳"
     atlas = build_atlas(spec.text, CONFIG_PATH.parents[2])
-    (board,), (lettering,) = build_meshes(spec, [item], atlas)
+    (board,), (lettering,), _ = build_meshes(spec, [item], atlas)
     assert facing_away(lettering) == 0
     assert len(lettering.triangles) == 2 * len(item.name) * faces
     assert (lettering.colours[:, 3] == LIT_ALPHA).all()
@@ -400,3 +402,34 @@ def test_the_lettering_faces_out_of_its_board_and_stays_on_it(spec, kind, sizes,
     spread = np.ptp(lettering.positions, axis=0)
     assert (spread[1] > max(spread[0], spread[2])) == (kind == "PROJECTING SIGNBOARD")
     assert lettering.texture is not None and lettering.texture.uri == "signboards_text.png"
+
+
+# --------------------------------------------------------------------------
+# The screens (step 3)
+# --------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(("kind", "faces"), [("WALL SIGNBOARD", 1), ("PROJECTING SIGNBOARD", 2)])
+def test_an_authored_screen_is_drawn_as_a_screen_and_not_lettered(spec, kind, faces) -> None:
+    from dataclasses import replace
+
+    screened = replace(spec, screens=("9",))
+    item = _place(screened, _board(screened, 5.0, 9.8, kind=kind, ident="9", length=6.0))
+    stack(screened, [item], NOWHERE, SignboardReport())
+    item.name = "金興茶餐廳"
+    atlas = build_atlas(spec.text, CONFIG_PATH.parents[2])
+    _, lettering, (screen,) = build_meshes(screened, [item], atlas)
+    assert lettering == []
+    assert facing_away(screen) == 0 and len(screen.triangles) == 2 * faces
+    assert (screen.colours[:, 3] == LIT_ALPHA).all()
+    # UVs in metres: the face's own width and height.
+    assert np.ptp(screen.uvs, axis=0) == pytest.approx([6.0, 1.0])
+    assert screen.texture is None and screen.material == "signboards_screen"
+
+    report = SignboardReport()
+    name_boards(screened.text, screened.screens, [item], None, report)
+    assert report.lettered == 0
+
+
+def test_the_screens_are_the_two_named_boards(spec) -> None:
+    assert set(spec.screens) == {"2297", "1934"}

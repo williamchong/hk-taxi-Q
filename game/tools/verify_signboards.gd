@@ -34,6 +34,12 @@ const TEXT_PREFIX: String = "signboards_text"
 const TEXT_MATERIAL: String = "res://tuning/signboards_text.tres"
 const TEXT_SHADER: String = "res://assets/shaders/signboards_text.gdshader"
 
+## The screens (`P3-103` step 3): their own primitive a cell, named
+## `signboards_screen_<cell>` (`SCREEN_MESH_NAME` in `etl/pipeline/signboards.py`),
+## on one shared material with no texture.
+const SCREEN_PREFIX: String = "signboards_screen"
+const SCREEN_MATERIAL: String = "res://tuning/signboards_screen.tres"
+
 
 func _init() -> void:
 	VerifyLayer.run(self, GeneratedLayer.SIGNBOARDS, _check)
@@ -48,6 +54,9 @@ func _check(scene_root: Node3D) -> PackedStringArray:
 		var mesh: Mesh = cells[cell]
 		if cell.begins_with(TEXT_PREFIX):
 			problems.append_array(_check_lettering(mesh, cell))
+			continue
+		if cell.begins_with(SCREEN_PREFIX):
+			problems.append_array(_check_screen(mesh, cell))
 			continue
 		for surface: int in mesh.get_surface_count():
 			var where: String = "%s surface %d" % [cell, surface]
@@ -82,5 +91,20 @@ func _check_lettering(mesh: Mesh, cell: String) -> PackedStringArray:
 		)
 		problems.append_array(
 			MeshContract.check_shader_source(mesh, surface, where, TEXT_SHADER, TEXT_MATERIAL)
+		)
+	return problems
+
+
+## A screen left on its imported material draws a flat dark quad; one with no
+## UVs plays every LED at the face's corner.
+func _check_screen(mesh: Mesh, cell: String) -> PackedStringArray:
+	var problems: PackedStringArray = []
+	for surface: int in mesh.get_surface_count():
+		var where: String = "%s surface %d" % [cell, surface]
+		if not (mesh.surface_get_format(surface) & Mesh.ARRAY_FORMAT_TEX_UV):
+			problems.append("%s carries no UVs" % where)
+		problems.append_array(MeshContract.check_surface(mesh, surface, where, true))
+		problems.append_array(
+			MeshContract.check_shader_material(mesh, surface, where, SCREEN_MATERIAL)
 		)
 	return problems

@@ -116,6 +116,7 @@ const SHADERS: Dictionary = {
 	# `etl/pipeline/signboards.py`, on the paths' terms, so `verify_signboards.gd`
 	# checks the dispatch by `resource_path`.
 	"signboards": "res://tuning/signboards.tres",
+	"signboards_screen": "res://tuning/signboards_screen.tres",
 	# The land no region's tiles draw (`P3-101`): `LAND_MATERIAL` in
 	# `etl/pipeline/basemap.py`, the second mesh in `water.glb`. ⚠️ Its own row,
 	# never the water's: that material is `water.gdshader`, and land on it waves.

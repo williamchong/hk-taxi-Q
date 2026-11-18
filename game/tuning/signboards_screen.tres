@@ -1,0 +1,14 @@
+[gd_resource type="ShaderMaterial" format=3]
+
+[ext_resource type="Shader" path="res://assets/shaders/signboards_screen.gdshader" id="1_signboards_screen"]
+
+[resource]
+resource_name = "signboards_screen"
+render_priority = 0
+shader = ExtResource("1_signboards_screen")
+shader_parameter/pixel_m = 0.3
+shader_parameter/drift = 0.25
+shader_parameter/slide_s = 7.0
+shader_parameter/gap_dark = 0.45
+shader_parameter/day_glow = 1.2
+shader_parameter/night_glow = 2.2

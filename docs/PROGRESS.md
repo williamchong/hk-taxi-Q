@@ -118,12 +118,13 @@ Phase 3 — `B2` and the road
   ground cut to a vertical quay along 2,776 m of published sea wall and breakwater, and the land
   beside the harbour drawn where no tile is (24.7 ha) — owed: the user's pick of the line tone
   (`build/driver/tone_sheets/`), the handset.
-- `P3-103` 🟡 Signboards, steps 1 and 2 of 3 (`Q260`): BD's registered boards as coloured boxes on
+- `P3-103` 🟡 Signboards, steps 1–3 (`Q260`): BD's registered boards as coloured boxes on
   the walls — Wan Chai 2,031 of 2,038 drawn (snap p50 0.27 m), Causeway Bay 131 of 132; 1,886
   coloured from their photos, the rest a palette; the faces lit at night; every board lettered
   with a generic shop name in the brush face, weighted by mount, FEHD licences and street. Street
-  viewpoint +20,438 primitives and +10 draws for both — owed: the user's look, the handset, the
-  screens (step 3).
+  viewpoint +20,438 primitives and +10 draws for both; two authored LED screens (East Point Centre,
+  Times Square) on a generic animated shader — owed: the user's look, the handset, the screens'
+  heights.
 - `P3-102` 🟡 A Star Ferry moored at Wan Chai Ferry Pier (`Q254`): 2,246 triangles modelled on the
   user's photos, alongside the pier's west face, at the basemap's water level, rocking 0.08 m /
   1.2° / 0.35°; +6,738 primitives and +2 draws in view, 0 facing away — owed: the user's look and

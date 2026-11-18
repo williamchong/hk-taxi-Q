@@ -196,8 +196,9 @@ def ink(text: SignText, colour: tuple[int, int, int]) -> tuple[int, int, int]:
     return max(text.inks, key=contrast)
 
 
-class TextBuilder:
-    """Quads, one a character, each sampling its atlas cell."""
+class QuadBuilder:
+    """Upright quads with UVs and a colour each: the lettering's glyphs, one a
+    character sampling its atlas cell, and the screens' faces."""
 
     def __init__(self) -> None:
         self._positions: list[np.ndarray] = []
@@ -205,16 +206,18 @@ class TextBuilder:
         self._uvs: list[np.ndarray] = []
         self._colours: list[np.ndarray] = []
 
-    def glyph(
+    def quad(
         self,
         centre: np.ndarray,
         right: np.ndarray,
         up: np.ndarray,
-        size: float,
+        size: tuple[float, float],
         cell: tuple[float, float, float, float],
         rgba: tuple[int, int, int, int],
     ) -> None:
-        half_r, half_u = right * (size / 2.0), up * (size / 2.0)
+        """A `size` (across, up) quad facing `right x up`, `cell` its
+        (u0, v0, u1, v1) with v0 at the top."""
+        half_r, half_u = right * (size[0] / 2.0), up * (size[1] / 2.0)
         # Bottom-left, bottom-right, top-right, top-left: counter-clockwise
         # seen from `right x up`, the way the glyph faces.
         self._positions.append(
@@ -232,7 +235,7 @@ class TextBuilder:
         self._normals.append(np.tile(np.cross(right, up), (4, 1)))
         self._colours.append(np.tile(np.array(rgba), (4, 1)))
 
-    def build(self, name: str, texture: Texture) -> MeshData | None:
+    def build(self, name: str, material: str, texture: Texture | None) -> MeshData | None:
         if not self._positions:
             return None
         count = 4 * len(self._positions)
@@ -246,25 +249,39 @@ class TextBuilder:
             colours=np.vstack(self._colours).astype(np.uint8),
             uvs=np.vstack(self._uvs).astype(np.float32),
             texture=texture,
-            material=TEXT_MATERIAL,
+            material=material,
         )
 
 
+Box = tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]
+
+
+def faces(board: Box, mount: str, lift_m: float) -> list[tuple[np.ndarray, np.ndarray]]:
+    """The middle of the board's lit face (both faces of a blade) `lift_m` off
+    it, and the face's outward normal.
+
+    `board` is `signboards.box`: the plan centre, the plan half-axes across and
+    through the face (`+through` away from the wall) and the height range.
+    """
+    centre, _, through, (low, high) = board
+    middle = np.array([centre[0], 0.5 * (low + high), centre[1]])
+    half_thick = float(np.linalg.norm(through))
+    unit = np.array([through[0], 0.0, through[1]]) / half_thick
+    sides = (1.0, -1.0) if mount == PROJECTING else (1.0,)
+    return [(middle + unit * sign * (half_thick + lift_m), unit * sign) for sign in sides]
+
+
 def letter(
-    builder: TextBuilder,
+    builder: QuadBuilder,
     text: SignText,
     atlas: Atlas,
     name: str,
     rgba: tuple[int, int, int, int],
     mount: str,
-    board: tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray],
+    board: Box,
 ) -> None:
-    """`name` on the board's lit face, or both faces of a blade, centred.
-
-    `board` is `signboards.box`: the plan centre, the plan half-axes across and
-    through the face (`+through` away from the wall) and the height range.
-    """
-    centre, across, through, (low, high) = board
+    """`name` on the board's lit face, or both faces of a blade, centred."""
+    _, across, _, (low, high) = board
     length = 2.0 * float(np.linalg.norm(across))
     height = high - low
     count = len(name)
@@ -275,15 +292,9 @@ def letter(
         size = min(length * text.fill, height * text.fill / count)
     else:
         size = min(height * text.fill, length * text.fill / count)
-    middle = np.array([centre[0], 0.5 * (low + high), centre[1]])
-    half_thick = float(np.linalg.norm(through))
-    unit = through / half_thick
-    sides = (1.0, -1.0) if mount == PROJECTING else (1.0,)
-    for sign in sides:
-        out = np.array([unit[0], 0.0, unit[1]]) * sign
+    for face, out in faces(board, mount, text.lift_m):
         right = np.cross(_UP, out)
-        face = middle + out * (half_thick + text.lift_m)
         reading = -_UP if vertical else right
         for index, char in enumerate(name):
             spot = face + reading * ((index - (count - 1) / 2.0) * size)
-            builder.glyph(spot, right, _UP, size, atlas.cells[char], rgba)
+            builder.quad(spot, right, _UP, (size, size), atlas.cells[char], rgba)
