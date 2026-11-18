@@ -22,7 +22,7 @@ restate the terms here.
 ### Required credits-screen text (draft)
 
 > Contains geospatial data from the Lands Department, the Transport Department, the Highways
-> Department and the Leisure and Cultural Services Department of the Government
+> Department, the Leisure and Cultural Services Department and the Buildings Department of the Government
 > of the Hong Kong Special Administrative Region, obtained via DATA.GOV.HK and the Common Spatial
 > Data Infrastructure (CSDI) Portal. **The Government of the HKSAR and the relevant organisations own
 > the intellectual property rights in that data.** Used under the DATA.GOV.HK and CSDI Portal Terms
@@ -460,3 +460,23 @@ found.
 - **LCSD Trees (Major Parks)** — `lcsd_rcd_1730101435734_98947`, the same department, found
   2026-11-18. `paged_sources.tree_lcsd_parks` reads `OBJECTID,Scientific_Name`; 30,526 points,
   stored in WGS84. Victoria Park is 2,230 of them across Wan Chai and Causeway Bay (74 genera).
+
+## Signboards (`Q260`)
+
+- **BD Legal / Validated Signboards** — `bd_rcd_1629267205232_53467`, Buildings Department, CSDI
+  `file-api` GeoJSON, layer `BDLSMW`, native EPSG:2326 (`Easting` / `Northing` columns beside the
+  geometry). 69.7 MB territory-wide; 2,038 boards in Wan Chai, 132 in Causeway Bay. Each row has
+  the board's type, its length, height and thickness in metres, `Location_Description_EN`
+  ("FACING HENNESSY ROAD") and a link to a photo PDF. ⚠️ **It records only boards that went through
+  the minor works or validation scheme**, so it is a lower bound: an unregistered board is absent.
+  The point is the board's location, not its wall. `signboards.py` snaps it to the nearest shipped
+  wall (p50 0.27 m, p90 0.98 m in Wan Chai).
+- **The photos** — one PDF a board on `storage.googleapis.com/legal-signboard-image-hosting-prod/`.
+  The board is outlined in red vector strokes on most of them. `tools/signboard_colour.py` reads that
+  outline with `pypdfium2`, takes the k-means colour inside it, and writes **one colour a board** to
+  `etl/sources/signboard_colour/signboard_colour.json`. Nothing else from a photo is kept. Across
+  the four driven regions: 3,455 of 3,883 measured (3,362 vector outline, 93 raster ring), 422 with
+  no outline, 5 dead links. Some photos are the applicant's own, extracted from minor works records.
+  `LICENSING.md` item 6.
+- **No owner and no trade name** in either: the database names no shop. The text step that follows
+  (`P3-103` step 2) writes generic names, never a real one.

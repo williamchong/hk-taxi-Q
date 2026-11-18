@@ -72,6 +72,7 @@ from pipeline.railings import RAILINGS_MANIFEST_NAME, RAILINGS_MANIFEST_SCHEMA
 from pipeline.roadmarks import ROADMARKS_MANIFEST_NAME, ROADMARKS_MANIFEST_SCHEMA
 from pipeline.roads import ROADGRAPH_NAME, ROADGRAPH_SCHEMA
 from pipeline.signals import SIGNALS_MANIFEST_NAME, SIGNALS_MANIFEST_SCHEMA
+from pipeline.signboards import SIGNBOARDS_MANIFEST_NAME, SIGNBOARDS_MANIFEST_SCHEMA
 from pipeline.signs import SIGNS_MANIFEST_NAME, SIGNS_MANIFEST_SCHEMA
 from pipeline.stopmarks import STOPMARKS_MANIFEST_NAME, STOPMARKS_MANIFEST_SCHEMA
 from pipeline.stops import STOPS_MANIFEST_NAME, STOPS_MANIFEST_SCHEMA
@@ -323,7 +324,10 @@ CITY_NAME = "city.json"
 # `backdrop.glb` is this region seen from past the far plane, no longer the
 # shore across from it, and the material skips it nearer than the plane. A v51
 # reader would draw a region's own far version over its tiles' edges.
-CITY_SCHEMA = 52
+# 53 since `P3-103` (`Q260`): the manifest names `signboards.glb`, the
+# Buildings Department's signboards on the walls. A v52 reader ships a region
+# without them.
+CITY_SCHEMA = 53
 
 # The hero-building placement document (`P3-6`), written by this stage from the
 # city config — ~2 entries derived from `landmarks:` plus one CRS conversion,
@@ -372,6 +376,7 @@ OPTIONAL_ASSET_KEYS = (
     "stops_placements",
     "planters",
     "paths",
+    "signboards",
     "backdrop",
     "lamps",
     "lamps_placements",
@@ -429,6 +434,7 @@ INPUTS: tuple[Input, ...] = (
     Input(STOPS_MANIFEST_NAME, STOPS_MANIFEST_SCHEMA, "stops"),
     Input(PLANTERS_MANIFEST_NAME, PLANTERS_MANIFEST_SCHEMA, "planters"),
     Input(PATHS_MANIFEST_NAME, PATHS_MANIFEST_SCHEMA, "paths"),
+    Input(SIGNBOARDS_MANIFEST_NAME, SIGNBOARDS_MANIFEST_SCHEMA, "signboards"),
     Input(BACKDROP_MANIFEST_NAME, BACKDROP_MANIFEST_SCHEMA, "backdrop"),
     Input(LAMPS_MANIFEST_NAME, LAMPS_MANIFEST_SCHEMA, "lamps"),
     Input(RAILINGS_MANIFEST_NAME, RAILINGS_MANIFEST_SCHEMA, "railings"),
@@ -520,6 +526,7 @@ def build_region(
     stops = documents[STOPS_MANIFEST_NAME]
     planters = documents[PLANTERS_MANIFEST_NAME]
     paths = documents[PATHS_MANIFEST_NAME]
+    signboards = documents[SIGNBOARDS_MANIFEST_NAME]
     backdrop = documents[BACKDROP_MANIFEST_NAME]
     lamps = documents[LAMPS_MANIFEST_NAME]
     railings = documents[RAILINGS_MANIFEST_NAME]
@@ -653,6 +660,9 @@ def build_region(
         # The pedestrian lines (`P3-101`, `Q250`); `null` where the city
         # declares no `paths:` block or the region holds no line.
         "paths": paths["asset"],
+        # The Buildings Department's signboards (`P3-103`, `Q260`); `null`
+        # where the city declares no `signboards:` block or the region has none.
+        "signboards": signboards["asset"],
         # The far shore (`P3-100`, `Q249`); `null` where the city declares no
         # `backdrop:` block or this region is not one that ships it.
         "backdrop": backdrop["asset"],

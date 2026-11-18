@@ -607,6 +607,14 @@ sources:
   pt_frequencies: https://static.data.gov.hk/td/pt-headway-en/frequencies.txt
   pt_calendar: https://static.data.gov.hk/td/pt-headway-en/calendar.txt
 
+  # The Buildings Department's Legal/Validated Signboards Database (`P3-103`,
+  # `Q260`): one Point per signboard, 24,631 territory-wide (2,036 in Wan Chai,
+  # 132 in Causeway Bay), with its type, length, height and thickness in metres,
+  # the street it faces (`FACING …`) and a link to a photo PDF with the board
+  # outlined in red. 70 MB. ⚠️ `NameEN` is the building name and a permit
+  # number, never the shop's, and nothing names what a board says.
+  signboards: https://portal.csdi.gov.hk/csdi-webpage/file-api?dataset_id=bd_rcd_1629267205232_53467&format=geojson&layer_name=BDLSMW
+
 # Buildings ship as one ~44 MB glTF zip per 1:1000 map sheet, 3,456 sheets for
 # the territory, with no single bulk URL. The CSDI portal's `file-api` serves
 # the *sheet index* — a polygon per sheet carrying that sheet's download URLs —
@@ -3780,6 +3788,70 @@ paths:
   # it. ⚠️ Authored: steps (`STP`) are what the publisher draws there instead.
   max_grade_pct: 100.0
   # `road_marks.cell_m`'s reasoning (`P3-42`, `Q135`).
+  cell_m: 300.0
+
+# The Buildings Department's signboards (`P3-103`, `Q260`), drawn as plain
+# boards by `pipeline/signboards.py`.
+#
+# **Where is read, what is authored.** The point, the type, the length, height
+# and thickness and the street a board faces are published; a point lies a
+# median 0.42 m from a building wall (p90 2.6 m). ⚠️ No height above the ground
+# is published, so every `base_m` here is ours, and nothing says what a board
+# reads: no lettering is drawn.
+signboards:
+  source: signboards
+  fields:
+    id: OBJECTID
+    type: Signboard_Type_EN
+    length: Dimension_Length_Meters_EN
+    height: Dimension_Height_Meters_EN
+    thickness: Dimension_Thickness_Meters_EN
+    facing: Location_Description_EN
+    photo: Photos_EN
+    # HK1980 Grid, published beside the WGS84 point; read so no stage
+    # reprojects a point the publisher already gave in the projected CRS.
+    easting: Easting
+    northing: Northing
+  # The published types (`Signboard_Type_EN`) and how each is drawn. Every
+  # `base_m` is authored: a fascia over a shopfront's head, a blade above head
+  # height, the rest at the foot of the wall. Wan Chai: 1,550 wall, 410
+  # projecting, 40 roof, 24 on-grade, 12 on a balcony or canopy.
+  mounts:
+    WALL SIGNBOARD: {mount: wall, base_m: 3.0}
+    PROJECTING SIGNBOARD: {mount: projecting, base_m: 3.5}
+    SIGNBOARD ON ROOF: {mount: roof, base_m: 0.0}
+    OUTDOOR SIGNBOARD FIXED ON-GRADE: {mount: wall, base_m: 0.3}
+    OUTDOOR SIGNBOARD WITH A SPREAD FOOTING: {mount: wall, base_m: 0.3}
+    SIGNBOARD ON OR HUNG UNDERNEATH BALCONY OR CANOPY: {mount: wall, base_m: 2.6}
+  max_snap_m: 4.0
+  # East Point Centre's board is 73.45 x 20.70 m and real; past 80 m a row is
+  # a typo.
+  max_dimension_m: 80.0
+  default_thickness_m: 0.2
+  outset_m: 0.05
+  stack_radius_m: 1.0
+  stack_gap_m: 0.3
+  # Authored, not cited: a blade over the drawn road clears a double-decker.
+  road_base_m: 5.5
+  roof_setback_m: 0.5
+  facing_probe_m: 8.0
+  facing_weight_m: 2.0
+  frame_darken: 0.45
+  # Printed grounds, not reflectances (`Signboards`' docstring): red, yellow,
+  # white, blue, green, black, orange and maroon.
+  palette:
+    - "#c8102e"
+    - "#f2c500"
+    - "#f4f1e8"
+    - "#1d4f91"
+    - "#1f7a3a"
+    - "#1a1a1a"
+    - "#e86a10"
+    - "#7a1f2b"
+  # Written by `tools/signboard_colour.py` from each board's photo PDF.
+  colour_survey: signboard_colour.json
+  survey_min_share: 0.25
+  survey_lightness: [12.0, 90.0]
   cell_m: 300.0
 
 # HyD's roadside planters (`P3-98`, `Q247`), built by `pipeline/planters.py`.

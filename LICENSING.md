@@ -143,7 +143,8 @@ The same directory holds subsets of **Noto Sans HK** (© 2014–2021 Adobe) and 
 `game/assets/generated/` and `etl/out/` are derived from the Lands Department's 3D Visualisation Map
 and iB1000 topographic map, the Transport Department's Road Network v2 and Traffic Aids Drawings,
 the Highways Department's Pavement Polygon, Tree and Roadside Planter Wall (CSDI-only), and the Leisure and Cultural
-Services Department's Trees (LCSD Venues other than Major Parks) and Trees (Major Parks), obtained via DATA.GOV.HK and the CSDI
+Services Department's Trees (LCSD Venues other than Major Parks) and Trees (Major Parks), and the Buildings
+Department's Legal/Validated Signboards Database, obtained via DATA.GOV.HK and the CSDI
 Portal. That
 includes the repainted hero meshes under `landmarks/` — a re-coloured government mesh is still the
 government's mesh, whatever it now wears.
@@ -245,6 +246,16 @@ sets no volume limit.
    survive a point upgrade unedited. ⚠️ `Engine.get_license_text()` is Godot's MIT notice alone,
    not the notices. `verify_menu.gd` holds that every component in the engine's table is named
    and every licence's text is carried whole; mutation-checked by dropping the texts.
+
+6. **Signboard colours read off applicants' photos** (`P3-103`, `Q260`). The Buildings
+   Department's signboards database links a photo for each board, and some were taken by the
+   department while others were "extracted from minor works specified document records submitted
+   to the Buildings Department" — the applicant's photograph. `tools/signboard_colour.py` derives
+   **one colour per board** from it at build time; no pixel, crop or lettering ships, and the
+   photos stay under `etl/sources/` with the rest of the government data. A colour is a
+   measurement, not a reproduction, and low risk. ⚠️ **A brand's colour does come through** — a
+   chain's red board is drawn red, with no name or logo — so it belongs beside item 1's trade-dress
+   question.
 
 The government terms are revisable by the publisher. Re-read them before launch and before adding a
 region (`Q100` retired the second city; the regions are the growth axis now).

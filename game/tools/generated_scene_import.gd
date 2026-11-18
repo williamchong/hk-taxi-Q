@@ -112,6 +112,10 @@ const SHADERS: Dictionary = {
 	# on the planters' terms and with their quiet fallback, so `verify_paths.gd`
 	# checks the dispatch by `resource_path`.
 	"paths": "res://tuning/paths.tres",
+	# The signboards (`P3-103`): `SIGNBOARDS_MATERIAL` in
+	# `etl/pipeline/signboards.py`, on the paths' terms, so `verify_signboards.gd`
+	# checks the dispatch by `resource_path`.
+	"signboards": "res://tuning/signboards.tres",
 	# The land no region's tiles draw (`P3-101`): `LAND_MATERIAL` in
 	# `etl/pipeline/basemap.py`, the second mesh in `water.glb`. ⚠️ Its own row,
 	# never the water's: that material is `water.gdshader`, and land on it waves.

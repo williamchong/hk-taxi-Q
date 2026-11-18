@@ -64,6 +64,10 @@ layer = "planters"
 script = ExtResource("1_layer")
 layer = "paths"
 
+[node name="Signboards" type="Node3D" parent="." unique_id=552412609]
+script = ExtResource("1_layer")
+layer = "signboards"
+
 [node name="Signs" type="Node3D" parent="." unique_id=637669317]
 script = ExtResource("1_layer")
 layer = "signs"

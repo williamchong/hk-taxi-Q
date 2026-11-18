@@ -263,7 +263,10 @@ const NOT_MEASURED: float = -1.0
 ## 52 since every region ships its own far version (`Q249` amended):
 ## `backdrop.glb` is this region seen from past the far plane, and its material
 ## skips it nearer than the plane.
-const SCHEMA_VERSION: int = 52
+##
+## 53 since `P3-103` (`Q260`): the manifest names `signboards.glb`, the
+## Buildings Department's signboards on the walls.
+const SCHEMA_VERSION: int = 53
 
 
 ## One entry of `tiles` — a square of the city, at every tier the ETL built.
@@ -528,6 +531,10 @@ var planters_path: String
 ## none. Optional on `tramway_path`'s terms.
 var paths_path: String
 
+## The signboards (`P3-103`, `Q260`), or **empty** where the region ships none.
+## Optional on `tramway_path`'s terms.
+var signboards_path: String
+
 ## The far shore (`P3-100`, `Q249`), or **empty** where the region ships none.
 ## Optional on `tramway_path`'s terms.
 var backdrop_path: String
@@ -730,6 +737,7 @@ static func load_manifest(region: String = "") -> CityManifest:
 	manifest.trees_placements_path = _resolve(document.get("trees_placements"), manifest.directory)
 	manifest.planters_path = _resolve(document.get("planters"), manifest.directory)
 	manifest.paths_path = _resolve(document.get("paths"), manifest.directory)
+	manifest.signboards_path = _resolve(document.get("signboards"), manifest.directory)
 	manifest.backdrop_path = _resolve(document.get("backdrop"), manifest.directory)
 	manifest.signals_plan_path = _resolve(document.get("signals_plan"), manifest.directory)
 	manifest.signal_heads_placements_path = _resolve(
@@ -866,6 +874,7 @@ func shipped() -> PackedStringArray:
 		trees_placements_path,
 		planters_path,
 		paths_path,
+		signboards_path,
 		backdrop_path,
 		signals_plan_path,
 		signal_heads_placements_path,

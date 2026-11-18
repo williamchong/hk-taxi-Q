@@ -51,6 +51,8 @@ below.
   export flag: the collider is the asset's, not the placer's.
 - `Paths` (`P3-101`, `Q250`): the topographic map's pavement margins and footpaths as ribbons on
   the ground, a mesh a 300 m cell. No body and no shadow, on the road paint's terms.
+- `Signboards` (`P3-103`, `Q260`): the Buildings Department's signboards, boxes on the walls the
+  tiles draw, a mesh a 300 m cell. No body; they cast shadows.
 - `Stops` (`P3-94`, `Q242`): the authored flags and tram shelters at published stops.
   `posts = true`: a cylinder up every `pole` and every shelter post (`tram_post`), none under a
   flag or a shelter's roof. Not in `prop_cells.tres`.

@@ -56,6 +56,7 @@ from pipeline.railings import RAILINGS_MANIFEST_NAME, RAILINGS_MANIFEST_SCHEMA
 from pipeline.roadmarks import ROADMARKS_MANIFEST_NAME, ROADMARKS_MANIFEST_SCHEMA
 from pipeline.roads import ROADGRAPH_NAME, ROADGRAPH_SCHEMA
 from pipeline.signals import SIGNALS_MANIFEST_NAME, SIGNALS_MANIFEST_SCHEMA
+from pipeline.signboards import SIGNBOARDS_MANIFEST_NAME, SIGNBOARDS_MANIFEST_SCHEMA
 from pipeline.signs import SIGNS_MANIFEST_NAME, SIGNS_MANIFEST_SCHEMA
 from pipeline.stopmarks import STOPMARKS_MANIFEST_NAME, STOPMARKS_MANIFEST_SCHEMA
 from pipeline.stops import STOPS_MANIFEST_NAME, STOPS_MANIFEST_SCHEMA
@@ -360,6 +361,13 @@ class _Region:
                 "region_id": REGION,
                 "asset": None,
             },
+            # And no `signboards:` block (`P3-103`).
+            SIGNBOARDS_MANIFEST_NAME: {
+                "schema_version": SIGNBOARDS_MANIFEST_SCHEMA,
+                "city_id": city.id,
+                "region_id": REGION,
+                "asset": None,
+            },
             # And no `backdrop:` block (`P3-100`).
             BACKDROP_MANIFEST_NAME: {
                 "schema_version": BACKDROP_MANIFEST_SCHEMA,
@@ -620,6 +628,17 @@ class TestAssembly:
         region.build()
         assert region.manifest()["paths"] == "paths.glb"
         assert "paths.glb" in shipped(region.manifest())
+
+    def test_built_signboards_are_shipped(self, region) -> None:
+        """The optional-key contract again, for `P3-103`'s `signboards.glb`."""
+        region.build()
+        assert region.manifest()["signboards"] is None
+
+        region.documents[SIGNBOARDS_MANIFEST_NAME]["asset"] = "signboards.glb"
+        (region.out_dir / "signboards.glb").write_bytes(b"glb")
+        region.build()
+        assert region.manifest()["signboards"] == "signboards.glb"
+        assert "signboards.glb" in shipped(region.manifest())
 
     def test_a_built_far_shore_is_shipped(self, region) -> None:
         """The optional-key contract again, for `P3-100`'s `backdrop.glb`."""
@@ -1214,6 +1233,7 @@ class TestOrchestrator:
             "stops",
             "planters",
             "paths",
+            "signboards",
             "backdrop",
             "export",
         ]
@@ -1272,6 +1292,7 @@ class TestOrchestrator:
             "stops",
             "planters",
             "paths",
+            "signboards",
             "backdrop",
             "export",
         ]

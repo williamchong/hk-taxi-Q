@@ -60,6 +60,7 @@ from pipeline import (
     roadmarks,
     roads,
     signals,
+    signboards,
     signs,
     stopmarks,
     stops,
@@ -198,6 +199,9 @@ STAGES: dict[str, Callable[[list[str]], int]] = {
     # On `planters`' terms: the ground a line is laid on and the carriageway
     # it is cut back from. Before `export`.
     "paths": paths.main,
+    # After `carve` for the walls it snaps to and `surface` for the road it
+    # clears; reads the road graph for the street a board faces.
+    "signboards": signboards.main,
     # The far shore, cut by `basemap`'s shoreline rule: it reads the sheets and
     # nothing a stage wrote. Before `export`.
     "backdrop": backdrop.main,
@@ -257,6 +261,7 @@ NEEDS: dict[str, tuple[str, ...]] = {
     "stops": ("surface", "fares", "tramlines", "busroutes"),
     "planters": ("carve", "surface"),
     "paths": ("carve", "surface"),
+    "signboards": ("carve", "surface"),
     "backdrop": ("fetch",),
     "export": (
         "basemap",
@@ -282,6 +287,7 @@ NEEDS: dict[str, tuple[str, ...]] = {
         "stops",
         "planters",
         "paths",
+        "signboards",
         "backdrop",
     ),
 }

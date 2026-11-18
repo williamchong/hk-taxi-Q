@@ -256,7 +256,7 @@ game-space metres. Each reader holds a `SCHEMA_VERSION` constant matching the wr
 
 | Document | Schema | Writer | Reader |
 |---|---|---|---|
-| `city.json` | 51 | `export.py` `CITY_SCHEMA` | `scripts/city/city_manifest.gd` |
+| `city.json` | 53 | `export.py` `CITY_SCHEMA` | `scripts/city/city_manifest.gd` |
 | `roadgraph.json` | 15 | `roads.py` | `generated_road_graph.gd`, `road_graph.gd` |
 | `fares.json` | 1 | `fares.py` | `generated_fares.gd` |
 | `landmarks.json` | 2 | `export.py` | `generated_landmarks.gd` |

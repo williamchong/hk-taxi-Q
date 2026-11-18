@@ -409,14 +409,13 @@ def trunks(spec: Trees) -> dict[str, dict[str, float]]:
 # --------------------------------------------------------------------------
 
 
-def tile_corners(city: Config, region_id: str, out_dir: Path) -> tuple[np.ndarray, np.ndarray]:
-    """The tiles' triangles as corners: the ground they draw, and everything else."""
+def tile_triangles(city: Config, region_id: str, out_dir: Path):
+    """Each shipped tile mesh with its triangles as corners and which of them
+    are ground (paving or park), mesh by mesh."""
     rebuild = f"python -m pipeline --region {region_id}"
     buildings = read_document(out_dir / BUILDINGS_MANIFEST_NAME, BUILDINGS_MANIFEST_SCHEMA, rebuild)
     paving, jitter = ground_colour(city)
     park = None if city.basemap is None else city.basemap.park_material.colour
-    ground: list[np.ndarray] = []
-    structure: list[np.ndarray] = []
     for path in tile_meshes(out_dir, buildings):
         for mesh in read_render(path):
             if mesh.colours is None or not len(mesh.triangles):
@@ -425,9 +424,16 @@ def tile_corners(city: Config, region_id: str, out_dir: Path) -> tuple[np.ndarra
             if park is not None:
                 on_ground |= wears(mesh.colours, park, 0.0)
             is_ground = on_ground[mesh.triangles].all(axis=1)
-            corners = mesh.positions[mesh.triangles].astype(np.float64)
-            ground.append(corners[is_ground])
-            structure.append(corners[~is_ground])
+            yield mesh, mesh.positions[mesh.triangles].astype(np.float64), is_ground
+
+
+def tile_corners(city: Config, region_id: str, out_dir: Path) -> tuple[np.ndarray, np.ndarray]:
+    """The tiles' triangles as corners: the ground they draw, and everything else."""
+    ground: list[np.ndarray] = []
+    structure: list[np.ndarray] = []
+    for _mesh, corners, is_ground in tile_triangles(city, region_id, out_dir):
+        ground.append(corners[is_ground])
+        structure.append(corners[~is_ground])
     return np.concatenate(ground), np.concatenate(structure)
 
 

@@ -104,6 +104,7 @@ const WATER: String = "water"
 const TREES: String = "trees"
 const PLANTERS: String = "planters"
 const PATHS: String = "paths"
+const SIGNBOARDS: String = "signboards"
 const BACKDROP: String = "backdrop"
 
 ## One row per layer. `file` is the asset in a region's bundle directory; `noun` and
@@ -288,6 +289,20 @@ const LAYERS: Dictionary[String, Dictionary] = {
 		"absence": "A city that declares no `paths:` block ships none, and that is not a failure.",
 		"placements": "",
 		"casts_shadow": false,
+		"shadow_meshes": [],
+	},
+	# The signboards (`P3-103`, `Q260`): the Buildings Department's boards on
+	# the walls, a mesh a plan cell. No body: a blade overhangs the pavement over
+	# head height, and the walls under it already collide. They cast a shadow.
+	SIGNBOARDS:
+	{
+		"file": "signboards.glb",
+		"noun": "signboards",
+		"module": "signboards",
+		"absence":
+		"A city that declares no `signboards:` block ships none, and that is not a failure.",
+		"placements": "",
+		"casts_shadow": true,
 		"shadow_meshes": [],
 	},
 	# The region's far version (`P3-100`, `Q249`): its skyline and the water

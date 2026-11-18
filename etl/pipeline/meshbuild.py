@@ -275,7 +275,11 @@ _UP = np.array([0.0, 1.0, 0.0])
 
 
 def face(
-    builder: ColouredBuilder, points: np.ndarray, colour: tuple[int, int, int], outward: np.ndarray
+    builder: ColouredBuilder,
+    points: np.ndarray,
+    colour: tuple[int, int, int],
+    outward: np.ndarray,
+    alpha: int = 255,
 ) -> None:
     """A convex polygon, wound so its front faces `outward`."""
     normal = np.cross(points[1] - points[0], points[2] - points[0])
@@ -284,7 +288,7 @@ def face(
     length = float(np.linalg.norm(normal))
     if length <= 0.0:
         return
-    builder.polygon(points, normal / length, colour)
+    builder.polygon(points, normal / length, colour, alpha)
 
 
 def polygons_of(shape) -> list[shapely.Polygon]:

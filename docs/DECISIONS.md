@@ -3628,3 +3628,41 @@ gone.
   drawn-layers note; the row readers' rule is `Q126`, not `Q94`.
 - Deciding number: every new guard fails on its mutation — five forbidden imports or calls (a
   mention in a comment passes), a per-sample outward-only push, a `+X` pole seed.
+
+## `Q260` — Signboards come from the Buildings Department's register, coloured from their photos
+
+**Status.** 🟡 Step 1 built 2026-11-19 (`P3-103`) on the user's plan: coloured boards without text
+first, the colour surveyed. Owed: the user's look day and night, the handset, step 2 (generic
+trade-name faces), step 3 (the screens). Canopies come later and apart. Checklist in
+`.claude/rules/signboards.md`.
+
+- **Source.** BD's Legal / Validated Signboards (`bd_rcd_1629267205232_53467`, `BDLSMW`): a point,
+  a type, a size in metres, the street it faces and a photo PDF. Registered boards only, so it is a
+  lower bound. No owner and no trade name, and none is invented from elsewhere: a text face will be
+  generic and seeded per `OBJECTID`.
+- **Placed on the shipped walls**, not on the footprints: the nearest wall triangle within
+  `max_snap_m` 4.0, pulled toward the street named in `FACING` by `facing_weight_m` 2.0 (cost =
+  distance + weight × (1 − cos)). Wan Chai: 2,031 of 2,038 drawn, snap p50 0.27 m / p90 0.98 m,
+  613 turned to their named street, 84 naming a street the graph does not carry. Causeway Bay: 131
+  of 132.
+- **Heights are authored by type** (`mounts:` `base_m`): wall 3.0 m, blade 3.5 m, roof on the
+  wall's top, the canopy type 2.6 m. Boards on one wall that overlap stack 0.3 m apart (447). A
+  blade over the drawn carriageway is raised to 5.5 m above the ground (64), clear of a
+  double-decker's 4.4 m. Missing sizes take the type's median (370); none collides.
+- **Colour from the photo.** Most photos outline the board in red vector strokes. Reading them
+  out of the PDF (`pypdfium2`, already a dependency; PyMuPDF refused as AGPL) and taking the
+  dominant Lab k-means colour inside measures 3,455 of 3,883 boards across the four driven
+  regions. A board with no outline, or a winner under `survey_min_share` 0.25, takes a palette
+  pick seeded by its ID. Lightness clamped to 12–90 so a blown-out photo is not drawn white.
+  Wan Chai: 1,768 surveyed, 263 palette.
+- **Lit at night** by the rig's `night_lights` (`Q160`): the two faces carry `COLOR_0` alpha 0 (the
+  lantern convention) and emit their own colour × `face_glow` 1.5; the edges are darkened 45% and
+  never glow. Nothing lights by day.
+- The palette is the third colour authored outside `materials:` (after `signs.colours` and the
+  signal heads): a board is a printed ground, not cladding, and each board is its own colour in
+  one draw call.
+- Cost: Hennessy Road's street viewpoint 621,329 → 633,497 primitives, 108 → 113 draws; the
+  throttle route +5–8 k primitives and +6 draws. Web PCK 107,918,012 → 108,498,072 bytes
+  (+580,060, 0.5%). `city.json` schema 53.
+- ⚠️ A brand's colour comes through the survey (`LICENSING.md` item 6). The photos are the
+  applicant's in part; only one colour a board leaves the build machine.

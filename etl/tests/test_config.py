@@ -1627,6 +1627,11 @@ class TestPaletteExposure:
         layer** (`P3-17`'s `.signals.colours.` until `P3-35a` removed the stage,
         restored by its port, `P3-3e`): a head is four colours in one draw call,
         and a lens's glass is a lamp's specification, not a reflectance.
+
+        ⚠️ **`signboards.palette` is the same argument at a third layer**
+        (`P3-103`): a board's ground is a printed or lit face, every board is
+        its own colour inside one draw call, and the palette is only the
+        fallback for a board the photo survey could not measure.
         """
         document = yaml.safe_load((CONFIG_PATH).read_text(encoding="utf-8"))
         declared = {entry["colour"] for entry in document["materials"].values()}
@@ -1646,7 +1651,12 @@ class TestPaletteExposure:
             for path, value in hex_colours(document, "")
             if not any(
                 path.startswith(prefix)
-                for prefix in (".materials.", ".signs.colours.", ".signals.heads.drawing.colours.")
+                for prefix in (
+                    ".materials.",
+                    ".signs.colours.",
+                    ".signals.heads.drawing.colours.",
+                    ".signboards.palette[",
+                )
             )
         }
         assert not outside, (

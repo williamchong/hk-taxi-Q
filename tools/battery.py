@@ -410,6 +410,30 @@ TRIGGERS: dict[str, Trigger] = {
             ),
         ),
     ),
+    "signboards": Trigger(
+        "`pipeline/signboards.py`, the `signboards` block, the colour survey, or the walls",
+        (
+            Report(
+                "signboards.json",
+                (
+                    "read",
+                    "drawn",
+                    "no_wall",
+                    "sized_by_median",
+                    "facing_named",
+                    "facing_unmatched",
+                    "facing_moved",
+                    "stacked",
+                    "over_road",
+                    "colour_surveyed",
+                    "colour_palette",
+                    "triangles",
+                    "facing_away",
+                    "bytes",
+                ),
+            ),
+        ),
+    ),
     "stops": Trigger(
         "`pipeline/stops.py`, the `stops` config block, or where a stop's furniture stands",
         (
