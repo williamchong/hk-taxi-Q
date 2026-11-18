@@ -19,7 +19,8 @@ and `paint_clearance.py --layer roadmarks`; run it for every bullet below, both 
   - `host_disagreement` is the load-bearing counter (transverse pick against nearest edge); a
     fall towards zero means the pick stopped picking (`Q69`). `axis_residual_deg` grades a rule
     that optimises it, and is recorded over refusals too (`n` > `drawn`, `Q58`).
-  - `inverted` must be 0 (`cull_back`); ETL and engine winding tests have opposite signs (`Q59`).
+  - `inverted` must be 0 (`cull_back`); ETL and engine winding tests have opposite signs
+    (`ARCHITECTURE.md`, "Drawn layers").
   - `underfill_m` is transverse-only, against the drawn half-width, never the graph's `width_m`.
   - `height_spread_m` is not a burial signal; `paint_clearance` is.
   - A station over nothing drawn at level 0 and under a drawn deck is refused and counted

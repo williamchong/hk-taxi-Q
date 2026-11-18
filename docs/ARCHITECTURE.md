@@ -569,7 +569,8 @@ node in `region.tscn`: railings a box per placement (`collides`, `Q159`), lamp a
 | `backdrop.glb` | `backdrop` → `backdrop.tres`; the far sea on `sea_water` → `water.tres` | `COLOR_0`; alpha 0 marks the far sea | The region's far version (`Q249`): mesh `backdrop` is its skyline on its ground, `backdrop_sea` the water round it (absent where there is none). Both stand past the camera's far plane and are drawn by `far_shore.gdshaderinc`'s depth squeeze, the skyline skipped nearer than the plane; no collider, no shadow. Every region ships one; a far-only region ships it with `backdrop.json` alone |
 
 - Winding decides visibility under `cull_back`. Godot winds front faces clockwise and glTF
-  counter-clockwise, so the engine-side and ETL-side tests have opposite signs (`Q59`).
+  counter-clockwise, so the engine-side and ETL-side tests have opposite signs, each pinned by a
+  known triangle: `verify_mesh_contract.gd`'s `_check_winding` and `test_lamps.py`.
 - The engine re-quantises an imported mesh to a 16-bit lattice over its own AABB; a triangle
   thinner than the lattice can flip and be culled. Stages shipping thin geometry drop slivers under
   two lattice cells (`boxjunctions.json`'s `slivers_dropped`, `import_quantum_m`).

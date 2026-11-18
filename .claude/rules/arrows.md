@@ -37,7 +37,7 @@ The stage grades itself: every failure renders as a well-drawn arrow or as nothi
   is expected. `outside_carriageway` (surveyed frame) is not `outside_drawn_ribbon`.
 - **Counters**: distributions publish p90/p99/max, not a median. `axis_residual_deg` is recorded
   over refusals too (`n` > `drawn`, `Q58`). `inverted` must be 0 (`cull_back`). The ETL and engine
-  winding tests have opposite signs on purpose (`Q59`).
+  winding tests have opposite signs on purpose (`ARCHITECTURE.md`, "Drawn layers").
 - **`stacked_disagreeing`** (two instructions in one slot) is a finding about the lane count,
   never a bar to retune; nothing is de-duplicated (`Q54`). Mutation-check it.
 - **The row as a lane-count source** (`Q94`, `Q130`): a row of one arrow is not a row — refused,

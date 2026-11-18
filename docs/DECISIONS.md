@@ -3605,3 +3605,26 @@ up or down a slope"). Desk-checked; the user's drive owed.
 - Trams stay level: the tram line is flat by the user's word, and a grade on it would be noise.
 - Deciding number: on the steepest road by its ends, `e335` (Wan Chai, 16.5 %) and `e21` (Causeway
   Bay, 14.5 %), the nose reads ±0.163 / ±0.143, opposite each way. Mutation caught: the sign.
+
+## `Q259` — An exception lives at its own code and in a test, never in a list
+
+**Status.** Closed 2026-11-19 on the user's instruction ("we really dont want a list of exceptions
+like this"). `CLAUDE.md`'s "Deliberately NOT consistent" and "Deliberately DUPLICATED" bullets are
+gone.
+
+- Each of the twelve entries was checked against the code. One was never an inconsistency
+  (`min_station_gap_m` beside `fold_tolerance_deg`: two bars for two degeneracies, `railings`),
+  one is gone (the lamps' unreversed ring beside the signs' reversed one: both are
+  `meshbuild.strut` now), and the rest stand, each held where it lives.
+- Held by a test: the four grader copies (`carriageway_margin.py`, `carriageway_region.py`, the
+  arrows' row reader, `skidpad_ablation.gd`) by `test_grader_copies.py`, which fails on the
+  forbidden import; the railings' unconditional push (`Q78`) by a zigzag survey that must draw one
+  straight fence; the winding signs, the station normals and the wrong-way monitor's two bars and
+  miss rule by the tests that already pinned them.
+- Held by the code's own docstring and its rule file: `opposed_pair_bearing_deg` beside
+  `pair_bearing_tolerance_deg` (`surface`), `_Ribbon`'s scalar filter (`surface`, 34 ms against
+  395 ms).
+- Two citations were wrong: the winding signs are not `Q59` (arrows) but `ARCHITECTURE.md`'s
+  drawn-layers note; the row readers' rule is `Q126`, not `Q94`.
+- Deciding number: every new guard fails on its mutation — five forbidden imports or calls (a
+  mention in a comment passes), a per-sample outward-only push, a `+X` pole seed.

@@ -225,16 +225,6 @@ read like inconsistencies and are not — "restoring consistency" is how most of
   instruction: `Q160` lights it at night.)
 - **Night is one rig blending, never two cross-fading, and `exposure_anchor` does not move with the
   hour** (`Q160`) — `facade`. A lit layer multiplies the rig's `night_lights`; nothing lights by day.
-- **Deliberately NOT consistent — leave them**: the two station normals (`carriageway._stations`
-  right, `surface.mitres` left); the ETL-side and engine-side winding tests' opposite signs (`Q59`);
-  `lamps._strut`'s unreversed ring beside `signs._draw_pole`'s reversed one; `railings.py`'s
-  unconditional push beside the signs' outward-only clamp (`Q78`); the wrong-way monitor that CLEARS on a miss
-  beside `street_tracker.gd` that HOLDS, and its two angle bars (`Q81`); `min_station_gap_m` beside
-  `fold_tolerance_deg`; `opposed_pair_bearing_deg` beside `pair_bearing_tolerance_deg`.
-- **Deliberately DUPLICATED — do not import one into the other**: `pipeline/carriageway.py` and
-  `tools/carriageway_margin.py` (`Q95`); `pipeline/region.py` and `tools/carriageway_region.py`
-  (`Q129`); the two arrow-row readers (`Q94`); `_Ribbon`'s scalar filter beside `_Occluders.cover`;
-  `skidpad_ablation._slip_deg` beside `FareSystem.slip_deg_of` (`Q84`, `Q145`).
 
 ## Where to look
 
