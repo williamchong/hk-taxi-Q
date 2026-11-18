@@ -423,10 +423,12 @@ its `HHMM`; a `frequencies` end is exclusive.
 
 ## The far shore (`Q249`)
 
-- **iB1000 `Building`** over Kowloon, the same `tiled_sources.topography` sheets the basemap
-  reads: 27 more sheets (922 MB) for 114.152–114.198 E, 22.2915–22.308 N, fetched for Wan Chai
-  through `backdrop.bounds`. `BASELEVEL` and `ROOFLEVEL` are read: 3,536 footprints in the strip,
-  133 with no level, 1,146 at least 30 m tall.
+- **iB1000 `Building`** over each region and `backdrop.sea_reach_m` (600 m) round it, the same
+  `tiled_sources.topography` sheets the basemap reads (`Config.fetch_extents`). Kowloon is the
+  far-only region `tsim_sha_tsui`, 114.152–114.198 E, 22.2915–22.308 N, whose fetch takes that map
+  alone. `BASELEVEL` and `ROOFLEVEL` are read: 3,536 footprints in its box, 133 with no level,
+  1,146 at least 30 m tall. Its build also reads the sea of every driven region whose frame its
+  reach meets — Mong Kok's included, so those sheets are fetched too.
 - ⚠️ `Shoreline` does not separate land from sea there: West Kowloon's waterfront and east Tsim
   Sha Tsui's are gaps of several hundred metres, so `basemap.sea_of` finds one piece. The shore
   is a closing of the footprints and the sea walls instead.

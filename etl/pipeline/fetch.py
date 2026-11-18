@@ -650,6 +650,10 @@ def fetch_city(
     region = city.region(region_id)
     if only is not None:
         _check_source_names(city, only)
+    if region.far_only and city.backdrop is not None:
+        # A far-only region is read by the backdrop alone (`Q249`): its sheets
+        # of that one map, and none of the street's sources.
+        only = {city.backdrop.source} if only is None else only & {city.backdrop.source}
     manifest_path = root / MANIFEST_NAME
     manifest = _load_manifest(manifest_path)
     report = FetchReport(downloaded=[], cached=[])
@@ -739,9 +743,9 @@ def _tiles_for(
         region_bounds=city.bounds_past(region.id, source.fetch_margin_m),
         region_crs=city.geodetic_crs,
     )
-    # And the sheets a stage reads away from the region altogether — the far
-    # shore (`backdrop:`), a kilometre over the water. Its own rectangles, never
-    # a wider margin: a margin that reached Kowloon would fetch the ring.
+    # And the sheets a stage reads away from the region altogether — the water
+    # round its far version (`backdrop.sea_reach_m`). Its own rectangles, never
+    # a wider margin on every source: that would fetch the ring of each one.
     keys = {tile.key for tile in tiles}
     for extent in city.fetch_extents(source.id, region.id):
         for tile in select_tiles(index, source, region_bounds=extent, region_crs=city.geodetic_crs):

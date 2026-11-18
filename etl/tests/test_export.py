@@ -1224,6 +1224,15 @@ class TestOrchestrator:
         assert calls[0][1][-1] == "--force"
         assert not any("--force" in argv for _, argv in calls[1:])
 
+    def test_a_far_only_region_runs_its_fetch_and_its_far_version_alone(self, monkeypatch) -> None:
+        """Seen and never driven (`Q249`): no stage that builds a street runs."""
+        calls: list[tuple[str, list[str]]] = []
+        self._stub(monkeypatch, calls)
+
+        orchestrator.main(["--region", "tsim_sha_tsui"])
+
+        assert [name for name, _ in calls] == ["fetch", "backdrop"]
+
     def test_from_skips_the_stages_before_it(self, monkeypatch) -> None:
         calls: list[tuple[str, list[str]]] = []
         self._stub(monkeypatch, calls)

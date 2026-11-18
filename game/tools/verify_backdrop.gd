@@ -1,11 +1,12 @@
-## Checks the generated far shore against the data contract, headless
+## Checks a region's generated far version against the data contract, headless
 ## (`P3-100`, `Q249`).
 ##
 ## Two meshes — the skyline on its ground, and the far sea — and the claims a
 ## frame cannot check: that each has the material that draws it past the far
 ## plane, that those materials agree with each other and with the drive
-## camera about where that plane is, that the far sea is the sea, and that no
-## block stands where the squeeze would put it in front of the street. Run:
+## camera about where that plane is, that the far sea is the sea, that the
+## region scene draws it no further than `far_view.tres` says, and that every
+## region synced for its far version alone can be placed. Run:
 ##
 ##     godot --headless --path game --script res://tools/verify_backdrop.gd
 ##
@@ -15,8 +16,10 @@
 extends SceneTree
 
 const FarCull = preload("res://scripts/city/far_cull.gd")
+const GeneratedDocument = preload("res://scripts/city/generated_document.gd")
 const GeneratedLayer = preload("res://scripts/city/generated_layer.gd")
-const Manifest = preload("res://scripts/city/city_manifest.gd")
+const GeneratedRegions = preload("res://scripts/city/generated_regions.gd")
+const CityRegions = preload("res://scripts/city/city_regions.gd")
 const VerifyLayer = preload("res://tools/verify_layer.gd")
 const MeshContract = preload("res://tools/mesh_contract.gd")
 
@@ -39,6 +42,10 @@ const MATERIALS: Dictionary[String, String] = {
 ## `far_shore.gdshaderinc`'s uniforms, which both materials state.
 const PIN_PARAMETERS: PackedStringArray = ["street_far_m", "pin_band_m", "pin_from_m"]
 
+## The region scene, whose far version node carries the far view.
+const REGION_SCENE: String = "res://scenes/region.tscn"
+const FAR_VIEW: String = "res://tuning/far_view.tres"
+
 ## The scene whose camera `street_far_m` restates, and the camera in it.
 const DRIVE_SCENE: String = "res://scenes/city_drive.tscn"
 const DRIVE_CAMERA: String = "Camera3D"
@@ -53,16 +60,16 @@ func _check(scene_root: Node3D) -> PackedStringArray:
 	var library: Dictionary[String, Mesh] = MeshContract.library_meshes(
 		scene_root, SURFACES, problems
 	)
-	for mesh_name: String in MATERIALS:
-		if not library.has(mesh_name):
-			problems.append("the far shore carries no '%s' mesh" % mesh_name)
+	# The skyline always; the sea where the region's frame or its reach held
+	# any (Sha Tin's held none).
+	if not library.has(SKYLINE):
+		problems.append("the far version carries no '%s' mesh" % SKYLINE)
+	for mesh_name: String in library:
+		if not MATERIALS.has(mesh_name):
+			problems.append("the far version carries a '%s' mesh it does not draw" % mesh_name)
 	if not problems.is_empty():
 		return problems
-	if library.size() != MATERIALS.size():
-		problems.append(
-			"the far shore carries %d meshes, expected %d" % [library.size(), MATERIALS.size()]
-		)
-	for mesh_name: String in MATERIALS:
+	for mesh_name: String in library:
 		var mesh := library[mesh_name] as ArrayMesh
 		# `true`: the colours ride `COLOR_0` from `materials:` (`Q33`).
 		problems.append_array(MeshContract.check_surface(mesh, 0, mesh_name, true))
@@ -71,18 +78,20 @@ func _check(scene_root: Node3D) -> PackedStringArray:
 		)
 	problems.append_array(
 		MeshContract.check_no_collision(
-			scene_root, "the far shore", "BACKDROP_NAME in etl/pipeline/backdrop.py"
+			scene_root, "the far version", "BACKDROP_NAME in etl/pipeline/backdrop.py"
 		)
 	)
 	if not GeneratedLayer.beyond_far(GeneratedLayer.BACKDROP):
-		problems.append("generated_layer.gd does not draw the far shore beyond the far plane")
+		problems.append("generated_layer.gd does not draw the far version beyond the far plane")
 	if not problems.is_empty():
 		return problems
 	problems.append_array(_check_cull())
 	var pin: Dictionary = _check_pin(problems)
-	problems.append_array(_check_sea(library[SEA] as ArrayMesh))
+	if library.has(SEA):
+		problems.append_array(_check_sea(library[SEA] as ArrayMesh))
 	if not pin.is_empty():
-		problems.append_array(_check_stands_off(library[SKYLINE] as ArrayMesh, pin))
+		problems.append_array(_check_far_view(float(pin["street_far_m"])))
+	problems.append_array(_check_far_regions())
 	return problems
 
 
@@ -113,6 +122,26 @@ func _check_cull() -> PackedStringArray:
 		var hidden: bool = FarCull.outside(planes, AABB(cases[case][0], size))
 		if hidden != bool(cases[case][1]):
 			problems.append("a box %s is %s" % [case, "hidden" if hidden else "drawn"])
+	# `FarCull.beyond`: measured to the box's nearest point, so a camera inside
+	# a far sea's box is never beyond it, however far its far corner lies.
+	var reach_cases: Dictionary[String, Array] = {
+		"inside it": [Vector3(-250.0, 0.0, -250.0), false],
+		"its near face within the reach": [Vector3(-250.0, 0.0, -1500.0), false],
+		"its near face past the reach": [Vector3(-250.0, 0.0, -2600.0), true],
+		# Each axis within the reach, the corner (1600, -1300) 2,062 m off.
+		"its near corner past the reach on a diagonal": [Vector3(1600.0, 0.0, -1800.0), true],
+	}
+	for case: String in reach_cases:
+		var beyond: bool = FarCull.beyond(Vector3.ZERO, AABB(reach_cases[case][0], size), 2000.0)
+		if beyond != bool(reach_cases[case][1]):
+			problems.append(
+				"a box with %s is %s" % [case, "beyond 2000 m" if beyond else "within 2000 m"]
+			)
+	# A far sea's box: kilometres across, its centre 4,500 m off and its near
+	# face 1,500 m. Measured to the centre it would be hidden from the quay.
+	var sea := AABB(Vector3(-3000.0, 0.0, -7500.0), Vector3(6000.0, 10.0, 6000.0))
+	if FarCull.beyond(Vector3.ZERO, sea, 2000.0):
+		problems.append("a far sea whose near face is within 2000 m is beyond it")
 	return problems
 
 
@@ -191,32 +220,51 @@ func _check_sea(mesh: ArrayMesh) -> PackedStringArray:
 	return problems
 
 
-## No block within `pin_from_m` of anywhere a camera can be: nearer than that
-## the squeeze lands it in front of its band, over the street's far end.
-func _check_stands_off(mesh: ArrayMesh, pin: Dictionary) -> PackedStringArray:
-	var manifest: Manifest = Manifest.load_manifest()
-	if manifest == null:
-		return ["the far shore shipped but city.json did not load"]
-	var drivable: AABB = manifest.bounds
-	var skyline: AABB = mesh.get_aabb()
-	var gap_x: float = maxf(
-		maxf(skyline.position.x - drivable.end.x, drivable.position.x - skyline.end.x), 0.0
-	)
-	var gap_z: float = maxf(
-		maxf(skyline.position.z - drivable.end.z, drivable.position.z - skyline.end.z), 0.0
-	)
-	var gap_m: float = Vector2(gap_x, gap_z).length()
-	if gap_m < float(pin["pin_from_m"]):
-		return [
+## The region scene's far version node carries `far_view.tres`, and that
+## reaches past the street's far plane: nearer, the far version would be hidden
+## everywhere it is drawn at all, since the material skips it inside the plane.
+func _check_far_view(street_far_m: float) -> PackedStringArray:
+	var far_view := load(FAR_VIEW) as FarViewProfile
+	if far_view == null:
+		return ["%s did not load as a FarViewProfile" % FAR_VIEW]
+	var problems: PackedStringArray = []
+	if far_view.max_far_m <= street_far_m + far_view.hysteresis_m:
+		problems.append(
 			(
-				"the skyline comes within %.0f m of the region and pin_from_m is %.0f"
-				% [gap_m, pin["pin_from_m"]]
+				"far_view.max_far_m is %.0f m and the far version is skipped inside %.0f m"
+				% [far_view.max_far_m, street_far_m + far_view.hysteresis_m]
 			)
-		]
-	print(
-		(
-			"  ok    %d triangles of skyline and shore, %.0f m off the region"
-			% [int(mesh.surface_get_array_index_len(0) / 3.0), gap_m]
 		)
-	)
-	return []
+	var content: Node = (load(REGION_SCENE) as PackedScene).instantiate()
+	var node: Node = content.get_node_or_null(CityRegions.FAR_NODE)
+	if node == null:
+		problems.append("%s has no %s node" % [REGION_SCENE, CityRegions.FAR_NODE])
+	elif String(node.get("layer")) != GeneratedLayer.BACKDROP:
+		problems.append("%s's %s draws no far version" % [REGION_SCENE, CityRegions.FAR_NODE])
+	elif node.get("far_view") != far_view:
+		problems.append(
+			"%s's %s is not given %s: drawn at any distance" % [REGION_SCENE, node.name, FAR_VIEW]
+		)
+	content.free()
+	return problems
+
+
+## Each region `regions.json` lists for its far version alone ships the
+## far version and a manifest at the schema `CityRegions` places it by.
+func _check_far_regions() -> PackedStringArray:
+	var problems: PackedStringArray = []
+	for id: String in GeneratedRegions.far():
+		var at: String = GeneratedRegions.dir(id) + GeneratedRegions.FAR_MANIFEST
+		var document: Dictionary = GeneratedDocument.load_object(
+			at, GeneratedRegions.FAR_SCHEMA, ""
+		)
+		if document.is_empty():
+			problems.append("%s did not load at schema %d" % [at, GeneratedRegions.FAR_SCHEMA])
+			continue
+		if (document.get("city_offset", []) as Array).size() != 3:
+			problems.append("%s names no city_offset" % at)
+		if not GeneratedLayer.is_present(GeneratedLayer.BACKDROP, id):
+			problems.append("%s is listed for its far version and ships none" % id)
+		else:
+			print("  ok    %s: far version only" % id)
+	return problems

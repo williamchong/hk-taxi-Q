@@ -28,6 +28,11 @@ const PATH: String = ROOT + "regions.json"
 ## Schema this understands, matching what `tools/sync_generated.sh` writes.
 const SCHEMA_VERSION: int = 1
 
+## What places a region synced for its far version alone: `etl/pipeline/
+## backdrop.py`'s `BACKDROP_MANIFEST_NAME` and `BACKDROP_MANIFEST_SCHEMA`.
+const FAR_MANIFEST: String = "backdrop.json"
+const FAR_SCHEMA: int = 2
+
 ## `--region=<id>` picks which listed region a single-region reader opens — how
 ## `check.sh` runs each verify tool once per region. Absent, it is the frame.
 const REGION_ARG: String = "--region="
@@ -35,21 +40,35 @@ const REGION_ARG: String = "--region="
 ## Read once per run: every locator reaches `listed()` through `dir()`, and the
 ## list is build output nothing rewrites while the game runs.
 static var _listed: PackedStringArray
+static var _far: PackedStringArray
 static var _listed_read: bool = false
 
 
 ## The synced regions in `regions.json` order, the frame first; empty where no
 ## list was written.
 static func listed() -> PackedStringArray:
+	_read()
+	return _listed
+
+
+## The regions synced for their far version alone (`Q249`), in `regions.json`
+## order: a far-only region, or a driven one this sync does not hold.
+static func far() -> PackedStringArray:
+	_read()
+	return _far
+
+
+static func _read() -> void:
 	if _listed_read:
-		return _listed
+		return
 	_listed_read = true
 	if not FileAccess.file_exists(PATH):
-		return _listed
+		return
 	var document: Dictionary = GeneratedDocument.load_object(PATH, SCHEMA_VERSION, "")
 	for region: Variant in document.get("regions", []) as Array:
 		_listed.append(str(region))
-	return _listed
+	for region: Variant in document.get("far", []) as Array:
+		_far.append(str(region))
 
 
 ## The region every other one is placed relative to, or "" with no list.

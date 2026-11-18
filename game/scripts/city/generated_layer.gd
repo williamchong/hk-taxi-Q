@@ -290,17 +290,17 @@ const LAYERS: Dictionary[String, Dictionary] = {
 		"casts_shadow": false,
 		"shadow_meshes": [],
 	},
-	# The far shore (`P3-100`, `Q249`): the skyline across the harbour and the
-	# sea out to it, past the camera's far plane. `beyond_far`, so the engine
-	# does not cull at that plane what the material draws beyond it. No shadow:
+	# The region's far version (`P3-100`, `Q249`): its skyline and the water
+	# round it, past the camera's far plane. `beyond_far`, so the engine does
+	# not cull at that plane what the material draws beyond it. No shadow:
 	# nothing it could fall on is drawn.
 	BACKDROP:
 	{
 		"file": "backdrop.glb",
-		"noun": "far shore",
+		"noun": "far version",
 		"module": "backdrop",
 		"absence":
-		"A region that is not one of `backdrop.regions` ships none, and that is not a failure.",
+		"A city that declares no `backdrop:` block ships none, and that is not a failure.",
 		"placements": "",
 		"casts_shadow": false,
 		"shadow_meshes": [],

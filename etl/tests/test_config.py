@@ -134,9 +134,9 @@ class TestCityOffset:
         before = load_config().city_transform()
 
         def add_region(doc: dict[str, Any]) -> None:
-            doc["regions"]["kowloon_tsim_sha_tsui"] = {
-                "name": "Tsim Sha Tsui",
-                "bounds": {"west": 114.168, "east": 114.180, "south": 22.294, "north": 22.302},
+            doc["regions"]["sham_shui_po"] = {
+                "name": "Sham Shui Po",
+                "bounds": {"west": 114.155, "east": 114.167, "south": 22.326, "north": 22.334},
                 "tile_size_m": 150.0,
             }
 
@@ -2819,7 +2819,7 @@ class TestRegionJoin:
                 "west": 114.188,
                 "east": 114.204,
                 "south": 22.284,
-                "north": 22.292,
+                "north": 22.290,
             }
 
         city = load_config(rewrite(corner))
@@ -2872,8 +2872,10 @@ class TestBasemapBlock:
 
         def without(doc: dict[str, Any]) -> None:
             doc.pop("basemap")
-            # The far shore stands on the basemap's water (`P3-100`).
+            # The far version stands on the basemap's water (`P3-100`), and a
+            # far-only region is nothing without it.
             doc.pop("backdrop")
+            doc["regions"].pop("tsim_sha_tsui")
             doc["materials"].pop("sea_water")
             doc["materials"].pop("park_grass")
 
@@ -2888,12 +2890,42 @@ class TestBasemapBlock:
         with pytest.raises(ValueError, match="backdrop needs a basemap"):
             load_config(rewrite(without))
 
-    def test_a_far_shore_in_an_undeclared_region_is_refused(self, rewrite) -> None:
-        def misspelt(doc: dict[str, Any]) -> None:
-            doc["backdrop"]["regions"] = ["wan_chia"]
+    def test_a_far_only_region_without_a_backdrop_is_refused(self, rewrite) -> None:
+        """It would ship nothing at all (`Q249`)."""
 
-        with pytest.raises(ValueError, match="undeclared regions: wan_chia"):
-            load_config(rewrite(misspelt))
+        def without(doc: dict[str, Any]) -> None:
+            doc.pop("backdrop")
+
+        with pytest.raises(ValueError, match="tsim_sha_tsui are far_only"):
+            load_config(rewrite(without))
+
+    def test_a_far_only_neighbour_is_refused(self, rewrite) -> None:
+        """A neighbour is driven into across the shared edge, and a far-only
+        region has no roads to drive into."""
+
+        def beside(doc: dict[str, Any]) -> None:
+            doc["regions"]["tsim_sha_tsui"]["bounds"] = {
+                "west": 114.204,
+                "east": 114.220,
+                "south": 22.276,
+                "north": 22.284,
+            }
+
+        with pytest.raises(ValueError, match="far_only and shares an edge with causeway_bay"):
+            load_config(rewrite(beside))
+
+    def test_a_far_only_region_is_no_driven_region_and_no_neighbour(self, hong_kong) -> None:
+        region = hong_kong.region("tsim_sha_tsui")
+        assert region.far_only and region.tile_size_m == 0.0
+        assert "tsim_sha_tsui" not in hong_kong.drivable_regions
+        assert set(hong_kong.drivable_regions) == set(hong_kong.regions) - {"tsim_sha_tsui"}
+
+    def test_far_only_must_be_a_flag(self, rewrite) -> None:
+        def stringy(doc: dict[str, Any]) -> None:
+            doc["regions"]["tsim_sha_tsui"]["far_only"] = "yes"
+
+        with pytest.raises(ValueError, match="far_only must be true or false"):
+            load_config(rewrite(stringy))
 
     def test_the_water_is_a_material_and_sits_at_sea_level(self, hong_kong) -> None:
         """The world's water (2026-09-25): its colour comes from `materials:`

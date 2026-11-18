@@ -68,6 +68,7 @@ from pipeline import (
     tramway,
     trees,
 )
+from pipeline.config import load_config
 
 log = logging.getLogger(__name__)
 
@@ -286,6 +287,12 @@ NEEDS: dict[str, tuple[str, ...]] = {
 }
 
 
+# What a `far_only` region is built by: the fetch of the backdrop's own map,
+# and the backdrop. No `export`, so it has no `city.json`; the sync reads its
+# `backdrop.json` instead.
+FAR_ONLY_STAGES = ("fetch", "backdrop")
+
+
 def _stage_argv(name: str, region: str, force: bool) -> list[str]:
     stage_argv = ["--region", region]
     if name == "fetch" and force:
@@ -416,6 +423,11 @@ def main(argv: list[str] | None = None) -> int:
 
     order = list(STAGES)
     names = order[order.index(args.start) :]
+    declared = load_config().regions.get(args.region)
+    if declared is not None and declared.far_only:
+        # Seen and never driven (`Q249`): its sheets and its far version, and
+        # none of the stages that build a street.
+        names = [name for name in names if name in FAR_ONLY_STAGES]
     if args.force and "fetch" not in names:
         # Refused rather than ignored. `--from roads --force` reads as "rebuild
         # everything from roads, forcefully" and would silently do nothing of

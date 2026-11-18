@@ -1,0 +1,8 @@
+[gd_resource type="Resource" script_class="FarViewProfile" format=3 uid="uid://d03qoj66sfip1"]
+
+[ext_resource type="Script" uid="uid://caoccibalfual" path="res://scripts/city/far_view_profile.gd" id="1_far_view"]
+
+[resource]
+script = ExtResource("1_far_view")
+max_far_m = 8000.0
+hysteresis_m = 100.0

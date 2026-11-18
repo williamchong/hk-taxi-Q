@@ -319,7 +319,11 @@ CITY_NAME = "city.json"
 # 51 since `P3-101` (`Q250`): the manifest names `paths.glb`, the topographic
 # map's pedestrian lines laid on the ground. A v50 reader ships a region
 # without them.
-CITY_SCHEMA = 51
+# 52 since every region ships its own far version (`Q249` amended):
+# `backdrop.glb` is this region seen from past the far plane, no longer the
+# shore across from it, and the material skips it nearer than the plane. A v51
+# reader would draw a region's own far version over its tiles' edges.
+CITY_SCHEMA = 52
 
 # The hero-building placement document (`P3-6`), written by this stage from the
 # city config — ~2 entries derived from `landmarks:` plus one CRS conversion,

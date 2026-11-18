@@ -118,12 +118,47 @@ for REGION in "${REGIONS[@]}"; do
 	sync_region "$REGION"
 done
 
+# The far versions of the regions not synced (`Q249`): a far-only region,
+# seen across the harbour and never driven, or a driven one this sync does not
+# hold. Each ships its far version alone — `backdrop.glb` and the manifest that
+# places it — and the game hides one past `far_view.tres`'s `max_far_m`. Every
+# one the ETL has built at the current schema goes with every sync.
+# Captured before the loop rather than read from a process substitution, whose
+# failure `set -e` never sees: a --built that died would list nothing, and the
+# sweep below would then delete every far version synced before.
+BUILT="$(cd "$ROOT/etl" && "$PYTHON" -m pipeline.backdrop --built)"
+FAR=()
+while IFS= read -r REGION; do
+	[[ -z "$REGION" ]] && continue
+	for RESIDENT in "${REGIONS[@]}"; do
+		[[ "$REGION" == "$RESIDENT" ]] && continue 2
+	done
+	FAR+=("$REGION")
+done <<<"$BUILT"
+for REGION in ${FAR[@]+"${FAR[@]}"}; do
+	SRC="$ROOT/etl/out/$REGION"
+	DST="$GENERATED/$REGION"
+	mkdir -p "$DST"
+	# The whole directory is these two, so everything else goes — a region
+	# synced whole before leaves directories — keeping the glb's import sidecar.
+	find "$DST" -mindepth 1 -maxdepth 1 ! -name 'backdrop.glb.import' -exec rm -rf {} +
+	cp "$SRC/backdrop.glb" "$SRC/backdrop.json" "$DST/"
+	echo "==> $REGION -> ${DST#"$ROOT/"} (far only)"
+done
+
 # Written last, so a failed region above leaves the previous list in place
 # rather than one naming a directory that never arrived.
 {
 	printf '{\n  "schema_version": 1,\n  "regions": ['
 	sep=""
 	for REGION in "${REGIONS[@]}"; do
+		printf '%s"%s"' "$sep" "$REGION"
+		sep=", "
+	done
+	printf ']'
+	printf ',\n  "far": ['
+	sep=""
+	for REGION in ${FAR[@]+"${FAR[@]}"}; do
 		printf '%s"%s"' "$sep" "$REGION"
 		sep=", "
 	done
@@ -139,6 +174,6 @@ while IFS= read -r stale; do
 	echo "  removing stale ${stale}"
 	rm -rf "${GENERATED:?}/$stale"
 done < <(cd "$GENERATED" && find . -mindepth 1 -maxdepth 1 ! -name regions.json ! -name .gitkeep \
-	| sed 's|^\./||' | grep -vxF -f <(printf '%s\n' "${REGIONS[@]}") || true)
+	| sed 's|^\./||' | grep -vxF -f <(printf '%s\n' "${REGIONS[@]}" ${FAR[@]+"${FAR[@]}"}) || true)
 
-echo "==> regions.json: ${REGIONS[*]} (frame ${REGIONS[0]})"
+echo "==> regions.json: ${REGIONS[*]} (frame ${REGIONS[0]}), far only: ${FAR[*]-none}"

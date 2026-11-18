@@ -443,7 +443,7 @@ def build_region(
     plane = water_mesh(water, spec.water_level_m, spec.water_material.colour)
     if plane is not None:
         outline = simplified(sea, spec.simplify_m)
-        tiled = [box(*city.projected_bounds(other).bbox) for other in city.regions]
+        tiled = [box(*city.projected_bounds(other).bbox) for other in city.drivable_regions]
         land = land_mesh(land_of(frame, outline, tiled, spec), outline, transform, spec, report)
         if land is not None:
             report.land_triangles = land.triangle_count

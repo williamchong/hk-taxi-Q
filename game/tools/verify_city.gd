@@ -257,7 +257,7 @@ func _check_documents(manifest: Manifest) -> PackedStringArray:
 		problems.append_array(
 			_check_document("paths", manifest.paths_path, GeneratedLayer.path(GeneratedLayer.PATHS))
 		)
-	# And the far shore (`P3-100`): a region off `backdrop.regions` names none.
+	# And the far version (`P3-100`): a city with no `backdrop:` block names none.
 	if not manifest.backdrop_path.is_empty():
 		problems.append_array(
 			_check_document(

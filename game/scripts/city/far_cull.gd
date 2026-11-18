@@ -1,5 +1,5 @@
-## Whether a box lies wholly outside a camera's view, the far plane ignored
-## (`P3-100`, `Q249`).
+## Whether a box lies wholly outside a camera's view, the far plane ignored,
+## or further from it than a far version is drawn (`P3-100`, `Q249`).
 ##
 ## A layer drawn past the far plane (`GeneratedLayer.beyond_far`) carries a
 ## cull margin the engine cannot cull through, so it was submitted every
@@ -29,3 +29,10 @@ static func outside(planes: Array[Plane], box: AABB) -> bool:
 		if plane.is_point_over(grown.get_support(-plane.normal)):
 			return true
 	return false
+
+
+## True where every point of `box` is further than `reach_m` from `eye`: the
+## camera is outside the box and its nearest point is past the reach.
+static func beyond(eye: Vector3, box: AABB, reach_m: float) -> bool:
+	var nearest: Vector3 = eye.clamp(box.position, box.end)
+	return eye.distance_to(nearest) > reach_m

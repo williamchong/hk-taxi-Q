@@ -12,14 +12,12 @@ from typing import Any
 from pipeline.config_blocks.base import (
     Material,
     SourceLayer,
-    _bounds,
     _MaterialTable,
     _require,
     _source_layer,
     _tile_member,
 )
 from pipeline.config_blocks.basemap import _positive
-from pipeline.crs import GeodeticBounds
 
 
 @dataclass(frozen=True)
@@ -32,28 +30,26 @@ class BackdropBand:
 
 @dataclass(frozen=True)
 class Backdrop:
-    """The far shore (`P3-100`, `Q249`): the skyline across the harbour as one
-    silhouette mesh, the ground it stands on and the sea that reaches it
-    (`pipeline/backdrop.py`). Seen from a kilometre and more, never driven.
+    """A region's far version (`P3-100`, `Q249`): its skyline as one silhouette
+    mesh, the ground it stands on and the water round it
+    (`pipeline/backdrop.py`). What another region sees of it past the camera's
+    far plane, where its own tiles are never loaded.
 
     ✅ **Every block is PUBLISHED**: a footprint of the topographic map's
     `Building` layer, extruded to the layer's own roof level. The water is the
     basemap's — its level, its colour and the frame it stops at — and so are
     the sea walls, so the block needs `basemap:` beside it.
 
-    ⚠️ **Not a region.** It has no roads, no tiles and no collider, and it is
-    drawn in the frame of each region in `regions`.
+    Every declared region ships one, built over its own `bounds`; a region
+    declared `far_only` ships nothing else.
     """
 
     source: str
     member: str | None
-    # The strip of the far shore that is built, on the city's geodetic datum.
-    # The fetch downloads `source`'s sheets over it for every region in
-    # `regions` (`Config.fetch_extents`).
-    bounds: GeodeticBounds
-    # The regions whose bundle ships the backdrop. A region joined to one of
-    # these is drawn beside it and needs no copy of its own.
-    regions: frozenset[str]
+    # How far past a region's read box its far version runs the water: far
+    # enough that the open harbour between two regions' frames is somebody's.
+    # The fetch downloads `source`'s sheets over it (`Config.fetch_extents`).
+    sea_reach_m: float
     buildings: SourceLayer
     # A block shorter than this, roof over base, is not drawn: at a kilometre
     # it is under the haze and behind the front row.
@@ -118,20 +114,13 @@ def _backdrop(body: Any, where: str, table: _MaterialTable) -> Backdrop | None:
         return None
     if not isinstance(body, dict):
         raise ValueError(f"{where} must be a mapping, got {body!r}")
-    bounds = _require(body, "bounds", where)
-    if not isinstance(bounds, dict):
-        raise ValueError(f"{where}:bounds must be a mapping, got {bounds!r}")
-    regions = _require(body, "regions", where)
-    if isinstance(regions, str) or not isinstance(regions, list) or not regions:
-        raise ValueError(f"{where}:regions must be a non-empty list of region ids, got {regions!r}")
     cap = int(_require(body, "triangle_cap", where))
     if cap < 1:
         raise ValueError(f"{where}:triangle_cap is {cap}, which draws nothing")
     return Backdrop(
         source=str(_require(body, "source", where)),
         member=_tile_member(body, where),
-        bounds=_bounds(bounds, f"{where}:bounds"),
-        regions=frozenset(str(region) for region in regions),
+        sea_reach_m=_positive(body, "sea_reach_m", where),
         buildings=_source_layer(
             _require(body, "buildings", where), f"{where}:buildings", _BUILDING_ROLES
         ),

@@ -263,7 +263,8 @@ game-space metres. Each reader holds a `SCHEMA_VERSION` constant matching the wr
 | `signals_plan.json` | 1 | `signals.py` | `scripts/traffic/signal_plan.gd` |
 | `tram_lines.json` | 1 | `tramlines.py` | `scripts/traffic/tram_lines.gd` |
 | `bus_routes.json` | 1 | `busroutes.py` | `scripts/traffic/bus_routes.gd` |
-| `regions.json` | 1 | `tools/sync_generated.sh` | `generated_regions.gd` |
+| `regions.json` | 1 | `tools/sync_generated.sh` | `generated_regions.gd`; `far` lists the regions synced for their far version alone |
+| `backdrop.json` | 2 | `backdrop.py` | `city_regions.gd`, for a region in `regions.json`'s `far`: its `city_offset` |
 
 Not part of the contract: `roadsurface.json`, `carriageway_region.json`, `podiums.json` and the
 per-stage reports (`buildings.json`, `clearance.json`, `signs.json`, …). The game reads none, and
@@ -562,7 +563,7 @@ node in `region.tscn`: railings a box per placement (`collides`, `Q159`), lamp a
 | `planters.glb` | `planters` (on `vertex_albedo.gdshader`) | `COLOR_0` | HyD's planter walls and the beds they close (`Q247`), one merged mesh. Carries `planters_collision-colonly`, the walls alone — the one generated layer after the road with a body of its own |
 | `paths.glb` | `paths` (on `vertex_albedo.gdshader`) | `COLOR_0` | iB1000 `CartoPedLine` pavement margins and footpaths as ribbons `lift_m` over the LOD0 ground (`Q250`), a mesh a 300 m cell. Cut back off the carriageway region, out of the sea and off ground steeper than `max_grade_pct`. No collider, no shadow |
 | `water.glb` | `sea_water` → `water.tres`; the land on `harbour_land` → `harbour_land.tres` | `COLOR_0` | Mesh `water`: `basemap.json`'s `water` as one flat mesh at `water_level_m`, facing +Y. Mesh `harbour_land` (`Q250`), where the frame holds any: the land beside the sea that no region's tiles draw, flat at `land_level_m` with a face to `seabed_m` under its sea edge |
-| `backdrop.glb` | `backdrop` → `backdrop.tres`; the far sea on `sea_water` → `water.tres` | `COLOR_0`; alpha 0 marks the far sea | The far shore (`Q249`): mesh `backdrop` is the skyline on its ground, `backdrop_sea` the sea run on to it. Both stand past the camera's far plane and are drawn by `far_shore.gdshaderinc`'s depth squeeze; no collider, no shadow. Only a region in `backdrop.regions` ships it |
+| `backdrop.glb` | `backdrop` → `backdrop.tres`; the far sea on `sea_water` → `water.tres` | `COLOR_0`; alpha 0 marks the far sea | The region's far version (`Q249`): mesh `backdrop` is its skyline on its ground, `backdrop_sea` the water round it (absent where there is none). Both stand past the camera's far plane and are drawn by `far_shore.gdshaderinc`'s depth squeeze, the skyline skipped nearer than the plane; no collider, no shadow. Every region ships one; a far-only region ships it with `backdrop.json` alone |
 
 - Winding decides visibility under `cull_back`. Godot winds front faces clockwise and glTF
   counter-clockwise, so the engine-side and ETL-side tests have opposite signs (`Q59`).
@@ -786,6 +787,10 @@ tools/export.sh [macos|web|android|ios]             # default: macos + web
 - `sync_generated.sh` copies exactly what `city.json` names (`python -m pipeline.export … --list`).
   **The argument list is the resident list**: it is written to `regions.json`, the first region is
   the frame, and anything else under `assets/generated/` is deleted. Always pass every region.
+  Every other region whose far version is built (`python -m pipeline.backdrop --built`) goes with
+  it as `far`: `backdrop.glb` and `backdrop.json` alone (`Q249`). A `far_only` region
+  (`tsim_sha_tsui`) is built by `python -m pipeline --region tsim_sha_tsui`, which runs `fetch` and
+  `backdrop` only.
 - `IOS_TEAM_ID=<team> tools/ios.sh device` puts a Release build on a handset; `… testflight
   [<build number>]` archives and uploads. It exports with a window, refuses an unbaked PCK, and
   flattens the icon's alpha in the build copy.

@@ -4,6 +4,7 @@
 [ext_resource type="Script" uid="uid://456d2wfy508d" path="res://scripts/city/landmarks.gd" id="2_landmarks"]
 [ext_resource type="Script" uid="uid://wrjn3akqp6qv" path="res://scripts/city/fence.gd" id="3_fence"]
 [ext_resource type="Script" uid="uid://c31jfv7xebr22" path="res://scripts/city/parked_layer.gd" id="4_parked"]
+[ext_resource type="Resource" uid="uid://d03qoj66sfip1" path="res://tuning/far_view.tres" id="5_far_view"]
 
 [node name="Region" type="Node3D" unique_id=1475960313]
 
@@ -14,6 +15,7 @@ layer = "water"
 [node name="Backdrop" type="Node3D" parent="." unique_id=1650274119]
 script = ExtResource("1_layer")
 layer = "backdrop"
+far_view = ExtResource("5_far_view")
 
 [node name="Tramway" type="Node3D" parent="." unique_id=867783560]
 script = ExtResource("1_layer")

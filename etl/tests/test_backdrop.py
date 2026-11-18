@@ -1,8 +1,9 @@
 """`pipeline/backdrop.py` — the far shore (`P3-100`, `Q249`).
 
 What is asserted is what a frame cannot show: that the cap is a cap, that the
-skyline it refuses is the short end, that the far sea never lies under a
-frame's land, and that the block the fetch reads is the one the stage does.
+skyline it refuses is the short end, that the open water never lies in a
+frame or inland, that a region's skyline is its own, and that the reach the
+fetch reads is the one the stage does.
 """
 
 from __future__ import annotations
@@ -23,12 +24,12 @@ from pipeline.backdrop import (
     BackdropReport,
     Block,
     build_meshes,
-    far_sea_of,
+    ground_of,
+    open_sea_of,
     shore_of,
     skyline_of,
-    strip_of,
 )
-from pipeline.basemap import WATER_MATERIAL, frame_of
+from pipeline.basemap import WATER_MATERIAL
 from pipeline.config import CONFIG_PATH, _materials, _MaterialTable
 from pipeline.config_blocks.backdrop import _backdrop
 
@@ -49,12 +50,11 @@ def _tower(x: float, y: float, height_m: float, side_m: float = 20.0) -> Block:
         (lambda b: b.update(triangle_cap=0), "triangle_cap"),
         (lambda b: b.update(min_height_m=0.0), "min_height_m"),
         (lambda b: b.update(ground_close_m=-1.0), "ground_close_m"),
-        (lambda b: b.update(regions=[]), "regions"),
-        (lambda b: b.update(regions="wan_chai"), "regions"),
+        (lambda b: b.update(sea_reach_m=0.0), "sea_reach_m"),
+        (lambda b: b.pop("sea_reach_m"), "sea_reach_m"),
         (lambda b: b.update(ground_material="moss"), "ground_material"),
         (lambda b: b["bands"][0].update(above_m=10.0), "the first is 0"),
         (lambda b: b["bands"][1].update(above_m=0.0), "not above the band before"),
-        (lambda b: b["bounds"].pop("north"), "north"),
         (lambda b: b["buildings"]["fields"].pop("roof"), "roof"),
     ],
 )
@@ -67,21 +67,20 @@ def test_block_refuses(mutate, message: str) -> None:
         _backdrop(body, "backdrop", table)
 
 
-def test_the_strip_stands_clear_of_every_region_that_ships_it(hong_kong, spec) -> None:
-    """North of the frame and off it: the far sea is run from the frame's north
-    edge, and a strip that reached into the frame would stand on the street."""
-    strip = strip_of(hong_kong, spec)
-    for region_id in spec.regions:
-        frame = frame_of(hong_kong, region_id, hong_kong.basemap.reach_m)
-        assert strip.bounds[1] > frame.bounds[3]
-        assert strip.distance(frame) > 400.0
-
-
-def test_the_fetch_reads_the_strip_for_a_region_that_ships_it(hong_kong, spec) -> None:
+def test_the_fetch_reads_the_sea_reach_of_every_region(hong_kong, spec) -> None:
     for region_id in hong_kong.regions:
         extents = hong_kong.fetch_extents(spec.source, region_id)
-        assert extents == ((spec.bounds,) if region_id in spec.regions else ())
-    assert hong_kong.fetch_extents("buildings", next(iter(spec.regions))) == ()
+        assert extents == (hong_kong.bounds_past(region_id, spec.sea_reach_m),)
+    assert hong_kong.fetch_extents("buildings", "wan_chai") == ()
+
+
+def test_the_reach_meets_a_far_only_region_from_the_frame_across_from_it(hong_kong, spec) -> None:
+    """Tsim Sha Tsui's reach runs its water to Wan Chai's frame: the open
+    harbour between the two is somebody's."""
+    from pipeline.basemap import frame_of
+
+    reach = frame_of(hong_kong, "tsim_sha_tsui", spec.sea_reach_m)
+    assert reach.intersects(frame_of(hong_kong, "wan_chai", hong_kong.basemap.reach_m))
 
 
 def test_the_skyline_is_the_tall_blocks_and_the_cap_refuses_the_shortest(spec) -> None:
@@ -116,7 +115,7 @@ def test_the_shore_closes_over_what_stands_on_it_and_fills_a_park(spec) -> None:
         if column in (0, 7) or row in (0, 7)
     ]
     wall = LineString([(600.0, 300.0), (1360.0, 300.0)])
-    shore = shore_of(strip, blocks, [wall], spec)
+    shore = shore_of(strip, ground_of(blocks, [wall], spec), spec)
 
     assert shore.contains(shapely.Point(980.0, 980.0))  # the park, filled
     assert shore.contains(shapely.Point(980.0, 450.0))  # closed out to the sea wall
@@ -124,23 +123,34 @@ def test_the_shore_closes_over_what_stands_on_it_and_fills_a_park(spec) -> None:
     assert not shore.contains(shapely.Point(100.0, 100.0))
 
 
-def test_the_far_sea_keeps_off_a_frames_land_and_carries_its_sea() -> None:
-    strip = box(-1000.0, 3000.0, 3000.0, 4000.0)
-    own = box(0.0, 0.0, 1000.0, 1000.0)
-    # A neighbour whose frame runs further north than the region's own.
-    beside = box(1000.0, 0.0, 2000.0, 1500.0)
-    own_sea = box(0.0, 800.0, 1000.0, 1000.0)
-    far_sea = far_sea_of(strip, [own, beside], [own_sea, Polygon()])
+def test_the_open_water_is_outside_every_frame_and_joined_to_a_sea() -> None:
+    reach = box(-1000.0, -1000.0, 3000.0, 4000.0)
+    frame = box(0.0, 0.0, 1000.0, 1000.0)
+    sea = box(0.0, 800.0, 1000.0, 1000.0)
+    # The far shore's land along the north, and an island of land in the
+    # harbour that walls off a lagoon.
+    land = shapely.union_all(
+        [
+            box(-1000.0, 3000.0, 3000.0, 4000.0),
+            box(2000.0, 1500.0, 2600.0, 2100.0).difference(box(2100.0, 1600.0, 2500.0, 2000.0)),
+        ]
+    )
+    # Inland behind the frame: unbuilt, but walled off from the sea by the
+    # frame's own land.
+    inland = box(-1000.0, -1000.0, 3000.0, 0.0)
+    open_sea = open_sea_of(
+        reach, shapely.union_all([land, box(1000.0, -1000.0, 3000.0, 0.0)]), [frame], [sea]
+    )
 
-    assert far_sea.contains(shapely.Point(500.0, 2000.0))  # the channel
-    assert far_sea.contains(shapely.Point(500.0, 3500.0))  # under the strip
-    assert far_sea.contains(shapely.Point(500.0, 900.0))  # the frame's own sea
-    assert not far_sea.contains(shapely.Point(500.0, 400.0))  # its land
-    assert not far_sea.contains(shapely.Point(1500.0, 900.0))  # a neighbour with no sea
-    assert not far_sea.contains(shapely.Point(1500.0, 1200.0))  # nor past the own north edge
-    assert far_sea.contains(shapely.Point(1500.0, 1600.0))
-    # East to west it spans the strip and the frames both.
-    assert far_sea.bounds[0] == -1000.0 and far_sea.bounds[2] == 3000.0
+    assert open_sea.contains(shapely.Point(500.0, 2000.0))  # the channel
+    assert open_sea.contains(shapely.Point(-500.0, 900.0))  # beside the frame, off its sea
+    assert not open_sea.contains(shapely.Point(500.0, 900.0))  # the frame's own sea is its own
+    assert not open_sea.contains(shapely.Point(500.0, 400.0))  # nor its land
+    assert not open_sea.contains(shapely.Point(500.0, 3500.0))  # the far shore's land
+    assert not open_sea.contains(shapely.Point(2300.0, 1800.0))  # the walled lagoon
+    assert open_sea.contains(shapely.Point(-500.0, -500.0))  # joined round the frame's west
+    assert inland.intersects(open_sea)
+    assert open_sea_of(reach, land, [frame], [Polygon()]).is_empty  # no sea, no open water
 
 
 def test_the_meshes_are_the_skyline_on_its_shore_and_a_marked_sea(hong_kong, spec) -> None:

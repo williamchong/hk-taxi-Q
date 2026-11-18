@@ -380,7 +380,7 @@ TRIGGERS: dict[str, Trigger] = {
                     "sea_triangles",
                     "shore_m2",
                     "sea_m2",
-                    "gap_m",
+                    "open_sea_m2",
                     "bytes",
                 ),
             ),

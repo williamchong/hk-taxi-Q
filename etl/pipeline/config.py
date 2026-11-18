@@ -352,6 +352,11 @@ class RegionConfig:
     name: str
     bounds: GeodeticBounds
     tile_size_m: float
+    # A region seen and never driven (`Q249`): it ships its far version
+    # (`pipeline/backdrop.py`) and nothing else — no tiles, no roads, no
+    # `city.json` — so `__main__` runs `fetch` and `backdrop` for it alone and
+    # the fetch takes only the backdrop's source. 0.0 `tile_size_m`: none cut.
+    far_only: bool = False
 
 
 # The four sides of a region, named as the compass reads them in the geodetic
@@ -642,7 +647,7 @@ class Config:
         """
         mine = self.region(region_id).bounds
         found: dict[str, str] = {}
-        for other_id, other in self.regions.items():
+        for other_id, other in self.drivable_regions.items():
             if other_id == region_id:
                 continue
             side = _shared_whole_edge(mine, other.bounds)
@@ -659,12 +664,18 @@ class Config:
 
     def fetch_extents(self, source_id: str, region_id: str) -> tuple[GeodeticBounds, ...]:
         """Rectangles away from the region whose sheets of `source_id` its build
-        reads all the same — the far shore's strip (`backdrop:`), for a region
-        that ships it. The fetch downloads them beside the region's own."""
+        reads all the same — the water round its far version, `backdrop.sea_reach_m`
+        past its read box (`backdrop:`). The fetch downloads them beside the
+        region's own."""
         backdrop = self.backdrop
-        if backdrop is None or backdrop.source != source_id or region_id not in backdrop.regions:
+        if backdrop is None or backdrop.source != source_id:
             return ()
-        return (backdrop.bounds,)
+        return (self.bounds_past(region_id, backdrop.sea_reach_m),)
+
+    @property
+    def drivable_regions(self) -> dict[str, RegionConfig]:
+        """The declared regions that are driven: every one but the far-only."""
+        return {key: region for key, region in self.regions.items() if not region.far_only}
 
     def read_bounds(self, region_id: str) -> GeodeticBounds:
         """The geodetic rectangle a region's sheets are selected on.
@@ -923,7 +934,7 @@ def load_config(path: Path | None = None) -> Config:
         _check_basemap_reach_is_fetched(city, path)
     if city.backdrop is not None:
         _check_tiled_source_exists(city, city.backdrop.source, f"{path}:backdrop.source")
-        _check_backdrop(city, path)
+    _check_backdrop(city, path)
     if city.trees is not None:
         for index, publisher in enumerate(city.trees.publishers):
             _check_source_exists(city, publisher.source, f"{path}:trees.publishers[{index}].source")
@@ -947,13 +958,22 @@ def load_config(path: Path | None = None) -> Config:
 
 
 def _check_backdrop(city: Config, path: Path) -> None:
-    """The backdrop stands on the basemap's shore, in regions the city declares.
+    """The backdrop stands on the basemap's shore and reads its water off the
+    basemap's sea, and a far-only region is one only the backdrop builds.
 
-    A misspelt region ships no backdrop anywhere, which reads exactly like a
-    city that declares none — `_check_carve_regions_are_declared`'s reason.
+    A far-only region is refused without a `backdrop:` block — it would ship
+    nothing at all — and refused where it shares a whole edge with a driven
+    region, which would make it a neighbour `join` reads roads across.
     """
     backdrop = city.backdrop
-    assert backdrop is not None
+    far_only = sorted(region_id for region_id, region in city.regions.items() if region.far_only)
+    if backdrop is None:
+        if far_only:
+            raise ValueError(
+                f"{path}:regions {', '.join(far_only)} are far_only and the city declares no "
+                "backdrop: block — they would ship nothing"
+            )
+        return
     if city.basemap is None:
         raise ValueError(
             f"{path}:backdrop needs a basemap: block — the far sea is its water run on"
@@ -963,14 +983,19 @@ def _check_backdrop(city: Config, path: Path) -> None:
             f"{path}:backdrop.source is {backdrop.source!r} and basemap.source is "
             f"{city.basemap.source!r} — the far shore's buildings and its shoreline are one map's"
         )
-    unknown = sorted(backdrop.regions - set(city.regions))
-    if unknown:
-        raise ValueError(f"{path}:backdrop.regions names undeclared regions: {', '.join(unknown)}")
     if backdrop.ground_level_m <= city.basemap.water_level_m:
         raise ValueError(
             f"{path}:backdrop.ground_level_m is {backdrop.ground_level_m} m, not above "
             f"basemap.water_level_m {city.basemap.water_level_m} m — the far shore would be awash"
         )
+    for region_id in far_only:
+        mine = city.regions[region_id].bounds
+        for other_id, other in city.drivable_regions.items():
+            if _shared_whole_edge(mine, other.bounds) is not None:
+                raise ValueError(
+                    f"{path}:regions.{region_id} is far_only and shares an edge with "
+                    f"{other_id} — a neighbour is driven into, and this one has no roads"
+                )
 
 
 def _check_basemap_reach_is_fetched(city: Config, path: Path) -> None:
@@ -1421,9 +1446,14 @@ def _census_days(body: Any, where: str) -> tuple[str, ...]:
 
 def _region(region_id: str, body: dict[str, Any], path: Path) -> RegionConfig:
     where = f"{path}:regions.{region_id}"
+    far_only = body.get("far_only", False)
+    if not isinstance(far_only, bool):
+        raise ValueError(f"{where}.far_only must be true or false, got {far_only!r}")
     return RegionConfig(
         id=region_id,
         name=str(_require(body, "name", where)),
         bounds=_bounds(_require(body, "bounds", where), f"{where}.bounds"),
-        tile_size_m=float(_require(body, "tile_size_m", where)),
+        # A far-only region cuts no tiles, so it states no tile size.
+        tile_size_m=0.0 if far_only else float(_require(body, "tile_size_m", where)),
+        far_only=far_only,
     )

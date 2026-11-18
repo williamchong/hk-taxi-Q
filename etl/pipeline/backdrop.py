@@ -1,22 +1,28 @@
-"""The far shore (`P3-100`, `Q249`): the skyline across the harbour, the ground
-it stands on and the sea that reaches it, as `backdrop.glb`.
+"""A region's far version (`P3-100`, `Q249`): what another region sees of it
+past the camera's 400 m far plane, where its tiles are never loaded, as
+`backdrop.glb` in the region's own frame.
 
-Seen from a kilometre and more and never driven, so it is none of the things a
-region is: no roads, no tiles, no collider, no shadow. Three parts, two meshes:
+The far plane stays 400 m (measured: raising it brought the streamed city into
+the frustum, +70% primitives), so the far version is drawn past it by
+`far_shore.gdshaderinc` and skipped nearer than it, where the region's own
+tiles stand. Every declared region ships one; a `far_only` region (Tsim Sha
+Tsui) ships nothing else. No roads, no collider, no shadow. Three parts, two
+meshes:
 
-- **The skyline**: each block of the topographic map's `Building` layer over
-  the strip (`backdrop.bounds`), extruded from the shore's ground to its
-  published roof level. Only blocks at least `min_height_m` tall, and no more
-  than `triangle_cap` triangles of them: over the cap the shortest go first,
-  and the manifest says what height was drawn down to.
+- **The skyline**: each block of the topographic map's `Building` layer whose
+  centre is in the region's `bounds`, extruded from the far version's ground
+  to its published roof level. Only blocks at least `min_height_m` tall, and
+  no more than `triangle_cap` triangles of them: over the cap the shortest go
+  first, and the manifest says what height was drawn down to.
 - **The shore**: one flat slab at `ground_level_m` under everything published
-  — every footprint and every sea wall, closed over gaps up to twice
-  `ground_close_m` and filled.
-- **The far sea**: the water from the basemap's frame out to the strip and
-  under it, in the water's own material, so the harbour does not end at the
-  map's reach — and the basemap's own sea a second time, because the far plane
-  cuts that off 400 m from the camera, which on a diagonal is short of the
-  frame's edge. Nearer than that the basemap's water is in front of its copy.
+  in the box — every footprint and every sea wall, closed over gaps up to
+  twice `ground_close_m` and filled.
+- **The far sea**: for a driven region, the basemap's own sea in its frame a
+  second time, because the far plane cuts the basemap's water off 400 m from
+  the camera, which on a diagonal is short of the frame's edge; and for every
+  region the open water round it, out to `sea_reach_m`: what is not land
+  there, in no driven region's frame, and joined to a frame's sea. Nearer than
+  the far plane the basemap's water is in front of its copy.
 
 ⚠️ **The shore is not the basemap's cut** (`basemap.sea_of`), which needs a
 shoreline that separates land from sea. Over Kowloon the published one does
@@ -24,9 +30,9 @@ not: West Kowloon's waterfront and east Tsim Sha Tsui's are gaps of several
 hundred metres, and the cut finds one piece. So the shore is where things
 stand, and an unbuilt waterfront wider than the closing is sea.
 
-⚠️ **The far sea is a rectangle, not a survey.** Between the frame and the
-strip no sheet is read, so it runs over whatever stands there past the frame's
-north edge: undrawn land beside the region reads as water from across the map.
+⚠️ **The open water is not a survey.** Outside every frame it is the reach less
+what stands there, so an unbuilt place wider than the closing that touches the
+harbour reads as water from across the map.
 
     python -m pipeline.backdrop --region wan_chai
 """
@@ -34,9 +40,10 @@ north edge: undrawn land beside the region reads as water from across the map.
 from __future__ import annotations
 
 import argparse
+import json
 import logging
 from collections.abc import Callable
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 
 import numpy as np
@@ -46,7 +53,7 @@ from shapely.geometry.base import BaseGeometry
 
 from pipeline import basemap, gdb
 from pipeline.config import Backdrop, Config, SourceLayer, load_config
-from pipeline.crs import GameTransform, project_bounds
+from pipeline.crs import GameTransform
 from pipeline.documents import write_document
 from pipeline.fetch import source_reads
 from pipeline.gltf import MeshData, write_glb
@@ -56,7 +63,10 @@ log = logging.getLogger(__name__)
 
 BACKDROP_NAME = "backdrop.glb"
 BACKDROP_MANIFEST_NAME = "backdrop.json"
-BACKDROP_MANIFEST_SCHEMA = 1
+# 2 since every region ships its own far version (`Q249` amended): the asset is
+# the region's, not the far shore across from it, and the manifest carries the
+# region's `city_offset` and `far_only`, which place a far-only one in the game.
+BACKDROP_MANIFEST_SCHEMA = 2
 BACKDROP_MESH_NAME = "backdrop"
 BACKDROP_SEA_MESH_NAME = "backdrop_sea"
 # The glTF material the engine's importer dispatches on — `SHADERS` in
@@ -73,6 +83,10 @@ FAR_SEA_ALPHA = 0
 # lower edge to see.
 _SKIRT_M = 1.0
 
+# How near a piece of open water must come to a frame's sea to be joined to it:
+# the two meet on the frame's edge, and the difference leaves a float's width.
+_JOIN_M = 1.0
+
 
 @dataclass(frozen=True)
 class Block:
@@ -82,6 +96,9 @@ class Block:
     footprint: Polygon
     roof_m: float
     height_m: float
+    # Whether the building it is part of is centred in the region's own box:
+    # the region's skyline is its own, the rest only closes its shore.
+    mine: bool = True
 
     @property
     def triangles(self) -> int:
@@ -93,7 +110,7 @@ class Block:
 
 @dataclass
 class BackdropReport:
-    # Building parts in the strip, and those with no usable level.
+    # Building parts in the region's box, and those with no usable level.
     blocks_read: int = 0
     blocks_no_level: int = 0
     # At least `min_height_m` tall, and the ones the cap kept.
@@ -108,19 +125,12 @@ class BackdropReport:
     sea_triangles: int = 0
     shore_m2: float = 0.0
     sea_m2: float = 0.0
-    # The strip's distance from the region's own frame, in metres: what
-    # keeps the skyline out of anywhere a car can be.
-    gap_m: float = 0.0
+    # Of `sea_m2`, the water outside every driven region's frame.
+    open_sea_m2: float = 0.0
+    # The driven regions whose frame's sea the open water was joined to.
+    seas_read: list[str] = field(default_factory=list)
     asset: str = ""
     bytes: int = 0
-
-
-def strip_of(city: Config, spec: Backdrop) -> Polygon:
-    """`backdrop.bounds` in projected metres."""
-    projected = project_bounds(
-        spec.bounds, geodetic_crs=city.geodetic_crs, projected_crs=city.projected_crs
-    )
-    return box(*projected.bbox)
 
 
 def _layers(
@@ -128,17 +138,18 @@ def _layers(
     spec: Backdrop,
     region_id: str,
     layer: SourceLayer,
-    strip: Polygon,
+    reach: Polygon,
     sources_root: Path | None,
 ) -> list[gdb.Layer]:
-    """`layer` from every sheet under the strip."""
-    reads = source_reads(city, spec, region_id, root=sources_root, bounds=spec.bounds)
+    """`layer` from every sheet under the region and its sea reach."""
+    bounds = city.bounds_past(region_id, spec.sea_reach_m)
+    reads = source_reads(city, spec, region_id, root=sources_root, bounds=bounds)
     return [
         gdb.read_layer(
             path,
             layer.layer,
             columns=layer.columns,
-            bbox=strip.bounds,
+            bbox=reach.bounds,
             zip_member=member,
             expect_crs=city.projected_crs,
         )
@@ -147,16 +158,22 @@ def _layers(
 
 
 def read_blocks(
-    layers: list[gdb.Layer], spec: Backdrop, strip: Polygon, report: BackdropReport
+    layers: list[gdb.Layer],
+    spec: Backdrop,
+    reach: Polygon,
+    own: Polygon,
+    report: BackdropReport,
 ) -> list[Block]:
-    """Every building part whose centre is inside the strip and whose levels
-    are published, thinned to `simplify_m`.
+    """Every building part whose centre is inside `reach` and whose levels are
+    published, thinned to `simplify_m`. Each is marked `mine` where its
+    building is centred in `own`, the region's box, and the report counts those.
 
     ⚠️ **Kept by its centre, never clipped**: a sheet's read box hands back the
     blocks that straddle it, and the same block from two sheets is one block.
     """
     seen: set[tuple[float, float, float]] = set()
-    shapely.prepare(strip)
+    shapely.prepare(reach)
+    shapely.prepare(own)
     blocks: list[Block] = []
     for layer in layers:
         base = layer.column(spec.buildings.field("base")).astype(np.float64)
@@ -168,18 +185,19 @@ def read_blocks(
                 continue
             centre = footprint.representative_point()
             key = (round(centre.x, 1), round(centre.y, 1), round(float(roof[owner]), 1))
-            if key in seen or not strip.contains(centre):
+            if key in seen or not reach.contains(centre):
                 continue
             seen.add(key)
-            report.blocks_read += 1
+            mine = own.contains(centre)
+            report.blocks_read += mine
             height = float(roof[owner] - base[owner])
             if not np.isfinite(height) or height <= 0.0:
-                report.blocks_no_level += 1
+                report.blocks_no_level += mine
                 continue
             simple = footprint.simplify(spec.simplify_m, preserve_topology=True)
             for part in shapely.get_parts(shapely.make_valid(simple)):
                 if isinstance(part, Polygon) and part.area > 0.0:
-                    blocks.append(Block(part, float(roof[owner]), height))
+                    blocks.append(Block(part, float(roof[owner]), height, mine))
     return blocks
 
 
@@ -208,11 +226,9 @@ def skyline_of(blocks: list[Block], spec: Backdrop, report: BackdropReport) -> l
     return drawn
 
 
-def shore_of(
-    strip: Polygon, blocks: list[Block], shoreline: list[LineString], spec: Backdrop
-) -> BaseGeometry:
+def ground_of(blocks: list[Block], shoreline: list[LineString], spec: Backdrop) -> BaseGeometry:
     """The ground everything published stands on: the footprints and the sea
-    walls, closed by `ground_close_m` and filled, inside the strip.
+    walls, closed by `ground_close_m` and filled.
 
     Filled, because a park inland is a hole in what is built and not a lake.
     """
@@ -223,26 +239,35 @@ def shore_of(
         for part in shapely.get_parts(closed)
         if isinstance(part, Polygon) and not part.is_empty
     ]
-    if not filled:
-        return Polygon()
-    shore = shapely.union_all(filled).intersection(strip)
+    return shapely.union_all(filled) if filled else Polygon()
+
+
+def shore_of(area: Polygon, ground: BaseGeometry, spec: Backdrop) -> BaseGeometry:
+    """`ground` inside `area`, thinned to `simplify_m`: the slab drawn there."""
+    shore = ground.intersection(area)
     return shapely.make_valid(shore.simplify(spec.simplify_m, preserve_topology=True))
 
 
-def far_sea_of(strip: Polygon, frames: list[Polygon], seas: list[BaseGeometry]) -> BaseGeometry:
-    """The water from the first of `frames` — the region's, whose north edge
-    it starts at — out to the strip and under it, and inside each frame the
-    sea the basemap found there.
+def open_sea_of(
+    reach: Polygon, land: BaseGeometry, frames: list[Polygon], seas: list[BaseGeometry]
+) -> BaseGeometry:
+    """The water in `reach` outside every one of `frames`: what is not `land`
+    there, kept where it joins one of `seas`.
 
-    Spans the strip and the frames both, east to west. ⚠️ Inside a frame it is
-    the basemap's sea and nothing more: run under the land, it would floor the
-    far end of every street the far plane cuts short.
+    Joined, so an unbuilt square inland is not water: only what runs on from a
+    frame's published sea is. ⚠️ Inside a frame it is nothing — the frame's own
+    region ships that sea — and run under the land there it would floor the far
+    end of every street the far plane cuts short.
     """
-    own = frames[0]
-    west = min(strip.bounds[0], *(frame.bounds[0] for frame in frames))
-    east = max(strip.bounds[2], *(frame.bounds[2] for frame in frames))
-    reach = box(west, own.bounds[3], east, strip.bounds[3])
-    return shapely.union_all([reach.difference(shapely.union_all(frames)), *seas])
+    known = shapely.union_all(seas) if seas else Polygon()
+    if known.is_empty:
+        return Polygon()
+    outside = reach.difference(land).difference(shapely.union_all(frames))
+    touching = known.buffer(_JOIN_M)
+    shapely.prepare(touching)
+    return shapely.union_all(
+        [part for part in shapely.get_parts(outside) if touching.intersects(part)]
+    )
 
 
 def _to_game(geometry: BaseGeometry, transform: GameTransform) -> BaseGeometry:
@@ -328,46 +353,57 @@ def build_region(
     sources_root: Path | None = None,
     out_root: Path | None = None,
 ) -> BackdropReport:
-    """Write `backdrop.glb` for a region that ships the far shore, and the
-    manifest for every region."""
+    """Write the region's far version, `backdrop.glb`, and its manifest."""
     report = BackdropReport()
     out_dir = city.out_dir(region_id, out_root)
     spec, harbour = city.backdrop, city.basemap
     meshes: list[MeshData] = []
-    if spec is not None and harbour is not None and region_id in spec.regions:
-        strip = strip_of(city, spec)
-        frame = basemap.frame_of(city, region_id, harbour.reach_m)
-        report.gap_m = float(strip.distance(frame))
-        if report.gap_m <= 0.0:
-            raise ValueError(
-                f"backdrop.bounds reaches into {region_id}'s own frame — "
-                "the far shore is the one a region does not hold"
-            )
-        if strip.bounds[1] < frame.bounds[3]:
-            raise ValueError(
-                f"backdrop.bounds is not north of {region_id}: the far sea is run "
-                "from the frame's north edge and has no other shape yet"
-            )
+    if spec is not None and harbour is not None:
+        own = box(*city.projected_bounds(region_id).bbox)
+        reach = basemap.frame_of(city, region_id, spec.sea_reach_m)
+        # The sea of every driven region whose frame the reach meets, this
+        # region's own among them: the open water is joined to these, and the
+        # frames are where it is not drawn.
         frames, seas = [], []
-        for resident in (region_id, *city.neighbours(region_id).values()):
+        own_sea: BaseGeometry = Polygon()
+        for other_id in city.drivable_regions:
+            if not basemap.frame_of(city, other_id, harbour.reach_m).intersects(reach):
+                continue
             framed, sea = basemap.read_sea(
-                city, resident, basemap.BasemapReport(), sources_root=sources_root
+                city, other_id, basemap.BasemapReport(), sources_root=sources_root
             )
             frames.append(framed)
             seas.append(sea)
+            report.seas_read.append(other_id)
+            if other_id == region_id:
+                own_sea = sea
         blocks = read_blocks(
-            _layers(city, spec, region_id, spec.buildings, strip, sources_root), spec, strip, report
+            _layers(city, spec, region_id, spec.buildings, reach, sources_root),
+            spec,
+            reach,
+            own,
+            report,
         )
         shoreline = basemap.read_shoreline(
-            _layers(city, spec, region_id, harbour.shoreline, strip, sources_root), harbour
+            _layers(city, spec, region_id, harbour.shoreline, reach, sources_root), harbour
         )
-        shore = shore_of(strip, blocks, shoreline, spec)
-        far_sea = far_sea_of(strip, frames, seas)
+        # Closed once over the whole reach, so the region's own slab meets the
+        # land beside it where the closing runs across its box's edge.
+        ground = ground_of(blocks, shoreline, spec)
+        shore = shore_of(own, ground, spec)
+        open_sea = open_sea_of(reach, shore_of(reach, ground, spec), frames, seas)
+        far_sea = shapely.union_all([own_sea, open_sea])
         report.shore_m2 = float(shore.area)
         report.sea_m2 = float(far_sea.area)
+        report.open_sea_m2 = float(open_sea.area)
         transform = city.game_transform(region_id)
         meshes = build_meshes(
-            skyline_of(blocks, spec, report), shore, far_sea, city, transform, report
+            skyline_of([block for block in blocks if block.mine], spec, report),
+            shore,
+            far_sea,
+            city,
+            transform,
+            report,
         )
     if meshes:
         report.bytes = write_glb(out_dir / BACKDROP_NAME, meshes)
@@ -385,8 +421,11 @@ def _write_manifest(out_dir: Path, city: Config, region_id: str, report: Backdro
         "schema_version": BACKDROP_MANIFEST_SCHEMA,
         "city_id": city.id,
         "region_id": region_id,
-        # `backdrop.glb`, or null where the city declares no `backdrop:` block
-        # or this region is not one that ships it.
+        # Seen and never driven: the game places this region by the offset
+        # below, since it has no `city.json` to read it from.
+        "far_only": city.region(region_id).far_only,
+        "city_offset": [round(value, 3) for value in city.city_offset(region_id)],
+        # `backdrop.glb`, or null where the city declares no `backdrop:` block.
         "asset": report.asset or None,
         "triangle_cap": None if spec is None else spec.triangle_cap,
         "min_height_m": None if spec is None else spec.min_height_m,
@@ -403,28 +442,56 @@ def _write_manifest(out_dir: Path, city: Config, region_id: str, report: Backdro
         "sea_triangles": report.sea_triangles,
         "shore_m2": round(report.shore_m2, 1),
         "sea_m2": round(report.sea_m2, 1),
-        "gap_m": round(report.gap_m, 1),
+        "open_sea_m2": round(report.open_sea_m2, 1),
+        "seas_read": report.seas_read,
         "bytes": report.bytes,
     }
     write_document(out_dir / BACKDROP_MANIFEST_NAME, document)
 
 
+def built(city: Config, out_root: Path | None = None) -> list[str]:
+    """The declared regions whose far version this stage has written at this
+    schema, in declaration order: what the game can draw of a region it does
+    not hold, a far-only one or a driven one not synced."""
+    found = []
+    for region_id in city.regions:
+        manifest = city.out_dir(region_id, out_root) / BACKDROP_MANIFEST_NAME
+        if not manifest.is_file():
+            continue
+        document = json.loads(manifest.read_text(encoding="utf-8"))
+        if document.get("schema_version") == BACKDROP_MANIFEST_SCHEMA and document.get("asset"):
+            found.append(region_id)
+    return found
+
+
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Build the far shore (backdrop.glb) for a region.")
-    parser.add_argument("--region", required=True)
+    parser = argparse.ArgumentParser(description="Build a region's far version (backdrop.glb).")
+    target = parser.add_mutually_exclusive_group(required=True)
+    target.add_argument("--region")
+    target.add_argument(
+        "--built",
+        action="store_true",
+        help="print the regions whose far version is built at this schema, one a line, and stop",
+    )
     parser.add_argument("--sources-root", type=Path, default=None)
     parser.add_argument("--out-root", type=Path, default=None)
     args = parser.parse_args(argv)
 
     logging.basicConfig(level=logging.INFO, format="%(message)s")
     city = load_config()
+    if args.built:
+        # For `tools/sync_generated.sh`, which ships these beside the regions
+        # it is asked for: stdout is the list, so nothing else is printed there.
+        for region_id in built(city, args.out_root):
+            print(region_id)
+        return 0
     report = build_region(city, args.region, sources_root=args.sources_root, out_root=args.out_root)
     if not report.asset:
-        log.info("backdrop: none — %s ships no far shore", args.region)
+        log.info("backdrop: none — the city declares no backdrop: block")
         return 0
     log.info(
         "backdrop: %d blocks read (%d with no level), %d tall -> %d drawn down to %.1f m "
-        "(tallest %.1f m), %d skyline + %d shore + %d sea triangles, %d m off the frame",
+        "(tallest %.1f m), %d skyline + %d shore + %d sea triangles, %.2f km² of open sea",
         report.blocks_read,
         report.blocks_no_level,
         report.blocks_tall,
@@ -434,7 +501,7 @@ def main(argv: list[str] | None = None) -> int:
         report.skyline_triangles,
         report.shore_triangles,
         report.sea_triangles,
-        report.gap_m,
+        report.open_sea_m2 / 1e6,
     )
     return 0
 

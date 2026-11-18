@@ -260,7 +260,10 @@ const NOT_MEASURED: float = -1.0
 ##
 ## 51 since `P3-101` (`Q250`): the manifest names `paths.glb`, the topographic
 ## map's pedestrian lines laid on the ground.
-const SCHEMA_VERSION: int = 51
+## 52 since every region ships its own far version (`Q249` amended):
+## `backdrop.glb` is this region seen from past the far plane, and its material
+## skips it nearer than the plane.
+const SCHEMA_VERSION: int = 52
 
 
 ## One entry of `tiles` — a square of the city, at every tier the ETL built.

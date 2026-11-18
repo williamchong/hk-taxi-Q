@@ -92,6 +92,11 @@ const _HEIGHT: Dictionary[String, String] = {
 	GeneratedLayer.SIGNS: "tops",
 }
 
+## How far a layer drawn past the far plane is drawn from (`far_view.tres`):
+## a far version further than `max_far_m` is hidden. Null draws it at any
+## distance, which is every other layer's case.
+@export var far_view: FarViewProfile
+
 ## The meshes of a layer drawn past the far plane, and each one's box in the
 ## world; empty for every other layer, which then never processes.
 var _beyond_far: Array[GeometryInstance3D] = []
@@ -107,14 +112,23 @@ func _ready() -> void:
 
 
 ## A `beyond_far` layer's meshes are hidden while the camera cannot see them:
-## the engine no longer can, past the margin that keeps them drawn.
+## the engine no longer can, past the margin that keeps them drawn. And past
+## `far_view`'s reach, where the fog has them.
 func _process(_delta: float) -> void:
 	var camera: Camera3D = get_viewport().get_camera_3d()
 	if camera == null:
 		return
 	var planes: Array[Plane] = camera.get_frustum()
+	var eye: Vector3 = camera.global_position
 	for index: int in _beyond_far.size():
-		_beyond_far[index].visible = not FarCull.outside(planes, _beyond_far_boxes[index])
+		var mesh: GeometryInstance3D = _beyond_far[index]
+		var box: AABB = _beyond_far_boxes[index]
+		var shown: bool = not FarCull.outside(planes, box)
+		if shown and far_view != null:
+			# Widened while shown and narrowed while hidden: the hysteresis.
+			var margin: float = far_view.hysteresis_m if mesh.visible else -far_view.hysteresis_m
+			shown = not FarCull.beyond(eye, box, far_view.max_far_m + margin)
+		mesh.visible = shown
 
 
 func _boot() -> void:

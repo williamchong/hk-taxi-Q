@@ -1,6 +1,6 @@
-// The far shore (`P3-100`, `Q249`): `backdrop.glb`'s skyline and the ground it
-// stands on, a vertex-coloured surface under the rig's exposure drawn past the
-// camera's far plane. `vertex_albedo.gdshader` with one more line, and its own
+// A region's far version (`P3-100`, `Q249`): `backdrop.glb`'s skyline and the
+// ground it stands on, a vertex-coloured surface under the rig's exposure drawn
+// past the camera's far plane and skipped nearer than it. `vertex_albedo.gdshader` with one more line, and its own
 // file because that one is held to the two props it was graded with.
 
 shader_type spatial;
@@ -76,6 +76,10 @@ void vertex() {
 }
 
 void fragment() {
+	// `VERTEX` is the true view position: only the clip position was squeezed.
+	if (far_shore_near(VERTEX)) {
+		discard;
+	}
 	vec3 albedo = albedo_linear * exposure_anchor;
 	ALBEDO = albedo;
 	METALLIC = 0.0;

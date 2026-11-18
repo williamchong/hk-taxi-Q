@@ -28,7 +28,11 @@ extends Node3D
 ## ⚠️ **Two streamers means two budgets.** `max_loads_in_flight` and
 ## `max_instantiations_per_frame` are per streamer, so on the line they double.
 
+const GeneratedDocument = preload("res://scripts/city/generated_document.gd")
 const GeneratedRegions = preload("res://scripts/city/generated_regions.gd")
+
+## The node of `region_scene` that draws a region's far version.
+const FAR_NODE: String = "Backdrop"
 const TilePreview = preload("res://scripts/city/tile_preview.gd")
 
 ## One region's content: the layer nodes, `Landmarks` and `Fence`. No tiles —
@@ -85,6 +89,39 @@ func _boot() -> void:
 			tiles.connect("built", built.emit)
 		add_child(node)
 		_regions.append(node)
+	for id: String in GeneratedRegions.far():
+		_place_far(id, offsets[0])
+
+
+## A region held for its far version alone (`Q249`): the `Backdrop` node of
+## `region_scene`, so it is drawn and culled on the same terms as a resident
+## region's, at the region's `city_offset` from `backdrop.json` — it has no
+## `city.json`.
+func _place_far(id: String, frame_offset: Vector3) -> void:
+	var at: String = GeneratedRegions.dir(id) + GeneratedRegions.FAR_MANIFEST
+	var document: Dictionary = GeneratedDocument.load_object(
+		at, GeneratedRegions.FAR_SCHEMA, "%s: no %s; re-run tools/sync_generated.sh" % [id, at]
+	)
+	if document.is_empty():
+		return  # `load_object` has said why.
+	var offset: Array = document.get("city_offset", [])
+	if offset.size() != 3:
+		push_error("%s names no city_offset; %s's far version is not placed" % [at, id])
+		return
+	var content: Node3D = region_scene.instantiate()
+	var backdrop: Node = content.get_node_or_null(FAR_NODE)
+	if backdrop == null:
+		content.free()
+		push_error("region_scene has no %s node; no far version is drawn" % FAR_NODE)
+		return
+	content.remove_child(backdrop)
+	content.free()
+	backdrop.set("region", id)
+	var node := Node3D.new()
+	node.name = id.to_pascal_case()
+	node.position = Vector3(float(offset[0]), float(offset[1]), float(offset[2])) - frame_offset
+	node.add_child(backdrop)
+	add_child(node)
 
 
 ## Make the road under `world_point` resident now, in every region that has any
