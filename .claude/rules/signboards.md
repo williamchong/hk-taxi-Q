@@ -17,7 +17,7 @@ paths:
 # Signboards — before marking work done
 
 `P3-103`, `Q260`. The Buildings Department's registered signboards as coloured boxes on the walls,
-their two faces lit at night, lettered with a generic shop name; two authored boards are LED screens. No canopies.
+their two faces lit at night, lettered with a generic shop name — **off** (`text.lettered: false`, the user's call), so colour only; two authored boards are LED screens. No canopies.
 
 - Rerun `python -m pipeline.signboards` on both regions and read its line: `read`, `drawn`,
   `no_wall`, `stacked`, `over_road`, surveyed against palette colours, `triangles`. Then the

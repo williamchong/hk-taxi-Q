@@ -743,7 +743,7 @@ def build_region(
         item.colour = colour_of(spec, board.ident, survey, report)
         placed.append(item)
     atlas = None
-    if spec.text is not None:
+    if spec.text is not None and spec.text.lettered:
         atlas = signboard_text.build_atlas(spec.text, CONFIG_PATH.parents[2])
         licences = signboard_text.read_licences(
             city, spec.text, region_id, transform, sources_root=sources_root

@@ -3689,5 +3689,8 @@ handset, the screens' heights. Canopies are a later task. Canopies come later an
   on `signboards_screen.gdshader`: a drifting colour field cut to a new slide every 7 s, seen
   through a 0.3 m LED grid that fades where an LED is under a pixel. No texture, no brand. It emits
   by day (1.2) and more at night (2.2). A screen is not lettered.
+- **The lettering is off (2026-11-20), on the user's call**: the boards ship colour only.
+  `text.lettered: false` drops the names and the atlas; the `text:` block stays validated and its
+  characters stay in the brush subset, so one line turns it back on. The screens are unaffected.
 - ⚠️ A screen's height is a wall board's authored 3 m base, so Times Square's sits at street level
   where the real one stands higher up the façade. A per-screen base is owed with the user's pick.

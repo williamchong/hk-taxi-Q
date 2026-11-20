@@ -433,3 +433,9 @@ def test_an_authored_screen_is_drawn_as_a_screen_and_not_lettered(spec, kind, fa
 
 def test_the_screens_are_the_two_named_boards(spec) -> None:
     assert set(spec.screens) == {"2297", "1934"}
+
+
+def test_the_shipped_boards_are_colour_only(spec) -> None:
+    # The user's call (2026-11-20): `text.lettered` is off, and the block
+    # stays whole so it switches back on.
+    assert spec.text is not None and not spec.text.lettered

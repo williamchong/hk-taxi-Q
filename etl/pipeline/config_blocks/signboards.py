@@ -94,6 +94,9 @@ class SignText:
     licences: RestaurantLicences | None
     # A street's trades weighted against the rest, by the street's English name.
     streets: dict[str, dict[str, float]]
+    # Off, the boards ship colour only: no names, no atlas. The block stays
+    # validated, and the font keeps its characters, so it switches back on.
+    lettered: bool = True
 
 
 @dataclass(frozen=True)
@@ -299,5 +302,6 @@ def _text(body: Any, where: str) -> SignText | None:
         trades=trades,
         licences=licences,
         streets=streets,
+        lettered=bool(body.get("lettered", True)),
         **sizes,
     )

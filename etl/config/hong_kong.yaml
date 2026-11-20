@@ -3870,6 +3870,8 @@ signboards:
   # Every character must be in the brush font: `tools/make_fonts.py` reads
   # this block, and the stage refuses a character the font lacks.
   text:
+    # Off on the user's call (2026-11-20): the boards are colour only for now.
+    lettered: false
     font: game/assets/authored/fonts/TaxiAceBrush-Medium.ttf
     glyph_px: 64
     fill: 0.7

@@ -122,7 +122,8 @@ Phase 3 — `B2` and the road
   the walls — Wan Chai 2,031 of 2,038 drawn (snap p50 0.27 m), Causeway Bay 131 of 132; 1,886
   coloured from their photos, the rest a palette; the faces lit at night; every board lettered
   with a generic shop name in the brush face, weighted by mount, FEHD licences and street. Street
-  viewpoint +20,438 primitives and +10 draws for both; two authored LED screens (East Point Centre,
+  viewpoint +20,438 primitives and +10 draws for both, the lettering since switched off
+  (`text.lettered: false`, colour only, the user's call 2026-11-20); two authored LED screens (East Point Centre,
   Times Square) on a generic animated shader — owed: the user's look, the handset, the screens'
   heights.
 - `P3-102` 🟡 A Star Ferry moored at Wan Chai Ferry Pier (`Q254`): 2,246 triangles modelled on the
