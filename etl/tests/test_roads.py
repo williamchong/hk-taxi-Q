@@ -36,6 +36,8 @@ from pipeline.roads import (
     _deck_heights,
     _edge_document,
     _follow_ground,
+    _land_on_street,
+    _Landing,
     _levels_at_node,
     _lifted_heights,
     _middle_of,
@@ -1185,6 +1187,91 @@ class TestBridgeUncovered:
         ]
         assert _bridge_uncovered(edges, {1}, self._deck()) == {}
         assert [p[1] for p in edges[1].polyline] == [8.0, 8.0]
+
+
+class TestLandOnStreet:
+    """`P4-3`: a street end raised to meet a deck that stops above it.
+
+    MARSH ROAD at node 269: `e248`'s deck ends at 4.10 m, `e466`'s street starts
+    at 3.44 m. The street rises to the deck and falls at the cap until it meets
+    its own profile.
+    """
+
+    _edge = TestBridgeUncovered._edge
+    _deck = TestBridgeUncovered._deck
+
+    def test_the_street_rises_to_the_deck_and_falls_at_the_cap(self) -> None:
+        edges = [
+            self._edge(0, (0, 1), [5.0, 4.1], level=1),
+            # 30 m, flat at 3.44 from the node to its far end.
+            self._edge(1, (1, 2), [3.44, 3.44], level=0),
+        ]
+        landing = _land_on_street(edges, set(), self._deck())
+        assert list(landing.landed) == [1]
+        ends, lift_m, _ = landing.landed[1]
+        assert (ends, lift_m) == (1, pytest.approx(0.66))
+        points = np.asarray(edges[1].polyline)
+        # Lifted to the deck at the node, one vertex inserted where a 10% fall
+        # meets the street: 0.66 m / 0.10 = 6.6 m along.
+        np.testing.assert_allclose(points[:, 1], [4.1, 3.44, 3.44], atol=1e-9)
+        np.testing.assert_allclose(points[:, 0], [100.0, 106.6, 130.0], atol=1e-9)
+        assert edges[1].on_structure == [False, False, False]
+        assert len(edges[1].structure_bounded) == 3
+
+    def test_a_vertex_inside_the_run_is_moved_onto_it(self) -> None:
+        edges = [
+            self._edge(0, (0, 1), [4.1, 4.1], level=1),
+            # Vertices every 10 m, the street climbing 1% away from the node.
+            self._edge(1, (1, 2), [3.44, 3.54, 3.64, 3.74], level=0),
+        ]
+        _land_on_street(edges, set(), self._deck())
+        points = np.asarray(edges[1].polyline)
+        # The fall closes on a 1% climb at 11%: 0.66 / 0.11 = 6 m, before the
+        # first original vertex, which stays where it was.
+        np.testing.assert_allclose(points[:, 0], [100.0, 106.0, 110.0, 120.0, 130.0], atol=1e-9)
+        np.testing.assert_allclose(points[:, 1], [4.1, 3.5, 3.54, 3.64, 3.74], atol=1e-9)
+
+    def test_both_ends_of_the_far_node_stay_put(self) -> None:
+        """Every level-0 end at the node rises, and nothing at their far ends moves."""
+        edges = [
+            self._edge(0, (0, 1), [4.5, 4.5], level=1),
+            self._edge(1, (1, 2), [4.0, 4.0], level=0),
+            self._edge(2, (3, 1), [4.0, 4.0], level=0),
+        ]
+        landing = _land_on_street(edges, set(), self._deck())
+        assert sorted(landing.landed) == [1, 2]
+        assert edges[1].polyline[0][1] == pytest.approx(4.5)
+        assert edges[2].polyline[-1][1] == pytest.approx(4.5)
+        assert edges[1].polyline[-1][1] == edges[2].polyline[0][1] == 4.0
+
+    def test_a_run_that_cannot_land_inside_its_edge_is_refused(self) -> None:
+        """6 m at 10% needs 60 m; the edge is 30 m, and its far node must not move."""
+        edges = [
+            self._edge(0, (0, 1), [11.5, 11.5], level=1),
+            self._edge(1, (1, 2), [5.5, 5.5], level=0),
+        ]
+        landing = _land_on_street(edges, set(), self._deck())
+        assert landing.landed == {}
+        assert landing.unlanded == [1]
+        assert [p[1] for p in edges[1].polyline] == [5.5, 5.5]
+
+    def test_a_closed_stub_is_never_a_target(self) -> None:
+        """`ISLAND EASTERN CORRIDOR`'s `e425`, 6 m over Victoria Park Road."""
+        edges = [
+            self._edge(0, (0, 1), [11.5, 11.5], level=1),
+            self._edge(1, (1, 2), [5.5, 5.5], level=0),
+        ]
+        landing = _land_on_street(edges, {0}, self._deck())
+        assert landing == _Landing(landed={}, unlanded=[])
+
+    def test_a_deck_below_the_street_is_not_landed_on(self) -> None:
+        """`e365` at node 30 sits under its street; `_descend` owns that sign."""
+        edges = [
+            self._edge(0, (0, 1), [3.0, 3.0], level=1),
+            self._edge(1, (1, 2), [3.4, 3.4], level=0),
+        ]
+        assert _land_on_street(edges, set(), self._deck()) == _Landing(landed={}, unlanded=[])
+        assert [p[1] for p in edges[1].polyline] == [3.4, 3.4]
 
 
 class TestDescend:

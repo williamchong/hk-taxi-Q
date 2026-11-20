@@ -53,6 +53,7 @@ from pipeline.clearance import (
     _subdivide,
     _write,
     measure,
+    stubs,
     walk,
     wears,
 )
@@ -89,6 +90,66 @@ def _drawn(
             "trim_m": list(trim),
         }
     }
+
+
+def _linked(
+    edge_id: int, nodes: tuple[int, int], *, level: int, on_structure: bool = False
+) -> dict:
+    """An edge with its nodes and structure flags, as `roads.py` publishes it."""
+    return {
+        **_edge(edge_id, [[0.0, 6.0 * level, 0.0], [0.0, 6.0 * level, 20.0]], level=level),
+        "from": nodes[0],
+        "to": nodes[1],
+        "on_structure": [on_structure, on_structure],
+    }
+
+
+class TestStubs:
+    """`P4-3`: an off-grade edge on nothing, leading nowhere, is closed.
+
+    `ISLAND EASTERN CORRIDOR`'s `e425`: from the region edge to 6 m over
+    Victoria Park Road. Each condition alone must leave an edge open.
+    """
+
+    def test_on_nothing_and_leading_nowhere_is_closed(self) -> None:
+        graph = {"edges": [_linked(425, (396, 388), level=1), _linked(413, (388, 1), level=0)]}
+        assert stubs(graph) == {425}
+
+    def test_a_bridged_link_meets_a_road_at_both_ends(self) -> None:
+        """`Q257`'s `e57`: on nothing, but a road at each end."""
+        graph = {
+            "edges": [
+                _linked(0, (0, 1), level=1, on_structure=True),
+                _linked(57, (1, 2), level=1),
+                _linked(52, (2, 3), level=0),
+            ]
+        }
+        assert 57 not in stubs(graph)
+
+    def test_a_deck_ending_at_the_region_edge_stands_on_its_structure(self) -> None:
+        graph = {
+            "edges": [_linked(9, (5, 6), level=1, on_structure=True), _linked(1, (6, 7), level=0)]
+        }
+        assert stubs(graph) == set()
+
+    def test_a_foreign_run_is_a_road_at_that_end(self) -> None:
+        graph = {
+            "edges": [_linked(425, (396, 388), level=1), _linked(413, (388, 1), level=0)],
+            "foreign_edges": [{"id": 900, "from": 395, "to": 396}],
+        }
+        assert stubs(graph) == set()
+
+    def test_a_street_is_never_a_stub(self) -> None:
+        graph = {"edges": [_linked(1, (0, 1), level=0)]}
+        assert stubs(graph) == set()
+
+    def test_a_stub_is_published_unmeasured(self) -> None:
+        graph = {"edges": [_linked(425, (396, 388), level=1), _linked(413, (388, 1), level=0)]}
+        drawn = {**_drawn(425, [3.2, 3.2], (2.0, 2.0)), **_drawn(413, [3.2, 3.2], (2.0, 2.0))}
+        corridor, report = walk(graph, drawn)
+        assert report.closed == [425]
+        assert report.corridor_m[425] == [NOT_MEASURED, NOT_MEASURED]
+        assert set(corridor.section_edge.tolist()) == {413}
 
 
 class TestLongestClear:

@@ -3,14 +3,18 @@ paths:
   - "etl/pipeline/roads.py"
   - "tools/deck_margin.py"
   - "tools/touchdown_error.py"
+  - "tools/node_step.py"
+  - "etl/tests/test_node_step.py"
+  - "etl/tests/test_touchdown_error.py"
   - "etl/tests/test_deck_margin.py"
   - "etl/tests/test_roads.py"
 ---
 
 # Off-grade ribbons, decks and touchdowns — before marking work done
 
-`tools/battery.py off-grade --region <r> --before <root>` runs `deck_margin`, `overhang` and
-`touchdown_error`. All three grade and exit 0.
+`tools/battery.py off-grade --region <r> --before <root>` runs `deck_margin`, `overhang`,
+`touchdown_error` and `node_step`. `node_step` gates (exit 1 over `P4-3`'s 0.15 m); the battery
+still exits 0.
 
 - **`_deck_heights`, `_descend`, `_lifted_heights`, `deck.touchdown_max_grade_pct`**: paste
   `tools/touchdown_error.py`'s table and the roads stage's `descended / refused / graded across`
@@ -28,6 +32,15 @@ paths:
   - The bar is one-sided: clamped inside the cap is the defect, over it is the refusal working.
     `overhang.py` reads slightly worse after a descent, because a ramp resting on terrain still
     counts as hanging.
+- **`_land_on_street`, or any height at a node joining level 0 to an open deck** (`P4-3`): paste
+  `tools/node_step.py`'s table and the roads stage's `raised to meet a deck` line, before and after.
+  - The grader walks the **drawn** road, following the surface it is on; it never reads a height
+    off `roadgraph.json`. Taking the highest face instead reads an overlapping carriageway as a step.
+  - The street rises to the deck, never the deck down to the street: at node 269 a 10% descent
+    sinks the road 0.24 m into its structure. The cap is the grade used, and a run that cannot land
+    inside its edge is refused (`ends_unlanded`), never cut short — its far node would step.
+  - A closed stub (`clearance.stubs`) is never a landing target; `e425` would lift Victoria Park
+    Road 6 m. Closed means unmeasured, so `RoadGraph._drivable` refuses it like level −1.
 - **Anything that moves an off-grade ribbon (`surface.floor_by_elevation_level`,
   `floor_on_structure_m`, an off-grade width)**: paste `tools/deck_margin.py`'s per-edge table,
   pooled distributions and counterfactual.

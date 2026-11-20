@@ -57,6 +57,11 @@ from pipeline.config import load_config  # noqa: E402
 log = logging.getLogger(__name__)
 
 
+# `roadgraph.json` rounds a height to the millimetre; a landed street end is
+# written from the deck end's own height, so the two agree to that and no more.
+LANDED_M = 0.002
+
+
 @dataclass(frozen=True)
 class End:
     """One off-grade edge end whose structure stops before the node."""
@@ -69,6 +74,17 @@ class End:
     hole_m: float
     step_m: float
     grade_pct: float
+
+    @property
+    def landed(self) -> bool:
+        """Whether the street at the node stands level with this end (`P4-3`).
+
+        `roads._land_on_street` raises a street to a deck its structure stopped
+        above, so the clamped run is then held level with the road it meets
+        rather than afloat over it — the refusal `_descend` made is repaired
+        from the street's side. Within `LANDED_M`, the graph's rounding.
+        """
+        return bool(self.has_step and abs(self.step_m) <= LANDED_M)
 
     @property
     def has_step(self) -> bool:
@@ -228,16 +244,20 @@ def main(argv: list[str] | None = None) -> int:
     # the grade is over the cap is the refusal working.
     log.info("")
     clamped = [e for e in found if e.clamped_m > 0.0]
-    missed = [e for e in clamped if e.should_descend(cap)]
-    refused = [e for e in clamped if not e.should_descend(cap)]
+    landed = [e for e in clamped if e.landed]
+    missed = [e for e in clamped if not e.landed and e.should_descend(cap)]
+    refused = [e for e in clamped if not e.landed and not e.should_descend(cap)]
     log.info(
-        "  %d ends still clamped: %d refused over the %.1f%% cap or with no street to land on, "
-        "%d that should have descended",
+        "  %d ends still clamped: %d met by a street raised to them (P4-3), %d refused over the "
+        "%.1f%% cap or with no street to land on, %d that should have descended",
         len(clamped),
+        len(landed),
         len(refused),
         cap,
         len(missed),
     )
+    for end in landed:
+        log.info("    landed: e%d at node %d, %s", end.edge, end.node, end.road)
     for end in refused:
         log.info(
             "    refused: e%d at node %d, %s — %s",

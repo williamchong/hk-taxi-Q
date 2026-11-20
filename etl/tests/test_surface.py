@@ -47,10 +47,12 @@ from pipeline.surface import (
     _Builder,
     _clamped_rails,
     _deck_rims,
+    _End,
     _ends_by_node_and_level,
     _half_widths,
     _insert_stations,
     _kerbside,
+    _landing_groups,
     _Marking,
     _on_structure_length_m,
     _prepare,
@@ -3048,3 +3050,25 @@ class TestThroughCorridors:
         report = build_region(city, "middle", out_root=tmp_path / "out")
         assert report.corridors == 0
         assert report.junctions == 1
+
+
+class TestLandingGroups:
+    """`P4-3`: deck arms meeting a street run to the node, untrimmed and uncapped.
+
+    Node 175, FLEMING ROAD: `e118` and `e208` (level 1) meet `e138` and `e675`
+    (level 0). Trimmed for a level-1 cap of their own, each stepped 0.27 m.
+    """
+
+    @staticmethod
+    def _ends(*keys: tuple[int, int]) -> dict[tuple[int, int], list[_End]]:
+        return {key: [_End(edge=i, at_start=True, foreign=False)] for i, key in enumerate(keys)}
+
+    def test_a_deck_meeting_a_street_lands(self) -> None:
+        assert _landing_groups(self._ends((175, 0), (175, 1))) == {(175, 1)}
+
+    def test_a_tunnel_portal_keeps_its_own_group(self) -> None:
+        """A portal steps 8 m: the per-level split is still right there."""
+        assert _landing_groups(self._ends((250, 0), (250, -1))) == set()
+
+    def test_decks_meeting_only_each_other_still_join(self) -> None:
+        assert _landing_groups(self._ends((9, 1), (10, 1), (10, 2))) == set()

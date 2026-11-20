@@ -34,6 +34,7 @@ from collections import Counter, defaultdict
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field, replace
 from pathlib import Path
+from typing import NamedTuple
 
 import numpy as np
 
@@ -476,6 +477,12 @@ class RoadReport:
     # population a reader should go and look at.
     edges_uncovered: int = 0
     edges_bridged: int = 0
+    # `P4-3`'s, `_land_on_street`: street ends raised to meet a deck that stops
+    # above them, with the lift each took, and the ends whose run out at the
+    # cap's grade does not meet the street's own profile inside the edge.
+    ends_landed: int = 0
+    ends_unlanded: int = 0
+    landed_lift_m: list[float] = field(default_factory=list)
     # `Q24`'s, on the at-grade edges the two counters above never reach.
     #
     # ⚠️ `edges_followed` counts edges that took the path, **not** edges that
@@ -1150,11 +1157,21 @@ def build_region(
             uncovered.add(edge.id)
         if edge.foreign is None:
             report.add(counts)
-    if surfaces.deck is not None and uncovered:
-        for i, bounded in _bridge_uncovered(every_edge, uncovered, surfaces.deck).items():
+    if surfaces.deck is not None:
+        bridged = _bridge_uncovered(every_edge, uncovered, surfaces.deck) if uncovered else {}
+        for i, bounded in bridged.items():
             if every_edge[i].foreign is None:
                 report.edges_bridged += 1
                 report.vertices_structure_bounded += bounded
+        # After the bridge, so a bridged link's ends are measured heights a
+        # street can land against; the edges still on the flat offset are not.
+        landing = _land_on_street(every_edge, uncovered - bridged.keys(), surfaces.deck)
+        for i, raised in landing.landed.items():
+            if every_edge[i].foreign is None:
+                report.ends_landed += raised.ends
+                report.landed_lift_m.append(raised.lift_m)
+                report.vertices_structure_bounded += raised.bounded
+        report.ends_unlanded += sum(1 for i in landing.unlanded if every_edge[i].foreign is None)
     for edge in every_edge:
         (report.edges if edge.foreign is None else report.foreign_edges).append(edge)
     report.stations_beyond_reach = sum(
@@ -2291,6 +2308,126 @@ def _bridge_uncovered(edges: list[Edge], uncovered: set[int], deck: _Deck) -> di
     return bridged
 
 
+class _Raised(NamedTuple):
+    """One edge `_land_on_street` raised: how many of its ends, by how much at
+    most, and its change in `structure_bounded` count."""
+
+    ends: int
+    lift_m: float
+    bounded: int
+
+
+@dataclass(frozen=True)
+class _Landing:
+    """What `_land_on_street` did: each raised edge, and one entry per end it
+    refused."""
+
+    landed: dict[int, _Raised]
+    unlanded: list[int]
+
+
+def _land_on_street(edges: list[Edge], closed: set[int], deck: _Deck) -> _Landing:
+    """At-grade edge ends raised to meet a deck that stops above the street (`P4-3`).
+
+    `_descend`'s mirror, for the touchdowns it cannot make. Where
+    `INFRASTRUCTURE` stops at or just short of the node with its top still
+    0.3-0.5 m above the street, the deck end publishes that height plus
+    `clearance_m` and the street publishes the terrain: a step of 0.17-0.66 m
+    across the node at seven of Wan Chai's nodes. The deck cannot come down to
+    meet it — at node 269, MARSH ROAD, a 10% descent sinks the road 0.24 m into
+    the structure 5 m back, which is why `_descend` refused it at 35.8% — so the
+    street rises to meet the deck. That is `Q90`'s reading of node 269: the real
+    touchdown is part-way along the at-grade edge.
+
+    Each level-0 end at a node an open off-grade edge reaches is lifted to the
+    highest such deck end there and falls away at `touchdown_max_grade_pct`
+    until it meets its own profile: `max(own, target - grade * s)`. Every
+    level-0 end at the node takes it, so the junction stays one height. One
+    vertex is inserted where the run meets the profile, which is what keeps the
+    raised run exactly linear with no resampling: any original vertex inside the
+    run is moved onto it, and every one beyond is untouched.
+
+    The cap is the grade *used*, not only the bar: the steepest the stage keeps
+    is also the shortest run of road it has to invent. A run that does not meet
+    the profile before the edge's far end is refused and counted, never cut
+    short, because a far node that moved would open a step there.
+
+    `closed` — the off-grade edges still on the level's flat offset, with
+    nothing under them and no road at one end — are never a target: lifting a
+    street 6 m to meet `ISLAND EASTERN CORRIDOR`'s stub is the defect, not the fix.
+    A deck end *below* the street is not lifted down to; `_descend` already
+    owns that sign (`e365` at node 30).
+    """
+    tops: dict[int, float] = {}
+    for edge in edges:
+        if edge.elevation_level <= 0 or edge.id in closed:
+            continue
+        for node, point in ((edge.from_node, edge.polyline[0]), (edge.to_node, edge.polyline[-1])):
+            tops[node] = max(tops.get(node, point[1]), point[1])
+
+    grade = deck.thresholds.touchdown_max_grade_pct / 100.0
+    landed: dict[int, _Raised] = {}
+    unlanded: list[int] = []
+    for index, edge in enumerate(edges):
+        if edge.elevation_level != 0 or not ({edge.from_node, edge.to_node} & tops.keys()):
+            continue
+        points = np.asarray(edge.polyline, dtype=np.float64)
+        flags = list(edge.on_structure)
+        lift_m, ends = 0.0, 0
+        for node, reverse in ((edge.from_node, False), (edge.to_node, True)):
+            target = tops.get(node)
+            if target is None or float((points[-1] if reverse else points[0])[1]) >= target:
+                continue
+            run = points[::-1] if reverse else points
+            run_flags = flags[::-1] if reverse else flags
+            raised = _ramp_down(run, run_flags, target, grade)
+            if raised is None:
+                unlanded.append(index)
+                continue
+            lift_m = max(lift_m, target - float(run[0, 1]))
+            ends += 1
+            points = raised[0][::-1] if reverse else raised[0]
+            flags = raised[1][::-1] if reverse else raised[1]
+        if not ends:
+            continue
+        bounded = _structure_bounded(deck, points[:, [0, 2]], points[:, 1])
+        edges[index] = replace(
+            edge,
+            polyline=[(float(x), float(y), float(z)) for x, y, z in points],
+            on_structure=flags,
+            structure_bounded=[bool(b) for b in bounded],
+        )
+        landed[index] = _Raised(ends, lift_m, int(bounded.sum()) - sum(edge.structure_bounded))
+    return _Landing(landed=landed, unlanded=unlanded)
+
+
+def _ramp_down(
+    run: np.ndarray, flags: list[bool], target: float, grade: float
+) -> tuple[np.ndarray, list[bool]] | None:
+    """`run`, whose first vertex stands below `target`, raised to it there and
+    falling at `grade` until it meets the run's own heights; `None` where the fall
+    does not meet them before the last vertex.
+    """
+    along = plan_lengths_2d(run[:, [0, 2]])
+    above = (target - grade * along) - run[:, 1]
+    meets = np.flatnonzero(above <= 0.0)
+    if not len(meets):
+        return None
+    k = int(meets[0])
+    # The fall crosses the profile inside segment (k - 1, k); `above` is linear
+    # along it, so the crossing is one division.
+    share = above[k - 1] / (above[k - 1] - above[k])
+    crossing = run[k - 1] + share * (run[k] - run[k - 1])
+    head = run[:k].copy()
+    head[:, 1] = target - grade * along[:k]
+    if share >= 1.0:
+        return np.vstack([head, run[k:]]), list(flags)
+    return (
+        np.vstack([head, crossing, run[k:]]),
+        [*flags[:k], False, *flags[k:]],
+    )
+
+
 def _node_heights(count: int, edges: Iterable[Edge]) -> list[float]:
     """One height per node, from the edge ends that meet there.
 
@@ -2969,6 +3106,14 @@ def main(argv: list[str] | None = None) -> int:
             "their ends, the rest on the level's flat offset",
             report.edges_uncovered,
             report.edges_bridged,
+        )
+    if report.ends_landed or report.ends_unlanded:
+        log.info(
+            "  %d at-grade ends raised to meet a deck above them (P4-3), lift max %.2f m; "
+            "%d could not land inside their edge",
+            report.ends_landed,
+            max(report.landed_lift_m, default=0.0),
+            report.ends_unlanded,
         )
     if report.edges_followed:
         log.info(

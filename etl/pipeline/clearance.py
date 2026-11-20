@@ -58,6 +58,7 @@ from __future__ import annotations
 
 import argparse
 import logging
+from collections import Counter
 from dataclasses import dataclass, field, replace
 from functools import lru_cache
 from pathlib import Path
@@ -245,6 +246,9 @@ class ClearanceReport:
     # *at the shipped spacing* and nothing in the document or the code would say
     # the measurement had changed shape.
     levels: tuple[int, ...] = LEVELS
+    # Off-grade stubs left unmeasured and so closed to the game (`P4-3`); see
+    # `stubs`.
+    closed: list[int] = field(default_factory=list)
 
     def count(self, occupancy: _Occupancy) -> None:
         """Fold one `occupy` pass into the running totals."""
@@ -327,6 +331,41 @@ def _across(forward: np.ndarray) -> np.ndarray:
     return np.stack([-forward[:, 1], forward[:, 0]], axis=1)
 
 
+def stubs(graph: dict) -> set[int]:
+    """Off-grade edges that stand on nothing and lead nowhere, closed to the game.
+
+    `P4-3`, on the user's call. An off-grade edge with **no station on
+    structure** and **an end no other road reaches** is a stub of a road the
+    region does not hold: `roads.py` found nothing under it, `_bridge_uncovered`
+    had no road at one end to draw it to, and it keeps the level's flat offset.
+    `ISLAND EASTERN CORRIDOR`'s `e425` is Wan Chai's one — it starts at the region
+    edge and ends 6.0 m above Victoria Park Road at node 388. Left measured, the
+    game routes traffic down it and drops each car 6 m at the junction.
+
+    Unmeasured rather than dropped from the graph: `RoadGraph._drivable` opens an
+    off-grade edge on a judged width and nothing else, so `NOT_MEASURED` on every
+    station closes it to the player, the router and the reset with no schema
+    change, the way level -1 is closed. Both conditions are needed: a bridged
+    link (`Q257`) stands on nothing but meets a road at both ends, and a deck
+    ending at the region edge leads nowhere but stands on its structure.
+    """
+    # Foreign runs count as reaching a node: a road the neighbour owns is still
+    # a road. An edge with no nodes (a hand-built test graph) reaches nothing
+    # and can be no stub.
+    edges = [e for e in graph["edges"] if "from" in e and "to" in e]
+    reached: Counter[int] = Counter()
+    linked = [e for e in graph.get("foreign_edges", []) if "from" in e and "to" in e]
+    for edge in [*edges, *linked]:
+        reached.update((int(edge["from"]), int(edge["to"])))
+    return {
+        int(edge["id"])
+        for edge in edges
+        if int(edge.get("elevation_level", 0)) > 0
+        and not any(edge.get("on_structure", []))
+        and min(reached[int(edge["from"])], reached[int(edge["to"])]) == 1
+    }
+
+
 def walk(
     graph: dict,
     drawn: dict[int, dict],
@@ -374,6 +413,8 @@ def walk(
     # annotation does not stop a caller passing a list, and `report.levels` is
     # compared with `!=` against a tuple constant.
     report = ClearanceReport(along_m=along_m, levels=tuple(levels))
+    closed = stubs(graph)
+    report.closed = sorted(closed)
     xs: list[np.ndarray] = []
     zs: list[np.ndarray] = []
     ys: list[np.ndarray] = []
@@ -405,7 +446,11 @@ def walk(
             entry.get("corridor_offset_m", entry.get("offset_m", [])), dtype=np.float64
         )
         report.corridor_m[edge_id] = [NOT_MEASURED] * len(points)
-        if int(published.get("elevation_level", 0)) not in levels or len(points) < 2:
+        if (
+            int(published.get("elevation_level", 0)) not in levels
+            or len(points) < 2
+            or edge_id in closed
+        ):
             continue
         for name, table in (("half-widths", halves), ("offsets", shifts)):
             if len(table) != len(points):
@@ -1221,6 +1266,13 @@ def main(argv: list[str] | None = None) -> int:
     bar_m = float(city.roads.lane_width_m)
     starved = report.starved(bar_m)
     log.info("  %d edges measured, bar is one lane at %.2f m", report.edges, bar_m)
+    if report.closed:
+        log.info(
+            "  %d off-grade stubs on nothing and leading nowhere left unmeasured, so closed "
+            "(P4-3): %s",
+            len(report.closed),
+            ", ".join(f"e{i}" for i in report.closed),
+        )
     if starved:
         # Reported, never refused. This stage publishes what is there; the gate
         # is `tools/carriageway_occupancy.py`, and failing the build here would

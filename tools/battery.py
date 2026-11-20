@@ -583,6 +583,7 @@ TRIGGERS: dict[str, Trigger] = {
             Tool("deck_margin.py", _GENERATED),
             Tool("overhang.py", _GENERATED),
             Tool("touchdown_error.py", _GENERATED),
+            Tool("node_step.py", _GENERATED),
         ),
     ),
     "q19": Trigger("`Q19`'s battery: road-surface, deck-height or ground changes", _Q19),

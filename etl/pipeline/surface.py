@@ -25,8 +25,9 @@ Three measurements off the emitted graph decide the shape of this:
   ⚠️ `P2-7` closed most of that: 26 of the 36 now step under 0.5 m, and the rule
   survives on the other six — the five tunnel portals still step 8 m, and a
   portal is a void no height source repairs. Per-level capping is therefore
-  still right, but it is no longer right *everywhere*, and `P4-*` reopening the
-  elevated network is where that distinction will start to matter. See `Q13`.
+  still right, but it is no longer right *everywhere*: since `P4-3` a deck that
+  meets a street lands on it, uncapped and untrimmed (`_landing_groups`, `Q264`).
+  See `Q13`.
 - **Mitred joints are safe.** The sharpest interior turn in the region is 91.8
   degrees, a mitre scale of 1.44. The limit below is a guard for another city,
   not something this data reaches.
@@ -605,6 +606,9 @@ class SurfaceReport:
     # will never close, and quoting it alone would report a stage that closed 26
     # of these 36 as one that closed none.
     level_steps_m: list[float] = field(default_factory=list)
+    # `P4-3`: off-grade node groups left untrimmed and uncapped because a street
+    # meets them there; see `_landing_groups`.
+    landing_groups: int = 0
     # Metres of kerb line dropped because a neighbouring carriageway had already
     # covered it. Reported every run because it is a *large* number against a
     # region's total kerb, and a collapse in it would mean the overlap test had
@@ -1521,7 +1525,12 @@ def build_region(
     )
     ends = _ends_by_node_and_level([*graph["edges"], *foreign_published], every_edge)
     report.foreign_ends = sum(end.foreign for group in ends.values() for end in group)
-    _assign_trims(ends, every_edge, style, report)
+    # `P4-3`: deck arms landing on a street run to the node like a lone arm,
+    # so the trims and the caps below see only the groups that still join.
+    landing = _landing_groups(ends)
+    report.landing_groups = len(landing)
+    joined = {key: group for key, group in ends.items() if key not in landing}
+    _assign_trims(joined, every_edge, style, report)
     # After the assignment, not beside `carriageway` above: the trims do not
     # exist until `_assign_trims` has seen every end that meets every node.
     report.trims_m = {
@@ -1560,7 +1569,7 @@ def build_region(
     # passes the ownership test below and a cluster is never left to the
     # neighbour; the test still runs so that there is one rule, not two.
     clusters = _stub_clusters(
-        ends,
+        joined,
         every_edge,
         report,
         owned=lambda node: owner_of(np.asarray(node_plan[node])) == region_id,
@@ -1569,7 +1578,7 @@ def build_region(
         (keys[0][1], [node for node, _ in keys]) for keys in clusters if len(keys) >= 2
     ]
     for keys in clusters:
-        groups = [ends[key] for key in keys]
+        groups = [joined[key] for key in keys]
         (node, level) = keys[0]
         if region is not None and level == 0:
             # A level-0 junction is `R` less the ribbons meeting at it, drawn
@@ -2562,6 +2571,26 @@ def _ends_by_node_and_level(
                 _End(edge=index, at_start=at_start, foreign=foreign)
             )
     return groups
+
+
+def _landing_groups(ends: dict[tuple[int, int], list[_End]]) -> set[tuple[int, int]]:
+    """The off-grade groups whose node a street also reaches (`P4-3`).
+
+    Per-level capping is right where levels are separated, and since `P4-3`
+    every *open* deck meeting a street meets it at the street's height:
+    `roads._land_on_street` raises the street to the deck. There the deck is
+    landing, and a cap of its own is the defect. At node 175, FLEMING ROAD,
+    `e118` and `e208` were trimmed 3-4 m short for a level-1 cap that sat
+    under their mouths, so a wheel stepped 0.27 m off each ribbon end onto the
+    street below; at node 385 the level-1 cap of `e502` and `e574` reached down
+    to 5.2 m beside a 7.7 m node, a 0.87 m step and a hole. Left long, as a lone
+    arm already is, the decks run to the node and meet the street's junction.
+
+    Level 1 and above only. A tunnel portal still steps 8 m, and its per-level
+    split is the rule this module's docstring argues for. A closed stub
+    (`clearance.stubs`) is still drawn, and lands nowhere useful either way.
+    """
+    return {(node, level) for node, level in ends if level > 0 and (node, 0) in ends}
 
 
 def _assign_trims(
@@ -3923,6 +3952,11 @@ def main(argv: list[str] | None = None) -> int:
             report.territory_mismatched_edges,
             report.territory_missing_edges,
         )
+    log.info(
+        "  %d off-grade node groups land on a street there and are left untrimmed and uncapped "
+        "(P4-3)",
+        report.landing_groups,
+    )
     log.info(
         "  join: %d foreign ends offered to the caps, %d caps took a foreign mouth, "
         "%d caps left to the neighbour containing their node",

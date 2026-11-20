@@ -107,8 +107,8 @@ unchanged. One street was checked. Two-way roads can arrive as opposed one-way c
 
 Every node joining two levels is a real ramp (zero plan-coincident crossings), so `ELEVATION` never
 keys nodes. Touchdowns are ramped (`Q90`); level 1 is open to the player (`Q103`, `Q108`, `Q110`);
-level −1 stays closed. Open: the 5 tunnel portals and `e425`'s stub (`Q6`), and node 269 MARSH
-ROAD's missing descent.
+level −1 stays closed. Open: the 5 tunnel portals. `e425`'s stub is closed and node 269 MARSH
+ROAD landed (`Q264`).
 
 ## `Q14` — Taxi-stand operating-time restrictions are discarded
 
@@ -1249,7 +1249,7 @@ became a 165° spin).
 
 ## `Q90` — Every hole in the structure is a touchdown; the sampler descends instead of clamping
 
-**Status.** Closed (`pipeline/roads.py::_descend`); one residue, node 269.
+**Status.** Closed (`pipeline/roads.py::_descend`); node 269's residue closed by `Q264`.
 
 - `INFRASTRUCTURE` stops where a ramp reaches grade. `_descend` ramps from the node's at-grade
   height to the first covered station, bounded by `deck.touchdown_max_grade_pct` (10.0). The cap
@@ -3786,3 +3786,28 @@ before-side builder script was skipped on the user's call; the battery recipe st
 - Python mutations: `godot-mutation-check/mutate.sh` (the user's skill repo) reads `SyntaxError`,
   `ImportError` and pytest's collection errors as INVALID and writes no `.pyc`. A syntax-breaking
   mutation of `meshbuild.strut` read KILLED before and reads INVALID now.
+
+
+## `Q264` — A deck that stops above the street is met by the street, and the step is graded on the drawn road
+
+**Status.** 🟡 Built 2026-11-21 (`P4-3`); the user's drive over nodes 269 and 369 owed.
+
+- Acceptance restated on the user's call: no step over 0.15 m on the drawn road at any node joining
+  level 0 to an *open* deck. The 5 level −1 portals step 8 m and stay closed (`Q13`).
+- Grader: `tools/node_step.py` walks 15 m either side of each node on `roads.glb`, following the
+  surface it is on; open edges are the game's rule read off `city.json`. Following the highest face
+  instead read overlapping carriageways as eleven false steps.
+- Mechanism: the structure model stops at or before the node 0.3–0.5 m above the street, and the
+  deck rides `clearance_m` on it. The deck cannot come down (at node 269 a 10% descent sinks the
+  road 0.24 m into its structure), so `roads._land_on_street` raises each street end to the deck
+  and falls at `touchdown_max_grade_pct` until it meets its own profile, one vertex inserted;
+  a run that cannot land inside its edge is refused, never cut short.
+- `surface._landing_groups`: a deck group whose node a street reaches is neither trimmed nor
+  capped, as a lone arm is not. Its own level-1 cap was the step at node 175 (0.27 m) and a cap
+  reaching down to 5.2 m at node 385 (0.87 m and a hole).
+- `clearance.stubs` closes, by publishing it unmeasured, an off-grade edge with no station on
+  structure and an end no other road reaches: Wan Chai's `e425` only, 6.0 m over Victoria Park
+  Road, which traffic was routed down. Not drawn differently.
+- Deciding numbers: Wan Chai 10 of 30 nodes over the bar (worst 0.87 m) → 0 of 29, worst 0.080 m;
+  8 street ends raised, max 0.67 m, 0 refused; Causeway Bay 0 → 0. Carve knock-on: `e398`'s carved
+  area 172 → 157 m², no grader worse. `touchdown_error` reads node 269 as landed rather than missed.
