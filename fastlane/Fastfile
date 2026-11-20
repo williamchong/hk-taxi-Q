@@ -16,9 +16,9 @@
 default_platform(:ios)
 
 APP_IDENTIFIER = "cloud.williamchong.hktaxiq"
-# The version the listing belongs to: the one Godot stamps on the build, which
-# is 1.0.0 while project.godot names none.
-APP_VERSION = "1.0.0"
+# The version the listing belongs to: the one Godot stamps on the build,
+# project.godot's config/version.
+APP_VERSION = "1.0.1"
 
 def review_information
   contact = %w[FIRST_NAME LAST_NAME PHONE EMAIL].map { |k| ENV["APP_REVIEW_#{k}"] }

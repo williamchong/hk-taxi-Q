@@ -41,6 +41,7 @@ any key equal to its default; such a key stays in force.
 | Setting | Value | Why |
 |---|---|---|
 | `application/config/name` | `Hong Kong Taxi Ace` | `Q208`; `name_localized` has `zh_HK` 香港的士車神. Kept in step by hand with `menu_text.json`'s `title` and the Android preset's `package/name`. A desktop names `user://` after this key |
+| `application/config/version` | `1.0.1` | The store version every preset stamps (`CFBundleShortVersionString`); Godot's default without it is 1.0.0. Kept in step by hand with `fastlane/Fastfile`'s `APP_VERSION`. Bump it once Apple approves a version: that train takes no more builds |
 | `application/boot_splash/image`, `bg_color` | `assets/authored/loading/boot_splash.png`, `HudStyle.plate_field` | The loading cover's still (`Q209`, `tools/make_splash.py`); `verify_menu` holds both |
 | `application/run/max_fps.mobile` | `60` | Desktop uncapped. The player's FRAME RATE pick replaces it on a phone (`Q223`) |
 | `display/window/size`, `stretch/mode`, `stretch/aspect` | 1920 × 1080, `canvas_items`, `expand` | Resolution-independent UI over the HUD's design frame |
