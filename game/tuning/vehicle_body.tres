@@ -43,3 +43,4 @@ shader_parameter/crown = 1.0
 shader_parameter/crown_radius_m = 3.0
 shader_parameter/crown_height_m = 0.7
 shader_parameter/crown_along = 0.3
+shader_parameter/glass_crown = 1.0

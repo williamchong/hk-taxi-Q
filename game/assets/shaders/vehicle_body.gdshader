@@ -378,6 +378,9 @@ uniform float crown : hint_range(0.0, 2.0) = 1.0;
 uniform float crown_radius_m : hint_range(0.5, 20.0) = 3.0;
 uniform float crown_height_m : hint_range(0.0, 3.0) = 0.7;
 uniform float crown_along : hint_range(0.0, 1.0) = 0.3;
+// The share of the crown that glass takes. At 1 a pane leans with its panel,
+// and a bus's or a tram's flank and windows reflect as one sheet.
+uniform float glass_crown : hint_range(0.0, 1.0) = 1.0;
 // Where the fragment is on the body, and the body's axes in view space.
 varying vec3 body_at;
 varying flat vec3 body_x;
@@ -516,7 +519,7 @@ void fragment() {
 		off.z *= crown_along;
 		off /= 1.0 + abs(off);
 		vec3 lean = body_x * off.x + body_y * off.y + body_z * off.z;
-		tilt -= crown * (lean - flat_n * dot(flat_n, lean));
+		tilt -= crown * (is_glass ? glass_crown : 1.0) * (lean - flat_n * dot(flat_n, lean));
 	}
 	NORMAL = normalize(flat_n - tilt);
 

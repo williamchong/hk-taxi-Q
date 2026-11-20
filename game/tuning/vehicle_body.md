@@ -53,6 +53,11 @@ braking must not brake the rest.
   gradient. The lean is the fragment's place on the body over the radius, soft-limited so a bus's
   end leans no further than a car's. `crown_along` 1.0 turned a wing's far end to the ground and it
   went grey. A door is its own mesh and crowns about its own origin. `crown` 0 is the flat sheet.
+- `glass_crown = 1.0`: the share of the crown the glazing takes. A bus's and a tram's panes lie
+  flat a few mm proud of the flank, so at 1 they lean with the paint and the flank reflects as one
+  sheet, windows and all. 0.5 parts them quietly; 0 stands each pane flat, and a flat pane faced
+  squarely mirrors the road and goes near black (the lower deck, the tram's ends). Every vehicle's
+  glass, the taxi's too. Lamps stay on the full crown. The user's pick is owed.
 - No `next_pass` (`Q248`, amended 2026-11-18): the black line round a vehicle is the city's screen
   pass, black since the same day (`cel_outline.tres`). `vehicle_outline.gdshader` stays as the way
   back, the body drawn again grown and inside out: a `next_pass` ShaderMaterial on it with
