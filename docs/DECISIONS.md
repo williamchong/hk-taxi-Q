@@ -3772,6 +3772,10 @@ pointer. Judgment calls stay as prose.
 - Gone, not encoded: the headless import no longer re-tabs `greybox_wanchai.json`. A plain
   import, a forced re-import, an editor run and four `check.sh` runs left it clean, so the
   warning (miscited `Q115`, which is prop placements) is removed rather than guarded.
+- Citations: `test_decision_citations.py` holds every backticked `Qnnn` in a tracked text file
+  to a `DECISIONS.md` heading (a heading can carry several: `Q2` `Q3` `Q5`). All 6,174 resolve
+  today; a planted citation of an unused id, a heading stripped of its ids and `Q3` dropped from its heading each
+  fail it. It cannot tell a wrong decision cited from a right one.
 - Python mutations: `godot-mutation-check/mutate.sh` (the user's skill repo) reads `SyntaxError`,
   `ImportError` and pytest's collection errors as INVALID and writes no `.pyc`. A syntax-breaking
   mutation of `meshbuild.strut` read KILLED before and reads INVALID now.
