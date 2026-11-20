@@ -87,6 +87,13 @@ const SIGNS_TEXT_ATLAS_BUDGET_PX: int = 1536 * 256
 ## only with the vocabulary, on the signs' terms above.
 const SIGNBOARDS_TEXT_ATLAS_BUDGET_PX: int = 512 * 1024
 
+## The gantry boards' faces (`P3-105`, `Q265`): every board's panels filled at
+## `direction_signs.px_per_m`, shelf-packed into the narrowest power-of-two
+## width holding the widest (G27A's 19.1 m is 1224 px at 64) and the shortest
+## power-of-two height. Wan Chai's nine boards are 2048 x 1024. Raised only with
+## the boards, on the signs' terms above; 2048 is WebGL2's guaranteed width.
+const DIRECTION_SIGNS_ATLAS_BUDGET_PX: int = 2048 * 1024
+
 const GeneratedRegions = preload("res://scripts/city/generated_regions.gd")
 
 ## The layer ids. Code callers pass these and never the bare string, so a
@@ -112,6 +119,7 @@ const TREES: String = "trees"
 const PLANTERS: String = "planters"
 const PATHS: String = "paths"
 const SIGNBOARDS: String = "signboards"
+const DIRECTION_SIGNS: String = "direction_signs"
 const BACKDROP: String = "backdrop"
 
 ## One row per layer. `file` is the asset in a region's bundle directory; `noun` and
@@ -322,6 +330,22 @@ const LAYERS: Dictionary[String, Dictionary] = {
 		"placements": "",
 		"casts_shadow": true,
 		"shadow_meshes": [],
+	},
+	# TD's gantry boards over the road (`P3-105`, `Q265`): one mesh of steel and
+	# board backs, one of faces on the atlas, and the legs' `-colonly` body, so a
+	# car hits a leg. It casts: a gantry with no shadow floats.
+	# Only the steel: it holds each board's whole slab, so the face is a second
+	# copy of the same shadow and a draw per cascade.
+	DIRECTION_SIGNS:
+	{
+		"file": "direction_signs.glb",
+		"noun": "direction signs",
+		"module": "direction_signs",
+		"absence":
+		"A city that declares no `direction_signs:` block ships none, and that is not a failure.",
+		"placements": "",
+		"casts_shadow": true,
+		"shadow_meshes": ["direction_signs"],
 	},
 	# The region's far version (`P3-100`, `Q249`): its skyline and the water
 	# round it, past the camera's far plane. `beyond_far`, so the engine does

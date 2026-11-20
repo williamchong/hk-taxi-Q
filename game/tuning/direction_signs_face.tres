@@ -1,0 +1,10 @@
+[gd_resource type="ShaderMaterial" format=3]
+
+[ext_resource type="Shader" path="res://assets/shaders/signs_text.gdshader" id="1_signs_text"]
+
+[resource]
+resource_name = "direction_signs_face"
+render_priority = 0
+shader = ExtResource("1_signs_text")
+shader_parameter/plate_roughness = 0.55
+shader_parameter/sheeting_glow = 0.06

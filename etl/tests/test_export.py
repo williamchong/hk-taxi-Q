@@ -34,6 +34,10 @@ from pipeline.busroutes import BUSROUTES_MANIFEST_NAME, BUSROUTES_MANIFEST_SCHEM
 from pipeline.clearance import CLEARANCE_NAME, CLEARANCE_SCHEMA
 from pipeline.config import Landmark, Material, SourcePaint
 from pipeline.crossings import CROSSINGS_MANIFEST_NAME, CROSSINGS_MANIFEST_SCHEMA
+from pipeline.direction_signs import (
+    DIRECTION_SIGNS_MANIFEST_NAME,
+    DIRECTION_SIGNS_MANIFEST_SCHEMA,
+)
 from pipeline.export import (
     CITY_NAME,
     CITY_SCHEMA,
@@ -379,6 +383,14 @@ class _Region:
                 "asset": None,
                 "text_atlas": None,
             },
+            # And no `direction_signs:` block (`P3-105`).
+            DIRECTION_SIGNS_MANIFEST_NAME: {
+                "schema_version": DIRECTION_SIGNS_MANIFEST_SCHEMA,
+                "city_id": city.id,
+                "region_id": REGION,
+                "asset": None,
+                "text_atlas": None,
+            },
             # And no `backdrop:` block (`P3-100`).
             BACKDROP_MANIFEST_NAME: {
                 "schema_version": BACKDROP_MANIFEST_SCHEMA,
@@ -651,6 +663,23 @@ class TestAssembly:
         region.build()
         assert region.manifest()["paths"] == "paths.glb"
         assert "paths.glb" in shipped(region.manifest())
+
+    def test_built_direction_signs_are_shipped(self, region) -> None:
+        """The optional-key contract again, for `P3-105`'s gantry boards."""
+        region.build()
+        assert region.manifest()["direction_signs"] is None
+        assert region.manifest()["direction_signs_text_atlas"] is None
+        document = region.documents[DIRECTION_SIGNS_MANIFEST_NAME]
+        document["asset"] = "direction_signs.glb"
+        document["text_atlas"] = "direction_signs_text.png"
+        (region.out_dir / "direction_signs.glb").write_bytes(b"glb")
+        (region.out_dir / "direction_signs_text.png").write_bytes(b"png")
+        region.build()
+        assert region.manifest()["direction_signs"] == "direction_signs.glb"
+        assert region.manifest()["direction_signs_text_atlas"] == "direction_signs_text.png"
+        assert {"direction_signs.glb", "direction_signs_text.png"} <= set(
+            shipped(region.manifest())
+        )
 
     def test_built_signboards_are_shipped(self, region) -> None:
         """The optional-key contract again, for `P3-103`'s `signboards.glb`."""
@@ -1265,6 +1294,7 @@ class TestOrchestrator:
             "planters",
             "paths",
             "signboards",
+            "direction_signs",
             "backdrop",
             "export",
         ]
@@ -1325,6 +1355,7 @@ class TestOrchestrator:
             "planters",
             "paths",
             "signboards",
+            "direction_signs",
             "backdrop",
             "export",
         ]

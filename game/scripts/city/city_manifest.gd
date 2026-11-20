@@ -272,7 +272,10 @@ const NOT_MEASURED: float = -1.0
 ##
 ## 55 since `P3-21` (`Q262`): the manifest names `roadtext.glb`, TD's road
 ## lettering laid in its rectangles.
-const SCHEMA_VERSION: int = 55
+##
+## 56 since `P3-105` (`Q265`): the manifest names `direction_signs.glb` and
+## `direction_signs_text_atlas`, TD's gantry boards over the road.
+const SCHEMA_VERSION: int = 56
 
 
 ## One entry of `tiles` — a square of the city, at every tier the ETL built.
@@ -547,6 +550,12 @@ var signboards_path: String
 ## The signboards' lettering atlas (`P3-103` step 2), beside `signboards.glb`.
 var signboards_text_atlas_path: String
 
+## TD's gantry boards (`P3-105`, `Q265`), or **empty** where the region hangs
+## none. Optional on `tramway_path`'s terms.
+var direction_signs_path: String
+## Their faces' atlas, beside `direction_signs.glb`.
+var direction_signs_text_atlas_path: String
+
 ## The far shore (`P3-100`, `Q249`), or **empty** where the region ships none.
 ## Optional on `tramway_path`'s terms.
 var backdrop_path: String
@@ -754,6 +763,10 @@ static func load_manifest(region: String = "") -> CityManifest:
 	manifest.signboards_text_atlas_path = _resolve(
 		document.get("signboards_text_atlas"), manifest.directory
 	)
+	manifest.direction_signs_path = _resolve(document.get("direction_signs"), manifest.directory)
+	manifest.direction_signs_text_atlas_path = _resolve(
+		document.get("direction_signs_text_atlas"), manifest.directory
+	)
 	manifest.backdrop_path = _resolve(document.get("backdrop"), manifest.directory)
 	manifest.signals_plan_path = _resolve(document.get("signals_plan"), manifest.directory)
 	manifest.signal_heads_placements_path = _resolve(
@@ -893,6 +906,8 @@ func shipped() -> PackedStringArray:
 		paths_path,
 		signboards_path,
 		signboards_text_atlas_path,
+		direction_signs_path,
+		direction_signs_text_atlas_path,
 		backdrop_path,
 		signals_plan_path,
 		signal_heads_placements_path,

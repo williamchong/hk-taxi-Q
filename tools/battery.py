@@ -469,6 +469,35 @@ TRIGGERS: dict[str, Trigger] = {
             ),
         ),
     ),
+    "direction_signs": Trigger(
+        "`pipeline/direction_signs.py`, the `direction_signs` block, or a deck by a gantry",
+        (
+            Report(
+                "direction_signs.json",
+                (
+                    "read",
+                    "drawn",
+                    "no_leader",
+                    "no_beam",
+                    "off_road",
+                    "no_panel",
+                    "under_deck",
+                    "no_footing",
+                    "panels",
+                    "label_parts",
+                    "legs",
+                    "cantilevers",
+                    "cleared",
+                    "wider_than_beam",
+                    "text_atlas_px",
+                    "triangles",
+                    "face_triangles",
+                    "facing_away",
+                    "bytes",
+                ),
+            ),
+        ),
+    ),
     "stops": Trigger(
         "`pipeline/stops.py`, the `stops` config block, or where a stop's furniture stands",
         (

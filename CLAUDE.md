@@ -210,6 +210,7 @@ checklist goes in a rule file, never back here: `check.sh` refuses a root `CLAUD
 | `basemap` | `pipeline/basemap.py`, `pipeline/shore.py`, the `basemap` block (`seal_m`, `water_level_m`, `seabed_m`, `shoreline.hard_types`, `quay_material`, `land_*`, `water_material`, `park_material`), `shore.cut_sea` and `buildings.paint_parks`, `water.tres`, `harbour_land.tres`, the `Water` node |
 | `paths` | `pipeline/paths.py`, the `paths` block (`widths_m`, `lift_m`, `sag_m`, `max_grade_pct`, `kerb_clear_m`), `materials.path_edging`, `paths.tres`, `verify_paths.gd`, the ground or the carriageway region a line is cut by |
 | `signboards` | `pipeline/signboards.py`, `signboard_text.py`, the `signboards` block (`mounts`, `palette`, `facing_weight_m`, `road_base_m`, `text:`), `tools/signboard_colour.py`, `signboards*.gdshader` / `.tres`, `verify_signboards.gd`, the shipped walls a board snaps to |
+| `direction_signs` | `pipeline/direction_signs.py`, the `direction_signs` block (`drawing_units_per_m`, the fill, `clearance_m`, `leg_*`, `deck_depth_m`), `direction_signs_face.tres`, `verify_direction_signs.gd`, the decks and the drawn asphalt a gantry stands by |
 
 ⚠️ **Three changes reach past their own rule.** A **widening** (`surface.floor_default_m`, any
 `roads.surface` width) moves the drawn kerb, so it owes `clearance`, `carriageway`, `railings`,

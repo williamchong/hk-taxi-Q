@@ -107,6 +107,7 @@ from pipeline.config_blocks.crossings import (  # noqa: F401
     ZebraEvidence,
     _crossings,
 )
+from pipeline.config_blocks.direction_signs import DirectionSigns, _direction_signs
 from pipeline.config_blocks.fares import (  # noqa: F401
     _FARE_OPTIONAL_ROLES,
     _FARE_ROLES,
@@ -510,6 +511,10 @@ class Config:
     # `pipeline/signboards.py` (`P3-103`, `Q260`). Optional on the same terms:
     # absent, the region ships none.
     signboards: Signboards | None = None
+    # TD's overhead direction signs on their gantries, drawn by
+    # `pipeline/direction_signs.py` (`P3-105`, `Q265`). Optional on the same
+    # terms: absent, the region ships none.
+    direction_signs: DirectionSigns | None = None
     # The signalled junctions and their authored stages, by
     # `pipeline/signals.py` (`P3-3a`, `Q173`). Optional: absent, the region
     # ships no signal plan and no car stops for a light.
@@ -915,6 +920,9 @@ def load_config(path: Path | None = None) -> Config:
         planters=_planters(document.get("planters"), f"{path}:planters", table),
         paths=_paths(document.get("paths"), f"{path}:paths", table),
         signboards=_signboards(document.get("signboards"), f"{path}:signboards"),
+        direction_signs=_direction_signs(
+            document.get("direction_signs"), f"{path}:direction_signs"
+        ),
         signals=_signals(document.get("signals"), f"{path}:signals"),
         bus_routes=_bus_routes(document.get("bus_routes"), f"{path}:bus_routes"),
         census_stations=_census_stations(document.get("traffic_census"), f"{path}:traffic_census"),
@@ -974,6 +982,7 @@ def load_config(path: Path | None = None) -> Config:
             _check_source_exists(
                 city, text.licences.source, f"{path}:signboards.text.licences.source"
             )
+    _check_direction_sign_colours(city, path)
     if city.bus_routes is not None:
         for index, route_set in enumerate(city.bus_routes.sets):
             _check_source_exists(city, route_set.source, f"{path}:bus_routes.sets[{index}].source")
@@ -987,6 +996,21 @@ def load_config(path: Path | None = None) -> Config:
         # A key nothing read is a setting that tunes nothing — see `_Read`.
         raise ValueError(f"{path} declares keys nothing reads: {', '.join(unread)}")
     return city
+
+
+def _check_direction_sign_colours(city: Config, path: Path) -> None:
+    """A direction sign's three colours are names in `signs.colours`, the sign
+    livery's one table (`test_no_colour_escapes_the_materials_table`)."""
+    spec = city.direction_signs
+    if spec is None:
+        return
+    livery = city.signs.colours if city.signs is not None else {}
+    unknown = sorted(name for name in spec.colours.values() if name not in livery)
+    if unknown:
+        raise ValueError(
+            f"{path}:direction_signs.colours names {', '.join(unknown)}, "
+            f"not in signs.colours ({', '.join(sorted(livery)) or 'none'})"
+        )
 
 
 def _check_backdrop(city: Config, path: Path) -> None:

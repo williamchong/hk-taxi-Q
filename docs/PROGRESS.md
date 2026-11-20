@@ -126,6 +126,11 @@ Phase 3 — `B2` and the road
   (`text.lettered: false`, colour only, the user's call 2026-11-20); two authored LED screens (East Point Centre,
   Times Square) on a generic animated shader — owed: the user's look, the handset, the screens'
   heights.
+- `P3-105` 🟡 Overhead direction signs (`Q265`): TD's gantry boards filled from
+  `DTAD_DS_PLATE_LINE`'s line-work (Chinese bold +1 cm at 4× AA) and hung on their `GS` beams on
+  authored legs; Wan Chai 9 of 18 drawn (5 no leader, 3 off road, 1 under a deck), 3 moved ≤ 0.6 m
+  clear of a footbridge, atlas 2048 × 1024; +3 draws, +2.4k prims at G57A; Causeway Bay none —
+  owed: the user's look and drive, the PCK, the handset, the scale on more than two boards.
 - `P3-104` 🟡 A pointer over every fare ring (`Q261`): a solid four-sided spike 3 m over each
   ring, bobbing 0.4 m and turning once in 4 s, in the ring's colour (`guide.tres` `pointer_*`,
   first guesses) — owed: the user's pick of size and height, the draw delta against `--hud=off`.

@@ -120,6 +120,11 @@ const SHADERS: Dictionary = {
 	# checks the dispatch by `resource_path`.
 	"signboards": "res://tuning/signboards.tres",
 	"signboards_screen": "res://tuning/signboards_screen.tres",
+	# TD's gantry boards (`P3-105`): `FRAME_MATERIAL` in
+	# `etl/pipeline/direction_signs.py` — the steel and the boards' backs, in the
+	# signs' own galvanised grey on the signs' own material, so a gantry and a
+	# sign post read as one steel. `verify_direction_signs.gd` checks the dispatch.
+	"direction_signs": "res://tuning/signs.tres",
 	# The land no region's tiles draw (`P3-101`): `LAND_MATERIAL` in
 	# `etl/pipeline/basemap.py`, the second mesh in `water.glb`. ⚠️ Its own row,
 	# never the water's: that material is `water.gdshader`, and land on it waves.
@@ -168,6 +173,8 @@ const SHADERS: Dictionary = {
 const TEXTURED: Dictionary = {
 	"signs_text": {"material": "res://tuning/signs_text.tres", "uniform": "glyph_atlas"},
 	"signboards_text": {"material": "res://tuning/signboards_text.tres", "uniform": "glyph_atlas"},
+	"direction_signs_face":
+	{"material": "res://tuning/direction_signs_face.tres", "uniform": "glyph_atlas"},
 }
 
 ## The vehicle door (`P5-23`, `Q124`). A body arrives with one material slot

@@ -3147,6 +3147,80 @@ stop_marks:
         fields: {code: REFNAME, bearing: ANGLE, level: ELEVATION}
         turn_deg: -90.0
 
+# TD's overhead direction signs on their gantries (`P3-105`, `Q265`), drawn by
+# `pipeline/direction_signs.py`. Checklist: `.claude/rules/direction_signs.md`.
+#
+# 🔴 **The words are TD's, drawn as line-work, never typed.** `DTAD_DS_PLATE_LINE`
+# carries each board's whole face as a callout beside the road — legends,
+# arrows, shields, symbols, the panel frames, plus its own size label and
+# SIGNID drawn outside the frames. There is no text field. The face is filled
+# from that line-work; the label is dropped as everything outside a panel.
+# Shipped as TD publishes it, out of date or not (the user's call, 2026-11-21:
+# G26A/G27A were last updated 2020-05-21 and Street View shows a newer board).
+direction_signs:
+  source: traffic_aids_drawings_gdb
+  layer: DTAD_DS_PLATE_LINE
+  fields: {code: SIGNID}
+  leaders:
+    layer: DTAD_DS_MISC_LINE
+    fields: {kind: LINETYPE}
+  # The gantry's span: `GS` in the `_C` pole layer is one straight line across
+  # the carriageway (386 HK-wide). On G57A its ends are 0.0 and 0.1 m inside
+  # the drawn kerb, and Street View shows the legs just past it.
+  beams:
+    layer: DTAD_DS_POLE_LINE_C
+    fields: {kind: REFNAME}
+  # TD's own reference, `H/WA/Glo-G27A`: a `-G` board is a gantry's. The plate's
+  # REFNAME (`GSP`) is set on 11 of 31, so it is not the signal.
+  gantry_code: "-G"
+  leader_kind: Leader Line
+  beam_kind: GS
+  # Measured, not published: the drawn board against its own size label,
+  # 94.75 / 19.1 m (G27A) and 72.75 / 14.7 m (G26A). Two boards.
+  drawing_units_per_m: 4.96
+  # How far outside the region a callout may sit and still be read: leaders
+  # run a median 20 m, 74 m the longest seen.
+  reach_m: 150.0
+  # A leader end this near a board's drawing is that board's; G58's is 2.0 m.
+  leader_touch_m: 2.5
+  # And its other end this near a beam is that beam's (0.3–1.1 m measured).
+  beam_reach_m: 2.5
+  # The beam's middle this near a level-0 centreline, or it is over no street
+  # the game drives (the bypass tunnel's beams are 18–73 m off any).
+  host_max_m: 8.0
+  # Real m²: a connected piece of line-work this big is a panel; the label's
+  # letters are ~0.03 m².
+  panel_min_m2: 0.5
+  # Real m²: a closed face of open line-work under this is a counter (o, a, R).
+  counter_max_m2: 0.1
+  # The English stroke and the Chinese thickening — the user's pick from
+  # frames (2026-11-21: AA 4x, +1 cm).
+  stroke_m: 0.04
+  bold_m: 0.01
+  px_per_m: 64
+  supersample: 4
+  pad_px: 2
+  # TPDM headroom, the board's lower edge over the road (`clearance.headroom_m`).
+  clearance_m: 5.1
+  board_thickness_m: 0.12
+  face_lift_m: 0.01
+  # The steel is authored: TD draws no leg and no section.
+  beam_depth_m: 0.6
+  beam_width_m: 0.4
+  leg_width_m: 0.4
+  leg_clear_m: 0.6
+  leg_max_push_m: 4.0
+  # A deck over the beam within the board's height plus this is in the way:
+  # TD's sign is on that footbridge's face (G26A: walkway 6.8 m up, board top
+  # 8.8 m). The gantry moves along its normal to the nearest clear line, at most
+  # `clear_max_push_m`; past it the board is refused (`under_deck`). 1.0 m is a
+  # footbridge's deck and parapet beam; HKCEC's links measure 0.9-1.2 m in
+  # Street View.
+  deck_depth_m: 1.0
+  clear_max_push_m: 6.0
+  # Names in `signs.colours`, the livery's one table.
+  colours: {field: blue, ink: white, steel: grey}
+
 # Published road lettering (`P3-21`, `Q262`): `CENTRAL 中區`, `KOWLOON 九龍`,
 # `BEWARE OF PED 小心行人`, drawn by `pipeline/roadtext.py`.
 #

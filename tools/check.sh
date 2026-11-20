@@ -51,7 +51,7 @@ VERIFY_TOOLS=(
 	verify_roadtext
 	verify_stops
 	verify_railings verify_signs verify_roadmarks verify_lamps verify_fares verify_water
-	verify_parked verify_trees verify_planters verify_paths verify_signboards verify_backdrop verify_signals verify_traffic verify_trams
+	verify_parked verify_trees verify_planters verify_paths verify_signboards verify_direction_signs verify_backdrop verify_signals verify_traffic verify_trams
 )
 
 # The verify tools that need no built region, so they run whatever

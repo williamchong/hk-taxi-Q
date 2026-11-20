@@ -3746,7 +3746,8 @@ The face's weight is a first pick (700) for the user's look from frames.
   nearest centreline is the crossing road), 0 inverted, letters p50 1.36 m, 24,335 triangles,
   1.84 MB. Causeway Bay: 17 read, 14 drawn, 2 too far, 1 off axis, 722 triangles.
 - Refused: re-hosting an off-axis legend on the aligned road (a second host rule on `Segments`);
-  destination wording on direction-sign boards (`DTAD_DS_*` publishes the plate, not its words).
+  destination wording on direction-sign boards (`DTAD_DS_*` publishes the plate, not its words —
+  ⚠️ wrong: it publishes the words as line-work, and `Q265` fills them).
 - Owed: the user's look and weight pick, the handset's frame time, the PCK.
 
 
@@ -3811,3 +3812,37 @@ before-side builder script was skipped on the user's call; the battery recipe st
 - Deciding numbers: Wan Chai 10 of 30 nodes over the bar (worst 0.87 m) → 0 of 29, worst 0.080 m;
   8 street ends raised, max 0.67 m, 0 refused; Causeway Bay 0 → 0. Carve knock-on: `e398`'s carved
   area 172 → 157 m², no grader worse. `touchdown_error` reads node 269 as landed rather than missed.
+
+
+## `Q265` — TD's gantry boards are filled from their line-work and hung on their beams
+
+**Status.** Shipped 2026-11-21 (`P3-105`) on the user's go: "aa x4 +1 bold cm" for the Chinese,
+"Add an authored gantry frame if data supports it", "ship td version".
+
+- `DTAD_DS_PLATE_LINE` draws every direction sign's face — English, Chinese, arrows, shields,
+  symbols, panel frames — as a callout beside the road, with its size label under it. Nothing is
+  text. `Q262`'s "the plate, not its words" was wrong.
+- The fill: parts deduplicated (TD draws each Chinese outline twice: 62 of 125 on G27A); a panel is
+  a connected face ≥ `panel_min_m2` of the **noded** line-work (un-noded, G26A's two top plates were
+  lost); the rest is the label, dropped. Chinese is closed rings, XOR-filled in raster (TD's
+  outlines self-intersect, which GEOS refuses) and dilated `bold_m` 1 cm; English is single strokes,
+  drawn `stroke_m` 4 cm; a face of open strokes ≤ `counter_max_m2` is a counter. 64 px/m at 4×
+  supersample, LANCZOS down.
+- Scale: 4.96 drawing units a metre, measured against the size label on G27A and G26A; not
+  published.
+- Place: the leader that touches the board ends on a `GS` line (`DTAD_DS_POLE_LINE_C`) — the beam.
+  Its middle must be on the drawn level-0 asphalt within `host_max_m` of a level-0 edge; the board
+  faces back down that edge's traffic (a `both` edge by the side the beam's middle is on).
+- Steel is authored: a 0.6 m beam with its underside 5.1 m over the road, the board on top (G57A in
+  Street View), a leg at each end pushed ≤ 4 m off the asphalt to 0.6 m clear, else a cantilever.
+  Legs collide (`-colonly`); the boards do not.
+- A deck over the beam within the board's height plus `deck_depth_m` 1.0 m moves the gantry along
+  its normal to the nearest clear line (≤ `clear_max_push_m`), else `under_deck`. G26A's GS line
+  runs the length of a footbridge (walkway 6.8 m, board top 8.8 m): unmoved, its plates stood
+  through the deck.
+- Wan Chai: 18 gantry boards read, 9 drawn, 5 no leader, 3 off road, 1 under a deck; 3 cleared
+  ≤ 0.6 m; 15 legs, 3 cantilevers; atlas 2048 × 1024 (399 KB PNG); 768 + 107 triangles; +3 draws,
+  +2.4k prims at G57A (the face casts no shadow; the frame holds the slab). Causeway Bay: 1 read, 0 drawn (no leader).
+- Refused: roadsignfactory.hk (a vendor's catalogue, not the government's data, and no licence to
+  ship); rewording a stale board to match Street View (the user: ship TD's).
+- Owed: the PCK delta, the handset's frame time, the scale on more boards, the 5 leaderless boards.

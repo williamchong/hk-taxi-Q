@@ -72,6 +72,10 @@ layer = "paths"
 script = ExtResource("1_layer")
 layer = "signboards"
 
+[node name="DirectionSigns" type="Node3D" parent="." unique_id=379038813]
+script = ExtResource("1_layer")
+layer = "direction_signs"
+
 [node name="Signs" type="Node3D" parent="." unique_id=637669317]
 script = ExtResource("1_layer")
 layer = "signs"

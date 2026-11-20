@@ -266,6 +266,16 @@ func _check_documents(manifest: Manifest) -> PackedStringArray:
 				GeneratedLayer.path(GeneratedLayer.SIGNBOARDS)
 			)
 		)
+	# And the gantry boards (`P3-105`): a city with no `direction_signs:` block
+	# names none.
+	if not manifest.direction_signs_path.is_empty():
+		problems.append_array(
+			_check_document(
+				"direction_signs",
+				manifest.direction_signs_path,
+				GeneratedLayer.path(GeneratedLayer.DIRECTION_SIGNS)
+			)
+		)
 	# And the far version (`P3-100`): a city with no `backdrop:` block names none.
 	if not manifest.backdrop_path.is_empty():
 		problems.append_array(

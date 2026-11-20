@@ -59,6 +59,10 @@ from pipeline.config import (
 )
 from pipeline.crossings import CROSSINGS_MANIFEST_NAME, CROSSINGS_MANIFEST_SCHEMA
 from pipeline.crs import GameTransform
+from pipeline.direction_signs import (
+    DIRECTION_SIGNS_MANIFEST_NAME,
+    DIRECTION_SIGNS_MANIFEST_SCHEMA,
+)
 from pipeline.documents import read_document, round_position, write_document
 from pipeline.fares import FARES_NAME, FARES_SCHEMA
 from pipeline.fence import FENCE_NAME, FENCE_SCHEMA
@@ -334,7 +338,10 @@ CITY_NAME = "city.json"
 # 55 since `P3-21` (`Q262`): the manifest names `roadtext.glb`, TD's road
 # lettering (`CENTRAL 中區`) laid in its rectangles. A v54 reader ships a region
 # without it.
-CITY_SCHEMA = 55
+# 56 since `P3-105` (`Q265`): the manifest names `direction_signs.glb` and
+# `direction_signs_text_atlas`, TD's gantry boards over the road. A v55 reader
+# ships a region without them.
+CITY_SCHEMA = 56
 
 # The hero-building placement document (`P3-6`), written by this stage from the
 # city config — ~2 entries derived from `landmarks:` plus one CRS conversion,
@@ -386,6 +393,8 @@ OPTIONAL_ASSET_KEYS = (
     "paths",
     "signboards",
     "signboards_text_atlas",
+    "direction_signs",
+    "direction_signs_text_atlas",
     "backdrop",
     "lamps",
     "lamps_placements",
@@ -445,6 +454,7 @@ INPUTS: tuple[Input, ...] = (
     Input(PLANTERS_MANIFEST_NAME, PLANTERS_MANIFEST_SCHEMA, "planters"),
     Input(PATHS_MANIFEST_NAME, PATHS_MANIFEST_SCHEMA, "paths"),
     Input(SIGNBOARDS_MANIFEST_NAME, SIGNBOARDS_MANIFEST_SCHEMA, "signboards"),
+    Input(DIRECTION_SIGNS_MANIFEST_NAME, DIRECTION_SIGNS_MANIFEST_SCHEMA, "direction_signs"),
     Input(BACKDROP_MANIFEST_NAME, BACKDROP_MANIFEST_SCHEMA, "backdrop"),
     Input(LAMPS_MANIFEST_NAME, LAMPS_MANIFEST_SCHEMA, "lamps"),
     Input(RAILINGS_MANIFEST_NAME, RAILINGS_MANIFEST_SCHEMA, "railings"),
@@ -538,6 +548,7 @@ def build_region(
     planters = documents[PLANTERS_MANIFEST_NAME]
     paths = documents[PATHS_MANIFEST_NAME]
     signboards = documents[SIGNBOARDS_MANIFEST_NAME]
+    direction_signs = documents[DIRECTION_SIGNS_MANIFEST_NAME]
     backdrop = documents[BACKDROP_MANIFEST_NAME]
     lamps = documents[LAMPS_MANIFEST_NAME]
     railings = documents[RAILINGS_MANIFEST_NAME]
@@ -677,6 +688,10 @@ def build_region(
         # where the city declares no `signboards:` block or the region has none.
         "signboards": signboards["asset"],
         "signboards_text_atlas": signboards.get("text_atlas"),
+        # TD's gantry boards over the road (`P3-105`, `Q265`); `null` where the
+        # city declares no `direction_signs:` block or hangs none here.
+        "direction_signs": direction_signs["asset"],
+        "direction_signs_text_atlas": direction_signs["text_atlas"],
         # The far shore (`P3-100`, `Q249`); `null` where the city declares no
         # `backdrop:` block or this region is not one that ships it.
         "backdrop": backdrop["asset"],
