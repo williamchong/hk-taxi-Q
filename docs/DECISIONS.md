@@ -3772,6 +3772,12 @@ pointer. Judgment calls stay as prose.
 - Gone, not encoded: the headless import no longer re-tabs `greybox_wanchai.json`. A plain
   import, a forced re-import, an editor run and four `check.sh` runs left it clean, so the
   warning (miscited `Q115`, which is prop placements) is removed rather than guarded.
+- Review: `.claude/skills/prove-review` proves a change by running something (a mutation, a battery
+  item, a before-side comparison, a frame), drops any finding not run, and checks the touched
+  comments are still true. pstack's `/no-comments` was evaluated and not adopted: its deletion
+  rules remove the measured reasons `CONTRIBUTING.md` keeps beside the code.
+- Principle, not a check: attack the premise after two failed fixes on one assumption
+  (`CLAUDE.md`).
 - Citations: `test_decision_citations.py` holds every backticked `Qnnn` in a tracked text file
   to a `DECISIONS.md` heading (a heading can carry several: `Q2` `Q3` `Q5`). All 6,174 resolve
   today; a planted citation of an unused id, a heading stripped of its ids and `Q3` dropped from its heading each

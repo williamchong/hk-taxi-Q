@@ -134,6 +134,8 @@ Common emoji for this project:
 - Update `docs/PROGRESS.md` — task status, metrics, risks, and the open questions.
 - Record any new decision, or any question that closes, in `docs/DECISIONS.md`, keyed by its ID —
   a `**Status.**` line and a few lines: the decision, the reason, the deciding number. No narrative.
+- **Attack the premise.** When two fixes resting on one assumption fail the same check, test the
+  assumption before writing a third.
 - **Bundle size is measured from a PCK, never summed from source files.** That rule has been wrong
   in both directions once each.
 
