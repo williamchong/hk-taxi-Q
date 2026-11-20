@@ -137,6 +137,7 @@ the cache the import writes.
 | `sidecars` | Every `*.glb.import` under `assets/generated/` and `assets/authored/` carries the pinned `meshes/*` keys. 0 sidecars passes (a clone has no city) | yes |
 | `warnings` | `--check-only` per script, grepping `treated as error\|Parse Error`; the swept count must equal the script count | yes |
 | Always tools | `verify_beam_budget`, `verify_vehicle`, `verify_mesh_contract`, `verify_hud`, `verify_input`, `verify_authored`, `verify_menu`, `verify_day_cycle`, `verify_perf_recorder`. No built region needed | yes |
+| `shaders` | `compile_shaders.gd`, windowed, once on `mobile` and once on `gl_compatibility`: every `.gdshader` under `res://`. `--headless` compiles no shader. No display: SKIP, said so | no |
 | Region tools | Once per region in `regions.json` (`--region=`): `verify_city`, `verify_tiles`, `verify_road_surface`, `verify_road_graph`, `verify_city_streamer`, `verify_spawn`, `verify_landmarks`, `verify_fence`, `verify_tramway`, `verify_arrows`, `verify_boxjunctions`, `verify_crossings`, `verify_stopmarks`, `verify_roadtext`, `verify_stops`, `verify_railings`, `verify_signs`, `verify_roadmarks`, `verify_lamps`, `verify_fares`, `verify_water`, `verify_parked`, `verify_trees`, `verify_planters`, `verify_paths`, `verify_backdrop`, `verify_signals`, `verify_traffic`, `verify_trams` | no |
 | `verify_join` | The runtime merge of the first two synced regions against `pipeline/join.py`; SKIPs on one region | no |
 
@@ -144,7 +145,7 @@ the cache the import writes.
 - `CHECK_JOBS` (default: cores, capped at 8) pools the sweep and the region tools; `CHECK_JOBS=1` is
   serial. `verify_road_graph` runs first and alone (`CLOCKED_TOOLS`): it gates on microsecond budgets.
 - A Godot step fails on a non-zero exit or on `Parse Error|SCRIPT ERROR|Failed to load
-  script|Failed to compile` in its output.
+  script|Failed to compile|SHADER ERROR` in its output.
 - `verify_road_graph` and `verify_join` need `reachability.json` beside each graph
   (`etl/out/<region>/`, `etl/out/<a>+<b>/`), written by `tools/reachability.py --region <r>
   [--graph-dir <dir>] --json`. Missing or stale FAILs, naming the command. After moving a region,
@@ -153,17 +154,16 @@ the cache the import writes.
 Traps:
 
 - A verify tool that hangs is usually a parse error: `_init` never runs, `quit()` is never called.
-  Give scripted Godot runs a watchdog. Tools extend `game/tools/verify_tool.gd` by path (`_expect`,
+  Give scripted Godot runs a watchdog; `check.sh` limits each of its runs to `GODOT_TIMEOUT`
+  (900 s) and FAILs one that reaches it. Tools extend `game/tools/verify_tool.gd` by path (`_expect`,
   `_fail`, `_finish`, `_start_watchdog`); the per-layer tools run through `verify_layer.gd`.
 - Verify tools `preload` every dependency and never name a `class_name` global: on a fresh clone the
   global cache does not exist, the tool fails to parse, and Godot exits 0.
 - Autoloads register on the first frame; a tool that loads a scene awaits `process_frame` first.
 - A verify tool proves an asset is correct, not that it renders (`Q73`). A new layer needs its node
   in `scenes/region.tscn` (`verify_city.gd` holds the `layer` ids both ways) and a frame looked at.
-- `check.sh` exits 0 on a shader that fails to compile. A shader change owes a render and
-  `grep -i "shader error"`.
-- A headless `--import` re-tabs `game/assets/authored/greybox_wanchai.json` (`Q115`). Restore it
-  after `check.sh`; never commit it.
+- A shader that compiles can still draw wrong: a shader change owes a render of every layer that
+  shares it. The `shaders` step only proves it compiles.
 - Exports are byte-deterministic given a clean `project.godot`. Bundle size is measured from a PCK,
   never summed from source files.
 

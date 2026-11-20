@@ -3,6 +3,7 @@
 #
 #   tools/sync_generated.sh                      # the regions already synced, else wan_chai
 #   tools/sync_generated.sh <region> [<region>...]
+#   tools/sync_generated.sh --drop <region> [<region>...]   # and delete the rest
 #
 # Each region lands in its own directory, game/assets/generated/<region>/, and
 # the list goes to game/assets/generated/regions.json in argument order — the
@@ -28,16 +29,32 @@ PYTHON="${PYTHON:-$ROOT/.venv/bin/python}"
 
 GENERATED="$ROOT/game/assets/generated"
 
+# 🔴 A region synced now and missing from the arguments is deleted by the sweep
+# at the bottom. `tools/sync_generated.sh wan_chai` on a two-region tree did
+# exactly that, and nothing said so until verify_join failed. So dropping one
+# takes --drop; without it the run refuses before touching anything.
+DROP=0
+if [[ "${1:-}" == "--drop" ]]; then
+	DROP=1
+	shift
+	if [[ $# -eq 0 ]]; then
+		echo "--drop takes the regions to keep" >&2
+		exit 1
+	fi
+fi
+SYNCED=""
+if [[ -f "$GENERATED/regions.json" ]]; then
+	SYNCED="$("$PYTHON" -c 'import json, sys; print(*json.load(open(sys.argv[1]))["regions"])' \
+		"$GENERATED/regions.json")"
+fi
+
 # With no argument the list is the one the last sync wrote, in its order, so the
 # frame region stays the frame. It was `wan_chai` alone, and the sweep at the
 # bottom removes every region not listed: a bare re-sync of a two-region tree
 # deleted the second one.
 if [[ $# -eq 0 ]]; then
-	if [[ -f "$GENERATED/regions.json" ]]; then
-		# shellcheck disable=SC2046
-		set -- $("$PYTHON" -c 'import json, sys; print(*json.load(open(sys.argv[1]))["regions"])' \
-			"$GENERATED/regions.json")
-	fi
+	# shellcheck disable=SC2086
+	set -- $SYNCED
 	if [[ $# -eq 0 ]]; then
 		set -- wan_chai
 	fi
@@ -63,6 +80,18 @@ for REGION in "${REGIONS[@]}"; do
 		exit 1
 	fi
 done
+
+DROPPED=""
+for REGION in $SYNCED; do
+	if ! printf '%s\n' "${REGIONS[@]}" | grep -qxF "$REGION"; then
+		DROPPED="$DROPPED $REGION"
+	fi
+done
+if ((!DROP)) && [[ -n "$DROPPED" ]]; then
+	echo "this sync would delete the synced region(s)$DROPPED. List them too," >&2
+	echo "or pass --drop first to delete them." >&2
+	exit 1
+fi
 
 LIST="$(mktemp)"
 trap 'rm -f "$LIST"' EXIT

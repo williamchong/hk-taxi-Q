@@ -21,6 +21,14 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 GODOT="${GODOT:-godot}"
 GDFORMAT="${GDFORMAT:-$ROOT/.venv/bin/gdformat}"
 
+# Every Godot run is time-limited. A GDScript error can leave a run that never
+# exits (an unused variable promoted to an error, a --script run on a
+# class_name script), and an unbounded hang is a check.sh that never says FAIL.
+# Exit 124 is the limit, and judge_godot names it. Override with
+# GODOT_TIMEOUT=<whole seconds>. Applied through a wrapper (below, beside $POOL),
+# so the pooled `bash -c` jobs, which take Godot as `$0`, get it too.
+GODOT_TIMEOUT="${GODOT_TIMEOUT:-900}"
+
 # The verify tools assert facts about generated assets, which are build output —
 # absent from a fresh clone until the ETL has run and been synced. Set
 # VERIFY_GENERATED=0 where there is no city to check; CI does, because building
@@ -105,7 +113,7 @@ UNDOCUMENTED_OK=(
 )
 
 # Godot reports a compile failure with any of these and still exits 0.
-FATAL='Parse Error|SCRIPT ERROR|Failed to load script|Failed to compile'
+FATAL='Parse Error|SCRIPT ERROR|Failed to load script|Failed to compile|SHADER ERROR'
 
 failed=0
 
@@ -133,6 +141,16 @@ fi
 POOL="$(mktemp -d)"
 trap 'rm -rf "$POOL"' EXIT
 
+# -k: a Godot spinning in a script loop ignores the TERM, so KILL follows.
+timeout_cmd="$(command -v timeout || command -v gtimeout || true)"
+if [[ -n "$timeout_cmd" ]]; then
+	printf '#!/bin/sh\nexec %q -k 10 %q %q "$@"\n' "$timeout_cmd" "$GODOT_TIMEOUT" "$GODOT" >"$POOL/godot"
+	chmod +x "$POOL/godot"
+	GODOT="$POOL/godot"
+else
+	echo "  WARN  no timeout or gtimeout on PATH: a Godot run that hangs will hang this script" >&2
+fi
+
 # Judges one finished Godot run and fails the script if either signal says it
 # went wrong: a compile failure named in the output, or a non-zero status. Both
 # are needed. The output check catches parse failures, which exit 0. The status
@@ -141,6 +159,11 @@ trap 'rm -rf "$POOL"' EXIT
 judge_godot() {
 	local label="$1" out="$2" status="$3"
 	echo "$out"
+	if ((status == 124 || status == 137)); then
+		echo "  FAIL  $label — still running after ${GODOT_TIMEOUT}s; usually a script error" >&2
+		failed=1
+		return
+	fi
 	if ((status != 0)); then
 		echo "  FAIL  $label — exit $status" >&2
 		failed=1
@@ -493,12 +516,13 @@ else
 	mkdir "$POOL/lint"
 	# shellcheck disable=SC2016
 	tr '\n' '\0' <<<"$scripts" | xargs -0 -n 1 -P "$CHECK_JOBS" bash -c '
-		"$0" --headless --path "$1" --check-only --script "$3" 2>&1 |
-			sed "s|^|$3: |" >"$(mktemp "$2/XXXXXX")"
+		out="$(mktemp "$2/XXXXXX")"
+		"$0" --headless --path "$1" --check-only --script "$3" 2>&1 | sed "s|^|$3: |" >"$out"
+		case "${PIPESTATUS[0]}" in 124 | 137) echo "$3: timed out" >>"$out" ;; esac
 	' "$GODOT" "$ROOT/game" "$POOL/lint"
 	script_count="$(grep -c . <<<"$scripts")"
 	swept="$(find "$POOL/lint" -type f | grep -c .)"
-	lint_hits="$(find "$POOL/lint" -type f -exec cat {} + | grep -E 'treated as error|Parse Error' | sort)"
+	lint_hits="$(find "$POOL/lint" -type f -exec cat {} + | grep -E 'treated as error|Parse Error|timed out' | sort)"
 	if ((swept != script_count)); then
 		echo "  FAIL  warnings — $swept of $script_count scripts reported back, so the" >&2
 		echo "        pool did not sweep them all. Re-run with CHECK_JOBS=1." >&2
@@ -516,6 +540,21 @@ for tool in "${ALWAYS_TOOLS[@]}"; do
 	echo "==> $tool"
 	run_godot "$tool" --headless --path "$ROOT/game" --script "res://tools/$tool.gd"
 done
+
+# Every shader, compiled on both renderers the game ships (Mobile, and
+# Compatibility for the web). 🔴 Not --headless: the dummy renderer accepts any
+# shader code, so a broken shader passed every step above. A real renderer
+# needs a display, so a machine without one (CI) skips, and says so.
+if [[ "$(uname)" == Darwin || -n "${DISPLAY:-}${WAYLAND_DISPLAY:-}" ]]; then
+	for method in mobile gl_compatibility; do
+		echo "==> shaders [$method]"
+		run_godot "shaders [$method]" --rendering-method "$method" --path "$ROOT/game" \
+			--script "res://tools/compile_shaders.gd"
+	done
+else
+	echo "==> shaders"
+	echo "  SKIP  no display to open a renderer on. The shaders were NOT compiled."
+fi
 
 # Once per synced region (P5-9b), in regions.json order, each tool handed its
 # region as --region= so every locator opens that region's directory. The list

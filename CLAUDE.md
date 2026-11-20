@@ -109,8 +109,6 @@ Common emoji for this project:
   the file, never in it** (`Q119`): a resource's in a sidecar (`tyre.md` beside `tyre.tres`), the
   config files' in `docs/ARCHITECTURE.md`. Godot's writer drops comments and default values, so the
   files are committed in the writer's own form and an editor save is a no-op. `check.sh` refuses a `;` line in a resource and requires the sidecar.
-  ⚠️ A headless `--import` re-tabs the tracked `game/assets/authored/greybox_wanchai.json`
-  (`Q115`): `git status` after `check.sh`, and `git checkout` it.
 - Hand-authored assets go to `game/assets/authored/` and **are** committed.
 - This is not a Node project. Do not run npm/npx/node commands.
 
@@ -192,9 +190,9 @@ checklist goes in a rule file, never back here: `check.sh` refuses a root `CLAUD
 
 ⚠️ **Three changes reach past their own rule.** A **widening** (`surface.floor_default_m`, any
 `roads.surface` width) moves the drawn kerb, so it owes `clearance`, `carriageway`, `railings`,
-`signs`, `lamps` and `boxjunctions`. A **shader** change owes a render and
-`grep -i "shader error"` — `check.sh` exits 0 on a shader that fails to compile — on every layer
-that shares it (`marking_paint`: arrows, boxes, stop lines; `signs.gdshader`: signs and lamps). And
+`signs`, `lamps` and `boxjunctions`. A **shader** change owes a render on every layer
+that shares it (`marking_paint`: arrows, boxes, stop lines; `signs.gdshader`: signs and lamps);
+`check.sh`'s `shaders` step only proves it compiles. And
 **anything that carves** owes `carve`, `ground_clearance` and `clearance`.
 
 ### Measured shut — do not re-propose

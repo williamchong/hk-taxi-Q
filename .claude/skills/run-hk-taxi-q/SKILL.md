@@ -152,8 +152,7 @@ tools/check.sh                 # gdformat, tuning sidecars, import, settings, wa
 ```
 
 Read its exit code, not its output. `VERIFY_GENERATED=0` skips the verify tools that need a built
-city. Then run `drive.sh` and look at a frame. Afterwards
-`git checkout game/assets/authored/greybox_wanchai.json` — the import re-tabs it.
+city. Then run `drive.sh` and look at a frame.
 
 ## Export web
 
@@ -171,8 +170,8 @@ tools/serve_web.py             # http://127.0.0.1:8060, or pass a port
   believing a screenshot.
 - **Changing `generated_scene_import.gd` does not re-run it.** Imports are cached on the source
   file. `rm -f game/.godot/imported/<asset>.glb-*.{scn,md5}` and reimport.
-- **A shader that fails to compile exits 0** from both `drive.sh` and `tools/check.sh`, and renders
-  a blank fallback. After touching a `.gdshader`: `drive.sh … 2>&1 | grep -i "shader error"`. Do
+- **A shader that fails to compile exits 0** from `drive.sh` and renders a blank fallback
+  (`tools/check.sh`'s `shaders` step fails it). After touching a `.gdshader`: `drive.sh … 2>&1 | grep -i "shader error"`. Do
   not judge it from the PNG.
 - **Godot exits 0 when a script fails to parse.** `drive.sh` and `check.sh` grep their output and
   supply the exit code. Never read raw `godot` output and call it a pass.

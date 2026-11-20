@@ -290,7 +290,6 @@ change. Closed questions are not listed here: see the headings in `DECISIONS.md`
   re-run.
 - **A test depends on the developer's fetched sources** — Low. Run the suite with
   `pipeline.fetch.SOURCES_ROOT` at an empty directory (`CONTRIBUTING.md`).
-- **A shader fails silently** — Low. `check.sh` exits 0; render and `grep -i "shader error"`.
 - **`tools/collider_offset.py --sweep` crashes** — Low. Its scratch build lacks `basemap.json`;
   the plain run grades.
 - **3 road-mark triangles under the road at a ribbon overlap** — Low. Worst 0.0151 m (`Q125`); the

@@ -69,7 +69,8 @@ cd ..
 tools/sync_generated.sh wan_chai causeway_bay   # copies exactly what each city.json names
 ```
 
-Wan Chai alone also works: build it and run `tools/sync_generated.sh wan_chai`. See
+Wan Chai alone also works: build it and run `tools/sync_generated.sh wan_chai` (add `--drop`
+first on a tree that already holds Causeway Bay). See
 [`etl/README.md`](etl/README.md).
 
 **Look at it.** Open the project (`open -a Godot --args --path "$PWD/game"`) and press **F5** to

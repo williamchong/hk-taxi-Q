@@ -3749,3 +3749,29 @@ The face's weight is a first pick (700) for the user's look from frames.
   destination wording on direction-sign boards (`DTAD_DS_*` publishes the plate, not its words).
 - Owed: the user's look and weight pick, the handset's frame time, the PCK.
 
+
+## `Q263` — A trap written as a warning becomes a check that fails on it
+
+**Status.** 🟡 Open 2026-11-21 on the user's go for the pstack-gap plan: each mechanical trap kept
+in a memory or a ⚠️ line gets a check, proven by planting the trap, and its warning shrinks to a
+pointer. Judgment calls stay as prose.
+
+- Shaders: `check.sh`'s `shaders` step compiles every `.gdshader` windowed on `mobile` and
+  `gl_compatibility` (`compile_shaders.gd`) and fails on `SHADER ERROR`. `--headless` compiles
+  none, and a bare `load()` compiled none either. CI has no display and SKIPs, saying so.
+  Deciding number: `undefined_symbol_xyz` in `marking_paint.gdshader` passed every step before,
+  and now fails exactly the two `shaders` steps.
+- Hangs: every `check.sh` Godot run goes through `timeout` (`GODOT_TIMEOUT`, 900 s), and exit 124
+  is a FAIL naming the limit. A planted early `return` in `verify_menu`'s `_init` hung the run
+  before; at 30 s it now fails `verify_menu` alone.
+- Sync: `sync_generated.sh` refuses a list that omits a synced region unless `--drop` comes first.
+  `tools/sync_generated.sh wan_chai` on the two-region tree used to delete Causeway Bay; it now
+  exits 1 before touching anything.
+- Export: `export.sh` names the missing `export_templates/<version>.stable/` before exporting. A
+  Godot reporting 4.9.1 or 4.8 now fails at once; 4.7.2 passes.
+- Gone, not encoded: the headless import no longer re-tabs `greybox_wanchai.json`. A plain
+  import, a forced re-import, an editor run and four `check.sh` runs left it clean, so the
+  warning (miscited `Q115`, which is prop placements) is removed rather than guarded.
+- Python mutations: `godot-mutation-check/mutate.sh` (the user's skill repo) reads `SyntaxError`,
+  `ImportError` and pytest's collection errors as INVALID and writes no `.pyc`. A syntax-breaking
+  mutation of `meshbuild.strut` read KILLED before and reads INVALID now.
