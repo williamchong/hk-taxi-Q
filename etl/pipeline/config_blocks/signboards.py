@@ -293,6 +293,10 @@ def _text(body: Any, where: str) -> SignText | None:
     sizes = _measures(body, where, ("fill", "vertical_aspect", "lift_m"), positive=True)
     if sizes["fill"] > 1.0:
         raise ValueError(f"{where}:fill is a share, got {sizes['fill']}")
+    lettered = body.get("lettered", True)
+    if not isinstance(lettered, bool):
+        # A quoted "false" would read true and letter every board again.
+        raise ValueError(f"{where}:lettered must be true or false, got {lettered!r}")
     return SignText(
         font=str(_require(body, "font", where)),
         glyph_px=glyph_px,
@@ -302,6 +306,6 @@ def _text(body: Any, where: str) -> SignText | None:
         trades=trades,
         licences=licences,
         streets=streets,
-        lettered=bool(body.get("lettered", True)),
+        lettered=lettered,
         **sizes,
     )

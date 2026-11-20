@@ -297,6 +297,7 @@ def test_a_blown_out_photo_is_clamped_into_the_lightness_bounds(spec) -> None:
         (lambda b: b["text"].update(name_chars=0), "name_chars"),
         (lambda b: b["text"].update(fill=1.5), "fill"),
         (lambda b: b.update(screens="2297"), "screens"),
+        (lambda b: b["text"].update(lettered="false"), "lettered"),
     ],
 )
 def test_block_refuses(mutate, message: str) -> None:
