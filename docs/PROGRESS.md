@@ -132,7 +132,8 @@ Phase 3 — `B2` and the road
   amplitude pick, the PCK, a night frame.
 - `P3-99` 🟡 Glossy, inked vehicles (`Q248`): red `C*` 68.7 → 64.7 in sun. The city's line is black and
   draws the vehicles' outline too, their own pass off (`prims` 988,372 → 709,510 at the start
-  line) — owed: the handset, the web build.
+  line). Window glass takes none of the crown, so it parts from the hull (`glass_crown` 0) — owed:
+  the handset, the web build.
 - `P3-98` 🟡 Roadside planters (`Q247`): 19 beds and 30 walls in Wan Chai, 1 and 5 in Causeway Bay —
   owed: the user's drive into one, the PCK.
 - `P3-93` 🟡 Stop furniture: flags at bus and minibus stops, tram shelters on solid posts
