@@ -3752,9 +3752,10 @@ The face's weight is a first pick (700) for the user's look from frames.
 
 ## `Q263` — A trap written as a warning becomes a check that fails on it
 
-**Status.** 🟡 Open 2026-11-21 on the user's go for the pstack-gap plan: each mechanical trap kept
+**Status.** Closed 2026-11-21 on the user's go for the pstack-gap plan: each mechanical trap kept
 in a memory or a ⚠️ line gets a check, proven by planting the trap, and its warning shrinks to a
-pointer. Judgment calls stay as prose.
+pointer. Judgment calls stay as prose. `CLAUDE.md`'s enforcer table lists what is left as text. A
+before-side builder script was skipped on the user's call; the battery recipe stays a memory.
 
 - Shaders: `check.sh`'s `shaders` step compiles every `.gdshader` windowed on `mobile` and
   `gl_compatibility` (`compile_shaders.gd`) and fails on `SHADER ERROR`. `--headless` compiles
@@ -3780,8 +3781,8 @@ pointer. Judgment calls stay as prose.
   (`CLAUDE.md`).
 - Citations: `test_decision_citations.py` holds every backticked `Qnnn` in a tracked text file
   to a `DECISIONS.md` heading (a heading can carry several: `Q2` `Q3` `Q5`). All 6,174 resolve
-  today; a planted citation of an unused id, a heading stripped of its ids and `Q3` dropped from its heading each
-  fail it. It cannot tell a wrong decision cited from a right one.
+  today; a planted citation of an unused id, a heading stripped of its ids and `Q3` dropped from
+  its heading each fail it. It cannot tell a wrong decision cited from a right one.
 - Python mutations: `godot-mutation-check/mutate.sh` (the user's skill repo) reads `SyntaxError`,
   `ImportError` and pytest's collection errors as INVALID and writes no `.pyc`. A syntax-breaking
   mutation of `meshbuild.strut` read KILLED before and reads INVALID now.
