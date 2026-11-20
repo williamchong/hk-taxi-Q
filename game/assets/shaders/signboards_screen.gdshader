@@ -34,11 +34,11 @@ void vertex() {
 	seed = COLOR.r;
 }
 
-void fragment() {
-	vec2 metres = UV;
+// The loop: a drifting colour field, cut to a new slide every `slide_s`.
+vec3 loop_colour(vec2 metres, float time, float phase) {
 	vec2 led = (floor(metres / pixel_m) + 0.5) * pixel_m;
-	float slide = floor(TIME / slide_s + seed * 7.0);
-	float t = TIME * drift + seed * 31.0;
+	float slide = floor(time / slide_s + phase * 7.0);
+	float t = time * drift + phase * 31.0;
 	// A slide's own direction and scale, so a cut reads as a new picture.
 	vec2 heading = vec2(cos(slide * 2.4), sin(slide * 2.4));
 	float scale = 0.08 + 0.06 * fract(slide * 0.618);
@@ -46,18 +46,20 @@ void fragment() {
 		+ sin(led.y * scale * 4.0 - t * 2.0)
 		+ sin(length(led - vec2(20.0, 5.0) * heading) * scale * 3.0 - t);
 	vec3 colour = 0.5 + 0.5 * cos(6.2831 * (vec3(0.0, 0.33, 0.67) + field * 0.2 + slide * 0.37));
+	return colour * colour;
+}
+
+void fragment() {
+	vec2 metres = UV;
+	// `plain` is a uniform, so the branch is coherent and a plain screen pays
+	// nothing for the loop.
+	vec3 colour = plain ? plain_colour : loop_colour(metres, TIME, seed);
 	// The dot grid, faded to its mean where an LED is smaller than a pixel.
 	vec2 cell = fract(metres / pixel_m) - 0.5;
 	float dot_mask = smoothstep(0.5, 0.3, length(cell));
 	float far = clamp(fwidth(metres.x) / pixel_m * 2.0, 0.0, 1.0);
 	float grid = mix(mix(1.0 - gap_dark, 1.0, dot_mask), 1.0 - 0.5 * gap_dark, far);
-	if (plain) {
-		colour = plain_colour;
-	} else {
-		colour *= colour;
-	}
-	vec3 lit = colour * grid;
 	ALBEDO = vec3(0.02);
 	ROUGHNESS = 0.3;
-	EMISSION = lit * mix(day_glow, night_glow, night_lights);
+	EMISSION = colour * grid * mix(day_glow, night_glow, night_lights);
 }
