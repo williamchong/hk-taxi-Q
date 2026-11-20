@@ -119,14 +119,20 @@ full-time. Needs a schema bump and a parser.
 
 ## `Q15` — Fare nodes snap by plan distance only
 
-**Status.** Open, half fixed · `P4-2`
+**Status.** Closed 2026-11-21 · `P4-1`, `P4-2` · reopens on a fare point at deck level
 
 Fare points are 2D, so `fares.build_region` snaps only to `elevation_level == 0` edges, as
 `kerbside.py`, `tramway.py` and `arrows.py` do.
 
 - `FareReport.off_grade_nearer` counts points with an off-grade edge nearer than their host;
   `export.py`'s `_check_fares` reads `elevation_level` strictly.
-- Open: a point that belongs on an elevated road snaps to the street beneath.
+- The runtime half shipped with `P4-1`: `RoadGraph.nearest_edge` takes the nearest edge within
+  `LEVEL_REACH_M` (2.5 m) of the query's height and falls back to plan distance only when none
+  is, which is `P4-2`'s accept. Nothing was left to build.
+- Deciding number: 1 of Wan Chai's 48 points and 0 of Causeway Bay's 7 have an off-grade edge
+  nearer than their host — `f_032`, by 0.80 m, under the Canal Road Flyover, where a taxi cannot
+  stop; Hennessy Road is its right host. No point in either region belongs on a deck.
+- Reopens: a region with a stand at deck or podium level; `off_grade_nearer` is the counter.
 - Refused: an `at_grade:` config key — a typo silently restores the defect.
 - Trap: a claim measured on one producer goes stale when a stage gains a second.
 

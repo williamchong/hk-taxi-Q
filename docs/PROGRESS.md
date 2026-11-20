@@ -41,7 +41,7 @@ Keep rows to one line. A row that needs a paragraph belongs in `DECISIONS.md`.
 - `P0-3b`: FPS on an A13, an Android build, then `P2-6` and the handset re-take of `traffic.tres`
   `cars`.
 - `P3-9` (authenticity round 1, the Phase 3 gate): different drivers from `P3-9a`, on a handset.
-- Not started: `P3-1b`, the one-handed layout (`P3-5b`), `P4-2`–`P4-5`, `P5-8`, `P5-14`.
+- Not started: `P3-1b`, the one-handed layout (`P3-5b`), `P4-3`–`P4-5`, `P5-8`, `P5-14`.
 - Known gaps: signal heads at 16 of Wan Chai's 72 staged junctions and 7 of Causeway Bay's 21 do
   not show every stage (`P3-3e`); a new driver cut (below).
 
@@ -190,8 +190,8 @@ Phase 3 — `B1`, `B3`, `B4`
 
 Phase 4–6
 
-- `P4-1` ✅. `P4-2`–`P4-5` ⬜ — `P4-2` owns the rest of `Q15`; `P4-3` MARSH ROAD's lip; `P4-5`
-  streaming distances and LOD0's cell.
+- `P4-1`, `P4-2` ✅ (`Q15` closed). `P4-3`–`P4-5` ⬜ — `P4-3` MARSH ROAD's lip; `P4-5` streaming
+  distances and LOD0's cell.
 - ✅ `P5-1`–`P5-7`, `P5-9a`–`d`, `f`, `g`, `P5-10`–`P5-13`, `P5-15`–`P5-28`. `P5-9e` 🚫 shared
   libraries (+3 to +11 draw calls at the seam). Owed: the drive across the seam (`P5-9f`).
 - `P5-8` ⬜ Content — behind `P3-9`, `Q6`. `P5-14` ⬜ Textures as an option on tiles.
@@ -214,7 +214,6 @@ change. Closed questions are not listed here: see the headings in `DECISIONS.md`
 - `Q13` Nothing ramps between levels in the source. Left: the 15 bores — needs a vertical
   instrument, not a wider `levels`.
 - `Q14` Stands carry operating hours `P1-5` discards. Deferred.
-- `Q15` Fare nodes snap by plan distance; a point on a deck snaps to the street below (`P4-2`).
 - `Q19` Solid geometry in the carriageway. Left: the building half, a drive of `e99` and of
   `e207` (carved 2026-11-18), the carve-wall arm (`Q104`).
 - `Q21` Should level −1 be drawn at all? 11 of 30 ends clipped at the region boundary.

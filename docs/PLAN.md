@@ -328,7 +328,7 @@ Not started:
 | ID | Deliverable | Accept |
 |---|---|---|
 | `P4-1` | ✅ `RoadGraph` serves off-grade edges, open where `clearance.LEVELS` measures (`Q111`) | — |
-| `P4-2` | ⬜ Level-aware nearest-edge — by 3D proximity, not plan distance. The ETL half is done (`Q15`) | Beside a deck a query resolves to the deck when it carries height and to the street when not |
+| `P4-2` | ✅ Level-aware nearest-edge — `RoadGraph.nearest_edge` ranks the query's own level first (`P4-1`); fare points stay at grade (`Q15`) | Beside a deck a query resolves to the deck when it carries height and to the street when not |
 | `P4-3` | ⬜ Ramp traversal — grade → deck → grade | No step over 0.15 m at any of the 36 mixed-level nodes, measured. MARSH ROAD `e248`'s 35.8% lip is reachable |
 | `P4-4` | ⬜ Traffic across levels — extends `P3-3` | AI obeys direction and turn restrictions on ramps |
 | `P4-5` | ⬜ Perf pass with the elevated network resident | 60fps on the device floor. The lever is LOD0's cell and radius; a harsher LOD1 moves 4–8% (`Q120`, `Q122`). Pull-in distance is also `Q26`'s look decision |
