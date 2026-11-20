@@ -137,6 +137,27 @@ Common emoji for this project:
 - **Bundle size is measured from a PCK, never summed from source files.** That rule has been wrong
   in both directions once each.
 
+### Rules and what enforces them
+
+A rule enforced in code keeps one line here; a ⚠️ line with no enforcer is the next candidate for
+one (`Q263`). A new check that replaces a warning shrinks the warning to a pointer.
+
+| Rule | Enforced by |
+|---|---|
+| Root `CLAUDE.md` ≤ 40k chars | `check.sh` `instructions` |
+| GDScript typed, warnings promoted, `gdformat` layout | `check.sh` `gdformat`, `settings`, `warnings` |
+| A resource's rationale in its sidecar, no `;` line | `check.sh` `tuning` |
+| Importer defaults reach every sidecar (`Q82`) | `check.sh` `sidecars` |
+| Every shader compiles on both renderers | `check.sh` `shaders` (skipped without a display) |
+| No Godot run hangs the check | `check.sh` `GODOT_TIMEOUT` |
+| Library meshes wind clockwise | `verify_mesh_contract.gd` `_check_winding` |
+| A grader never imports what it grades | `test_grader_copies.py` |
+| A battery row reads its own side | `test_battery.py` `test_every_tool_is_pointed_at_its_own_side` |
+| A cited `Qnnn` exists | `test_decision_citations.py` |
+| A sync never drops a region by omission | `sync_generated.sh` (`--drop`) |
+| An export names missing templates | `export.sh` |
+| Text only: bundle size from a PCK, schema bumps, "Crazy Taxi", the hand-read rule table below | — |
+
 ### Scoped checklists — `.claude/rules/`
 
 🔴 **Every other checklist lives in `.claude/rules/<name>.md` and loads ITSELF when a file in its
