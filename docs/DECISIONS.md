@@ -3692,5 +3692,8 @@ handset, the screens' heights. Canopies are a later task. Canopies come later an
 - **The lettering is off (2026-11-20), on the user's call**: the boards ship colour only.
   `text.lettered: false` drops the names and the atlas; the `text:` block stays validated and its
   characters stay in the brush subset, so one line turns it back on. The screens are unaffected.
+- **The screens show plain blue (2026-11-20), on the user's call**: `plain` in
+  `signboards_screen.tres` holds every screen on `plain_colour` through the same LED grid and glow;
+  the loop stays in the shader for when it is switched off.
 - ⚠️ A screen's height is a wall board's authored 3 m base, so Times Square's sits at street level
   where the real one stands higher up the façade. A per-screen base is owed with the user's pick.

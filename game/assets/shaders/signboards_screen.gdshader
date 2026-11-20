@@ -23,6 +23,10 @@ uniform float slide_s : hint_range(1.0, 60.0) = 7.0;
 uniform float gap_dark : hint_range(0.0, 1.0) = 0.45;
 uniform float day_glow : hint_range(0.0, 8.0) = 1.2;
 uniform float night_glow : hint_range(0.0, 8.0) = 2.2;
+// On, the screen shows `plain_colour` and nothing moves; the loop stays for
+// when it is switched back.
+uniform bool plain = false;
+uniform vec3 plain_colour : source_color = vec3(0.0, 0.2, 1.0);
 
 varying float seed;
 
@@ -47,7 +51,12 @@ void fragment() {
 	float dot_mask = smoothstep(0.5, 0.3, length(cell));
 	float far = clamp(fwidth(metres.x) / pixel_m * 2.0, 0.0, 1.0);
 	float grid = mix(mix(1.0 - gap_dark, 1.0, dot_mask), 1.0 - 0.5 * gap_dark, far);
-	vec3 lit = colour * colour * grid;
+	if (plain) {
+		colour = plain_colour;
+	} else {
+		colour *= colour;
+	}
+	vec3 lit = colour * grid;
 	ALBEDO = vec3(0.02);
 	ROUGHNESS = 0.3;
 	EMISSION = lit * mix(day_glow, night_glow, night_lights);

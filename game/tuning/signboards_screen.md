@@ -11,5 +11,8 @@ boards are the authored `signboards.screens` ids; the loop is generic and carrie
 - `gap_dark` 0.45: how dark the gaps between LEDs read up close.
 - `day_glow` 1.2 / `night_glow` 2.2: a screen is a light, so it emits by day too; at night it burns
   brighter, blended by the rig's `night_lights`. Under the glow pass's 3.0 threshold.
+- `plain` true, `plain_colour` `(0, 0.2, 1)`: the user's call (2026-11-20), every screen shows a
+  plain blue, through the same LED grid and glow. The loop below is kept for when it is switched
+  off.
 - Squared colour (`colour * colour`): deeper, more saturated hues than the raw cosine palette, which
   read washed out by day.
