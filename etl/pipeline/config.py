@@ -246,6 +246,7 @@ from pipeline.config_blocks.roads import (  # noqa: F401
     _touchdown_levels,
     _width_bounds,
 )
+from pipeline.config_blocks.roadtext import RoadText, _road_text
 from pipeline.config_blocks.signals import (  # noqa: F401
     SignalHeads,
     Signals,
@@ -476,6 +477,9 @@ class Config:
     # Published bus stop, stand and tram stop paint, drawn by
     # `pipeline/stopmarks.py` (`P3-89`). Optional on the same terms.
     stop_marks: StopMarks | None = None
+    # Published road lettering, drawn by `pipeline/roadtext.py` (`P3-21`,
+    # `Q262`). Optional on the same terms.
+    road_text: RoadText | None = None
     stops: Stops | None = None
     # Published pedestrian railings, drawn by `pipeline/railings.py` (`P3-19`).
     # Optional on the same terms as the three blocks above: a city whose estate
@@ -902,6 +906,7 @@ def load_config(path: Path | None = None) -> Config:
         boxjunctions=_boxjunctions(document.get("boxjunctions"), f"{path}:boxjunctions"),
         crossings=_crossings(document.get("crossings"), f"{path}:crossings"),
         stop_marks=_stop_marks(document.get("stop_marks"), f"{path}:stop_marks"),
+        road_text=_road_text(document.get("road_text"), f"{path}:road_text"),
         stops=_stops(document.get("stops"), f"{path}:stops"),
         railings=_railings(document.get("railings"), f"{path}:railings"),
         road_marks=_road_marks(document.get("road_marks"), f"{path}:road_marks"),

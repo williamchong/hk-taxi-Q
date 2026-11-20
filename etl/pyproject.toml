@@ -5,6 +5,7 @@ description = "Build-time pipeline turning HK government open geodata into game-
 requires-python = ">=3.11"
 license = "GPL-3.0-or-later"
 dependencies = [
+    "fonttools>=4.50",
     "numpy>=1.26",
     "pillow>=10.0",
     "pyogrio>=0.10",
@@ -78,6 +79,17 @@ dependencies = [
 # you can name, so nothing needs to read the printed No. column, and
 # `tools/sign_atlas_survey.py` — which would have needed `tesseract` — was never
 # built and is not owed.
+#
+# ---- `fonttools`, on the user's go of 2026-11-20 (`P3-21`, `Q262`) ----
+#
+# Road lettering is published as a string and the rectangle it fills, never as
+# strokes, so the letterforms come from a face: `roadtext.Face` reads Noto Sans
+# HK's outlines at a weight on its variable axis and flattens the curves. Pure
+# Python, MIT, no system install — the `pyogrio` argument again. ⚠️ **Rasterising with
+# Pillow and tracing was the alternative**, and it ships every edge a pixel off;
+# an atlas decal was the other, and road paint with alpha leaves `Q68`'s
+# opaque-only rule. `tools/make_fonts.py` used to be its only caller, which is
+# why that file still says it is a tool's alone.
 [project.optional-dependencies]
 # gdtoolkit formats GDScript, which has nothing to do with the ETL. It lives
 # here because this is the repo's only Python manifest, the same reason the

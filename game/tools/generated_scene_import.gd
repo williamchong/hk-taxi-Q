@@ -44,6 +44,9 @@ const SHADERS: Dictionary = {
 	# `verify_stopmarks.gd` holds the pair per kind.
 	"stopmarks_white": "res://tuning/roadmarks.tres",
 	"stopmarks_yellow": "res://tuning/boxjunctions.tres",
+	# `P3-21` (`Q262`). The road lettering, in the road marks' white on the same
+	# terms. `verify_roadtext.gd` holds it.
+	"roadtext_white": "res://tuning/roadmarks.tres",
 	# The published stop and give-way lines (`P3-23`). One entry for all three
 	# codes, because all three are the same white paint — what tells a give-way
 	# line from a stop line is the geometry `pipeline/roadmarks.py` built, not a

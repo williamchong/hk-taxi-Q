@@ -55,6 +55,7 @@ from pipeline.planters import PLANTERS_MANIFEST_NAME, PLANTERS_MANIFEST_SCHEMA
 from pipeline.railings import RAILINGS_MANIFEST_NAME, RAILINGS_MANIFEST_SCHEMA
 from pipeline.roadmarks import ROADMARKS_MANIFEST_NAME, ROADMARKS_MANIFEST_SCHEMA
 from pipeline.roads import ROADGRAPH_NAME, ROADGRAPH_SCHEMA
+from pipeline.roadtext import ROADTEXT_MANIFEST_NAME, ROADTEXT_MANIFEST_SCHEMA
 from pipeline.signals import SIGNALS_MANIFEST_NAME, SIGNALS_MANIFEST_SCHEMA
 from pipeline.signboards import SIGNBOARDS_MANIFEST_NAME, SIGNBOARDS_MANIFEST_SCHEMA
 from pipeline.signs import SIGNS_MANIFEST_NAME, SIGNS_MANIFEST_SCHEMA
@@ -339,6 +340,15 @@ class _Region:
                 "features": 0,
                 "drawn": 0,
             },
+            # And no `road_text:` block (`P3-21`).
+            ROADTEXT_MANIFEST_NAME: {
+                "schema_version": ROADTEXT_MANIFEST_SCHEMA,
+                "city_id": city.id,
+                "region_id": REGION,
+                "asset": None,
+                "features": 0,
+                "drawn": 0,
+            },
             # And no `stops:` block (`P3-94`).
             STOPS_MANIFEST_NAME: {
                 "schema_version": STOPS_MANIFEST_SCHEMA,
@@ -607,6 +617,18 @@ class TestAssembly:
         region.build()
         assert region.manifest()["stopmarks"] == "stopmarks.glb"
         assert "stopmarks.glb" in shipped(region.manifest())
+
+    def test_drawn_road_lettering_is_shipped_and_a_null_is_not(self, region) -> None:
+        """The optional-key contract again, for `P3-21`'s `roadtext.glb`."""
+        region.build()
+        assert region.manifest()["roadtext"] is None
+        assert "roadtext.glb" not in shipped(region.manifest())
+
+        region.documents[ROADTEXT_MANIFEST_NAME]["asset"] = "roadtext.glb"
+        (region.out_dir / "roadtext.glb").write_bytes(b"glb")
+        region.build()
+        assert region.manifest()["roadtext"] == "roadtext.glb"
+        assert "roadtext.glb" in shipped(region.manifest())
 
     def test_built_planters_are_shipped(self, region) -> None:
         """The optional-key contract again, for `P3-98`'s `planters.glb`."""
@@ -1229,6 +1251,7 @@ class TestOrchestrator:
             "boxjunctions",
             "crossings",
             "stopmarks",
+            "roadtext",
             "roadmarks",
             "railings",
             "signs",
@@ -1288,6 +1311,7 @@ class TestOrchestrator:
             "boxjunctions",
             "crossings",
             "stopmarks",
+            "roadtext",
             "roadmarks",
             "railings",
             "signs",

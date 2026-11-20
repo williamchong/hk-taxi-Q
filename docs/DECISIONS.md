@@ -1002,6 +1002,7 @@ or extent is never invented, moved or stretched.
   `TS101` carry lettering (`Q68`).
 - Refused: bend and narrows warnings `TS401`–`TS418` (13 primitives for 53 plates) and `P3-21`
   road lettering. Held: speed limits `TS174` / `TS175`.
+- `P3-21`'s refusal reversed on the user's instruction (2026-11-20): `Q262`.
 
 ## `Q66` — A deviation board's direction is derived, because nobody publishes it
 
@@ -3712,3 +3713,33 @@ for his pick from frames. Extends `Q142`'s guide, reopens nothing.
   hour without the rig. Drawn as one mesh and one multimesh beside the rings'.
 - Its numbers are `guide.tres`'s `pointer_*`: 3.0 m from ring to tip, 2.0 × 1.4 m, a 0.4 m bob
   that never sinks below the height, one turn in 4 s.
+
+## `Q262` — Road lettering is TD's string in TD's rectangle, in Noto Sans HK, facing the traffic
+
+**Status.** 🟡 Built 2026-11-20 (`P3-21`) on the user's instruction, reversing `Q65`'s refusal.
+The face's weight is a first pick (700) for the user's look from frames.
+
+- `DTAD_RD_MARK_ANNO` gives each legend its string, an `Angle` and the rectangle it fills, word
+  fragments apart (`CEN`, `TRAL`). `pipeline/roadtext.py` lays each where filed; no word is joined,
+  translated or invented.
+- `Q65`'s two blockers: **no direction** — `Angle` is right modulo 180 (`FlipAngle` 90 on 465 of
+  466), so the letters face the nearest flow (`stopmarks._in_flow_frame`'s rule); **no typeface** —
+  Noto Sans HK (OFL), fetched as a source, not committed. TD's faces are sans (`ENGINEERING`,
+  `chinese` / 微軟正黑體); Free HK Kai was refused: plates are Kai, road paint is not, and a brush
+  hairline vanishes at 28% width.
+- `fontTools` becomes an ETL dependency (outlines, weight instancing). Refused: tracing a Pillow
+  raster (edges a pixel off) and an alpha decal (leaves `Q68`'s opaque rule).
+- The fill is non-zero by winding: the variable face's strokes overlap, and even-odd holes them.
+- The sliver bar is authored (`sliver_m` 0.01), not the paint's 2 × `import_quantum_m`: 4.5 cm
+  dropped 5,775 of 24,586 pieces (holes in 5 cm strokes); 0 let `split` cut mm slivers onto the
+  tunnel portal cap's steep facets, 74 triangles on edge. 1.5 cm: 0 on edge in both regions.
+- The rectangle is the text's frame (advances × `hhea` line box), not its ink: `東` and `及` file
+  identical 1.34 × 2.82 m rectangles 1.9 m apart, and ink stretched to fill them overlapped the
+  next row by half. Set by the frame, letters p50 1.36 m (2.56 stretched).
+- Wan Chai: 274 read, 5 on a bore (`A03`), 259 drawn, 10 off axis (two junction mouths where the
+  nearest centreline is the crossing road), 0 inverted, letters p50 1.36 m, 24,335 triangles,
+  1.84 MB. Causeway Bay: 17 read, 14 drawn, 2 too far, 1 off axis, 722 triangles.
+- Refused: re-hosting an off-axis legend on the aligned road (a second host rule on `Segments`);
+  destination wording on direction-sign boards (`DTAD_DS_*` publishes the plate, not its words).
+- Owed: the user's look and weight pick, the handset's frame time, the PCK.
+

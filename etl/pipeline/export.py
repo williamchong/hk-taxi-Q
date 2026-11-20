@@ -71,6 +71,7 @@ from pipeline.planters import PLANTERS_MANIFEST_NAME, PLANTERS_MANIFEST_SCHEMA
 from pipeline.railings import RAILINGS_MANIFEST_NAME, RAILINGS_MANIFEST_SCHEMA
 from pipeline.roadmarks import ROADMARKS_MANIFEST_NAME, ROADMARKS_MANIFEST_SCHEMA
 from pipeline.roads import ROADGRAPH_NAME, ROADGRAPH_SCHEMA
+from pipeline.roadtext import ROADTEXT_MANIFEST_NAME, ROADTEXT_MANIFEST_SCHEMA
 from pipeline.signals import SIGNALS_MANIFEST_NAME, SIGNALS_MANIFEST_SCHEMA
 from pipeline.signboards import SIGNBOARDS_MANIFEST_NAME, SIGNBOARDS_MANIFEST_SCHEMA
 from pipeline.signs import SIGNS_MANIFEST_NAME, SIGNS_MANIFEST_SCHEMA
@@ -330,7 +331,10 @@ CITY_NAME = "city.json"
 # 54 since `P3-103` step 2: the manifest names `signboards_text_atlas`, the
 # boards' lettering. A v53 reader ships the glb without it, and every name
 # samples nothing.
-CITY_SCHEMA = 54
+# 55 since `P3-21` (`Q262`): the manifest names `roadtext.glb`, TD's road
+# lettering (`CENTRAL 中區`) laid in its rectangles. A v54 reader ships a region
+# without it.
+CITY_SCHEMA = 55
 
 # The hero-building placement document (`P3-6`), written by this stage from the
 # city config — ~2 entries derived from `landmarks:` plus one CRS conversion,
@@ -375,6 +379,7 @@ OPTIONAL_ASSET_KEYS = (
     "boxjunctions",
     "crossings",
     "stopmarks",
+    "roadtext",
     "stops",
     "stops_placements",
     "planters",
@@ -435,6 +440,7 @@ INPUTS: tuple[Input, ...] = (
     Input(BOXJUNCTIONS_MANIFEST_NAME, BOXJUNCTIONS_MANIFEST_SCHEMA, "boxjunctions"),
     Input(CROSSINGS_MANIFEST_NAME, CROSSINGS_MANIFEST_SCHEMA, "crossings"),
     Input(STOPMARKS_MANIFEST_NAME, STOPMARKS_MANIFEST_SCHEMA, "stopmarks"),
+    Input(ROADTEXT_MANIFEST_NAME, ROADTEXT_MANIFEST_SCHEMA, "roadtext"),
     Input(STOPS_MANIFEST_NAME, STOPS_MANIFEST_SCHEMA, "stops"),
     Input(PLANTERS_MANIFEST_NAME, PLANTERS_MANIFEST_SCHEMA, "planters"),
     Input(PATHS_MANIFEST_NAME, PATHS_MANIFEST_SCHEMA, "paths"),
@@ -527,6 +533,7 @@ def build_region(
     boxjunctions = documents[BOXJUNCTIONS_MANIFEST_NAME]
     crossings = documents[CROSSINGS_MANIFEST_NAME]
     stopmarks = documents[STOPMARKS_MANIFEST_NAME]
+    roadtext = documents[ROADTEXT_MANIFEST_NAME]
     stops = documents[STOPS_MANIFEST_NAME]
     planters = documents[PLANTERS_MANIFEST_NAME]
     paths = documents[PATHS_MANIFEST_NAME]
@@ -654,6 +661,8 @@ def build_region(
         "crossings": crossings["asset"],
         # `null` where the city drew no stop or stand paint, on the same terms.
         "stopmarks": stopmarks["asset"],
+        # The road lettering (`P3-21`, `Q262`), on the same terms.
+        "roadtext": roadtext["asset"],
         # The authored stop furniture (`P3-94`), on `lamps`' terms; `null` where
         # the city declares no `stops:` block.
         "stops": stops["asset"],

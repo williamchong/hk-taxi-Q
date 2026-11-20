@@ -2,7 +2,7 @@
 
 The paint of the road marks drawn as geometry (`P3-23`, `Q53`). `tools/generated_scene_import.gd`
 maps the ETL's `roadmarks` and `crossings_zebra` (zebra stripes, `P3-35g2`) material names to this
-file. `stopmarks_white` (`P3-89`) takes it too. `verify_roadmarks.gd` and `verify_crossings.gd` check the dispatch by path, because
+file. `stopmarks_white` (`P3-89`) and `roadtext_white` (`P3-21`) take it too. `verify_roadmarks.gd` and `verify_crossings.gd` check the dispatch by path, because
 `marking_paint.gdshader` is shared with `arrows.tres` and `boxjunctions.tres` (`Q71`).
 
 Dimensions and dash modules are not here. They are geometry from `hong_kong.yaml`'s `road_marks:`

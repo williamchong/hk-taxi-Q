@@ -170,6 +170,7 @@ checklist goes in a rule file, never back here: `check.sh` refuses a root `CLAUD
 | `carve` | `pipeline/carve.py`, the `carve` block, which edges are carved |
 | `crossings` | `pipeline/crossings.py`, the `crossings` block (`line_types`, `zebra`, `lift_m`, `max_stripe_width_m`), which paint a crossing takes |
 | `stopmarks` | `pipeline/stopmarks.py`, the `stop_marks` block (`marks:`, `legend_stroke_m`, `symbols`, `turn_deg`), the stop and stand paint's glyphs |
+| `roadtext` | `pipeline/roadtext.py`, the `road_text` block (`font_*`, `flatten_em`, `line_gap_em`, `refused`, `bearing_tolerance_deg`), the `noto_sans_hk` source, `verify_roadtext.gd` |
 | `planters` | `pipeline/planters.py`, the `planters` block, `planters.tres`, `verify_planters.gd`, the carriageway region or the tiles' walls a bed is cut by |
 | `stops` | `pipeline/stops.py`, the `stops` block (flags, the tram shelter), `verify_stops.gd`, where `bus_routes.json` / `fares.json` / `tram_lines.json` put a stop |
 | `boxjunctions` | `pipeline/boxjunctions.py`, the `boxjunctions` block, the drawn ribbon's extent, any painted layer's height or `lift_m`, `DrawnSurface` |

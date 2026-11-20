@@ -133,7 +133,7 @@ by hand (`Q53`).
 | `P3-26` | ✅ Lamp posts from iB1000 (`Q82`, `Q199`) |
 | `P3-17` | 🚫 Signal heads as a merged layer — dropped (`Q77`), removed by `P3-35a`; returned lit as `P3-3e` |
 | `P3-7a` | 🚫 Façade survey look — withdrawn with the vision reader (`Q102`); `Q44` and `Q45` ship. Findings in `Q34`, `Q47`, `Q48` |
-| `P3-21` | ❌ Road lettering from `DTAD_RD_MARK_ANNO` — no-go (`Q65`): no direction value, needs an authored typeface. Data: 274 rotated-rectangle `MultiPolygon`s, 67 distinct strings (word fragments), sizes on `CT174/51-5(1)F` |
+| `P3-21` | 🟡 Road lettering from `DTAD_RD_MARK_ANNO` — refused by `Q65`, reopened on the user's instruction (`Q262`): `pipeline/roadtext.py` lays Noto Sans HK into TD's rectangles, facing the traffic. Owed: the user's look and pick of `font_weight`; the handset's frame time; the PCK |
 
 Awaiting the user's review:
 

@@ -297,6 +297,14 @@ func _check_documents(manifest: Manifest) -> PackedStringArray:
 				GeneratedLayer.path(GeneratedLayer.STOPMARKS)
 			)
 		)
+	if not manifest.roadtext_path.is_empty():
+		problems.append_array(
+			_check_document(
+				"road lettering",
+				manifest.roadtext_path,
+				GeneratedLayer.path(GeneratedLayer.ROADTEXT)
+			)
+		)
 	if not manifest.stops_path.is_empty():
 		problems.append_array(
 			_check_document(

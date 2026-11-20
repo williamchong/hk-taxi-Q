@@ -269,7 +269,10 @@ const NOT_MEASURED: float = -1.0
 ##
 ## 54 since `P3-103` step 2: the manifest names `signboards_text_atlas`, the
 ## boards' lettering.
-const SCHEMA_VERSION: int = 54
+##
+## 55 since `P3-21` (`Q262`): the manifest names `roadtext.glb`, TD's road
+## lettering laid in its rectangles.
+const SCHEMA_VERSION: int = 55
 
 
 ## One entry of `tiles` — a square of the city, at every tier the ETL built.
@@ -417,6 +420,10 @@ var crossings_path: String
 ## The bus stop, stand and tram stop paint (`P3-89`), or **empty** where the
 ## region ships none. Optional on `crossings_path`'s terms.
 var stopmarks_path: String
+
+## The road lettering (`P3-21`, `Q262`), or **empty** where the region ships
+## none. Optional on `crossings_path`'s terms.
+var roadtext_path: String
 
 ## The stop furniture library and where it stands (`P3-94`), or **empty** where
 ## the region ships none. Optional on `lamps_path`'s terms.
@@ -719,6 +726,7 @@ static func load_manifest(region: String = "") -> CityManifest:
 	manifest.boxjunctions_path = _resolve(document.get("boxjunctions"), manifest.directory)
 	manifest.crossings_path = _resolve(document.get("crossings"), manifest.directory)
 	manifest.stopmarks_path = _resolve(document.get("stopmarks"), manifest.directory)
+	manifest.roadtext_path = _resolve(document.get("roadtext"), manifest.directory)
 	manifest.stops_path = _resolve(document.get("stops"), manifest.directory)
 	manifest.stops_placements_path = _resolve(document.get("stops_placements"), manifest.directory)
 	manifest.lamps_path = _resolve(document.get("lamps"), manifest.directory)
@@ -866,6 +874,7 @@ func shipped() -> PackedStringArray:
 		boxjunctions_path,
 		crossings_path,
 		stopmarks_path,
+		roadtext_path,
 		stops_path,
 		stops_placements_path,
 		lamps_path,

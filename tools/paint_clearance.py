@@ -107,6 +107,7 @@ _LAYERS: tuple[tuple[str, str, bool], ...] = (
     ("boxjunctions", "yellow box junctions", True),
     ("crossings", "pedestrian crossings", True),
     ("stopmarks", "stop and stand markings", True),
+    ("roadtext", "road lettering", True),
     ("roadmarks", "stop and give-way lines", True),
     # Reported and never gated. `Q58` measured tram rails a median 3.26 m *past*
     # the drawn kerb, off the carriageway entirely, so a "buried" tram triangle

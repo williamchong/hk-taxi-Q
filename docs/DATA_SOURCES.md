@@ -266,7 +266,7 @@ source. Motorcycle bays are ~1 m apart, car bays ~5 m.
 | `DTAD_TRAFFIC_LIGHT_PT` | Signal posts (`pipeline/signals.py`, `Q76`, `Q173`). Some are not heads (bollards, `PBUTT`, `WIGWAG`). `ANGLE` is not a facing; no `GG_NAME` |
 | `DTAD_RST_ZONE_LINE` | Kerbside yellow lines, `RM1040` / `RM1041`. Read only by `tools/kerbside_source_audit.py`: `TIME_ZONE` is null on every feature. `RM1040` sits on `NSR TIME_ZONE = 1` for 99.95% of its length |
 | `DTAD_RD_MARK_SYM_LINE` | Legends as the strokes of a stick font, in place and to size (`pipeline/stopmarks.py`, `Q242`): `REFNAME` `1047` BUS STOP 巴士站 (letters 1600, characters 2700), `1175` / `1176` taxi drop-off / pick-up (800 / 1350). The bare number, no `RM`. Also `1049` stand outlines and `1051` parking bays, unread |
-| `DTAD_RD_MARK_ANNO` | Road text (`CENTRAL`, `九龍`) as rotated rectangles, some with `<FNT …>` markup. Not in use (`P3-21`) |
+| `DTAD_RD_MARK_ANNO` | Road text (`CENTRAL`, `九龍`) as rotated rectangles, some with `<FNT …>` / `<BOL>` markup (`pipeline/roadtext.py`, `P3-21`, `Q262`). One feature a word fragment (`CEN`, `TRAL`), a lane's width each; Latin rectangles ~2.56 m tall, `CharacterWidth` 28–30%. `Angle` is the plan's reading angle with `FlipAngle` 90, so right modulo 180 only. Faces `ENGINEERING` and `chinese` / 微軟正黑體 (sans). `ELEVATION` `A01` / `A03` on decks and bores. Some strings are drafting notes (`COLOURED DRESSING IN REDDISH BROWN`) |
 | `DTAD_TW_STRIP_LINE` | **Not tramway** — tactile warning strips (`REFNAME = TACW`) |
 
 **Marking codes** are defined in `Index Plan/(RM 1001 - 1080).pdf` (`CT174/51-5(1)F`) and

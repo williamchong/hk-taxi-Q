@@ -145,7 +145,10 @@ Phase 3 — `B2` and the road
   (`Q242`) — owed: the user's look.
 - `P3-89` 🟡 Stop and stand paint, `P3-91` 🟡 its legends (`Q242`) — owed: the user's look, the
   handset.
-- 🚫 `P3-7a` (withdrawn, `Q102`), `P3-17` (returned as `P3-3e`, `Q173`). ❌ `P3-21` (`Q65`).
+- `P3-21` 🟡 Road lettering (`Q262`, reopening `Q65`): TD's `CENTRAL 中區` strings in Noto Sans HK,
+  259 of 274 in Wan Chai and 14 of 17 in Causeway Bay — owed: the user's look and weight pick, the
+  handset, the PCK.
+- 🚫 `P3-7a` (withdrawn, `Q102`), `P3-17` (returned as `P3-3e`, `Q173`).
 
 Phase 3 — `B1`, `B3`, `B4`
 

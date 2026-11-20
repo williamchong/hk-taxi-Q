@@ -26,9 +26,10 @@ lacks draws in the next face down — a brush line's in the 黑體, a 黑體 lin
 in the Kai — in the middle of the line, never as a box. `etl/tests/test_fonts.py`
 fails on it; re-run this tool.
 
-⚠️ **`fontTools` is this tool's alone** (`pip install fonttools`), not an ETL
-dependency: `font_coverage.py` and the test read a `cmap` by hand so nothing on
-the build's path needs a font library.
+⚠️ **`fontTools` was this tool's alone until `P3-21`** (`Q262`): the road
+lettering reads Noto Sans HK's outlines through it, so it is an ETL dependency
+now. `font_coverage.py` and the test still read a `cmap` by hand, and need no
+font library.
 
 The sources are not committed (45 MB). Fetch them into one directory:
 

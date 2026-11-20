@@ -564,6 +564,12 @@ sources:
   # `sign_sheets.py`/`sign_text.py` crop the lettering cells out of its PDFs.
   traffic_aids_data_dictionary: https://static.data.gov.hk/td/traffic-aids-drawings-v2/dataspec/tadrawings_dataspec.zip
 
+  # Noto Sans HK, the variable-weight face (SIL OFL 1.1), pinned at the commit
+  # `tools/make_fonts.py` cuts the interface's subset from. NOT city data and
+  # not committed: `road_text:` reads glyph outlines from it at build time
+  # (`P3-21`, `Q262`). The interface keeps its own committed subset.
+  noto_sans_hk: https://github.com/google/fonts/raw/2ac7e8ea/ofl/notosanshk/NotoSansHK%5Bwght%5D.ttf
+
   # The two fare-node datasets, both whole-territory point GeoJSON and both
   # small — 518 and 275 features, 343 KB and 192 KB. data.gov.hk lists only a
   # portal link for each, so these URLs come from the CSDI file-api the
@@ -3140,6 +3146,41 @@ stop_marks:
         layer: DTAD_RD_MARK_SYM_PT
         fields: {code: REFNAME, bearing: ANGLE, level: ELEVATION}
         turn_deg: -90.0
+
+# Published road lettering (`P3-21`, `Q262`): `CENTRAL 中區`, `KOWLOON 九龍`,
+# `BEWARE OF PED 小心行人`, drawn by `pipeline/roadtext.py`.
+#
+# `DTAD_RD_MARK_ANNO` files each legend as its string, an `Angle` and the
+# rectangle the lettering fills, word fragments apart (`CEN` and `TRAL` are two
+# features, a lane's width each). The string, the place and the extent are
+# TD's; the letterforms are Noto Sans HK, cut at `font_weight` and set in the
+# rectangle as a drawing program sets text: the rectangle is the advances by
+# the line box, not the ink, so `東` and `及` file identical rectangles. TD's own
+# faces are `ENGINEERING` (a MicroStation stroke font) and `chinese` /
+# 微軟正黑體, both sans.
+#
+# `Angle` is the plan's reading angle and `FlipAngle` is 90 on 465 of Wan
+# Chai's 466, so it fixes the AXIS and never the way the letters face: that is
+# the traffic's (`stopmarks._in_flow_frame`'s rule), letter tops pointing the
+# way the nearest flow runs.
+road_text:
+  source: traffic_aids_drawings_gdb
+  layer: DTAD_RD_MARK_ANNO
+  fields: {text: TextString, bearing: Angle, level: ELEVATION}
+  # `Q134`'s decks; `A03` is the bores `Q21` keeps shut.
+  deck_codes: [A01]
+  font_source: noto_sans_hk
+  font_weight: 700
+  flatten_em: 0.02
+  # TD's `FontLeading` is 0: lines stack a line box apart.
+  line_gap_em: 0.0
+  refused: []
+  # The sliver bar; 2 x the import quantum (4.5 cm) is a stroke's width here.
+  sliver_m: 0.015
+  lift_m: 0.013
+  max_offset_m: 12.0
+  bearing_tolerance_deg: 20.0
+  cell_m: 300.0
 
 # Authored furniture at published stops (`P3-93`-`P3-95`, `Q242`): a flag on a
 # pole where a bus or a green minibus stops and at TD's taxi pick-up / drop-off

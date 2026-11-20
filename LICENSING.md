@@ -135,6 +135,10 @@ The same directory holds subsets of **Noto Sans HK** (© 2014–2021 Adobe) and 
   rename the CC BY note below says OFL would require.
 - **Bundling is permitted with software under any terms**, the store build included; the fonts
   themselves stay OFL and are never sold alone.
+- **The road lettering's glyphs are Noto Sans HK's outlines, not the font** (`P3-21`, `Q262`).
+  The ETL reads the full face as a fetched source, never committed, and bakes the outlines into
+  the generated `roadtext.glb`. OFL 1.1 puts no condition on what a font is used to make; the
+  face is already credited as the interface's.
 
 ---
 

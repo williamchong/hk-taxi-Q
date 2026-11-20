@@ -21,7 +21,7 @@ vertex on the drawn road (`boxjunctions._place`, imported, with its tripwires).
   runs through a corner. A dimension change is a `DATA_SOURCES.md` change.
 - **A legend is strokes, drawn where surveyed** (`DTAD_RD_MARK_SYM_LINE`: `1047`, `1175`, `1176`).
   `legend_stroke_m` is the one authored dimension: TD publishes a letter height and no stroke
-  width. `P3-21`'s no-go was `DTAD_RD_MARK_ANNO`'s rectangles and still stands.
+  width. `DTAD_RD_MARK_ANNO`'s rectangles are `roadtext`'s (`P3-21`, `Q262`), not this stage's.
 - **A legend filed as a point is stood with the region's own stroke legends as its glyph**
   (`glyph_of`, `stand_symbols`). TD files a legend one way or the other, never both (0 of 1,205
   `1047` points citywide lie inside a stroke legend), so nothing calibrates the point against the
