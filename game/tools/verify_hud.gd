@@ -2353,6 +2353,12 @@ func _check_guide() -> void:
 		"pulse_hz": profile.pulse_hz,
 		"pulse_depth": profile.pulse_depth,
 		"ring_alpha": profile.ring_alpha,
+		"pointer_height_m": profile.pointer_height_m,
+		"pointer_length_m": profile.pointer_length_m,
+		"pointer_width_m": profile.pointer_width_m,
+		"pointer_bob_m": profile.pointer_bob_m,
+		"pointer_bob_hz": profile.pointer_bob_hz,
+		"pointer_spin_hz": profile.pointer_spin_hz,
 	}
 	for key: String in floors:
 		if floors[key] <= 0.0:
@@ -2409,6 +2415,27 @@ func _check_guide() -> void:
 		var r: float = Vector2(point.x, point.z).length()
 		banded = banded and (is_equal_approx(r, 4.0) or is_equal_approx(r, 3.4))
 	_expect(flat and banded, "guide", "the ring is flat, 48 segments between radius 3.4 and 4.0")
+	_expect(
+		profile.pointer_height_m > profile.ring_lift_m,
+		"guide",
+		"the pointer hangs above its ring, not in the road"
+	)
+	var pointer: ArrayMesh = FareGuideScript.pointer_mesh(2.0, 1.4, 4)
+	var pointer_arrays: Array = pointer.surface_get_arrays(0)
+	var pointer_points: PackedVector3Array = pointer_arrays[Mesh.ARRAY_VERTEX]
+	var pointer_colours: PackedColorArray = pointer_arrays[Mesh.ARRAY_COLOR]
+	var tip_down: bool = pointer_points.size() == 4 * 3 + 2 * 3
+	var tips: int = 0
+	for point: Vector3 in pointer_points:
+		if point == Vector3.ZERO:
+			tips += 1
+		else:
+			tip_down = tip_down and is_equal_approx(point.y, 2.0)
+	_expect(
+		tip_down and tips == 4 and pointer_colours.size() == pointer_points.size(),
+		"guide",
+		"the pointer is a capped four-sided spike, tip at its origin pointing down, shaded per face"
+	)
 
 
 ## A synthetic stop the way `FareSystem` resolves one: the publisher's

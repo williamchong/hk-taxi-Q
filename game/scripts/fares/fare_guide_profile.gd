@@ -29,3 +29,11 @@ const PATH: String = "res://tuning/guide.tres"
 @export var pulse_hz: float
 @export var pulse_depth: float
 @export var ring_alpha: float
+## The solid pointer hung over every ring so a target reads from afar: the
+## gap from the ring up to its tip, its length and width, and its bob and spin.
+@export var pointer_height_m: float
+@export var pointer_length_m: float
+@export var pointer_width_m: float
+@export var pointer_bob_m: float
+@export var pointer_bob_hz: float
+@export var pointer_spin_hz: float

@@ -21,3 +21,12 @@ zero it would draw with.
   the road's own paint.
 - `pulse_hz`, `pulse_depth`, `ring_alpha`: the ring pulses by `pulse_depth` of its size,
   alpha-blended.
+- `pointer_*` (`Q261`, the user's ask): a solid four-sided spike over every ring — the destination's
+  in the distance colour, each pending customer's in `pending_colour` — because a flat ring on
+  the road is lost a block or two out. Opaque and unshaded, its faces shaded by baked vertex
+  colours, so it reads the same at night. All first guesses, for the user's pick from frames:
+  - `pointer_height_m` 3.0: the gap from the ring to the tip, over a car roof, under a bus's.
+  - `pointer_length_m` 2.0, `pointer_width_m` 1.4: the spike, tip to cap and corner to corner.
+  - `pointer_bob_m` 0.4 at `pointer_bob_hz` 0.6: the tip rises from `pointer_height_m` by up to
+    this, never sinks below it.
+  - `pointer_spin_hz` 0.25: one turn in four seconds, so the shaded faces catch the eye.

@@ -126,6 +126,9 @@ Phase 3 — `B2` and the road
   (`text.lettered: false`, colour only, the user's call 2026-11-20); two authored LED screens (East Point Centre,
   Times Square) on a generic animated shader — owed: the user's look, the handset, the screens'
   heights.
+- `P3-104` 🟡 A pointer over every fare ring (`Q261`): a solid four-sided spike 3 m over each
+  ring, bobbing 0.4 m and turning once in 4 s, in the ring's colour (`guide.tres` `pointer_*`,
+  first guesses) — owed: the user's pick of size and height, the draw delta against `--hud=off`.
 - `P3-102` 🟡 A Star Ferry moored at Wan Chai Ferry Pier (`Q254`): 2,246 triangles modelled on the
   user's photos, alongside the pier's west face, at the basemap's water level, rocking 0.08 m /
   1.2° / 0.35°; +6,738 primitives and +2 draws in view, 0 facing away — owed: the user's look and

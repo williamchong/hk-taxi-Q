@@ -83,7 +83,7 @@ Owed: three frames at `--debug-view=off` — boarding at the boot stand, carryin
 - **Every string is `FareFace`'s**; one decided in `hud.gd` is invisible to the check.
   **Signal-driven, never polled** (`fares.md`).
 - **No goal until someone is aboard** (`Q142`): idle, the arrow points at the closest pending
-  customer and every pending pickup has a pin and a road ring; all hidden while a fare runs. No
+  customer and every pending pickup has a pin, a road ring and a pointer over it (`Q261`); all hidden while a fare runs. No
   nearest-pickup callout, no designated stand per hail.
 - A stop is `Fare.Stop.place(language)` over its road name; the distance is never between two
   names. One language at a time (`--lang=`), the plate included.

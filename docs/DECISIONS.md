@@ -3698,3 +3698,17 @@ handset, the screens' heights. Canopies are a later task. Canopies come later an
   the loop stays in the shader for when it is switched off.
 - ⚠️ A screen's height is a wall board's authored 3 m base, so Times Square's sits at street level
   where the real one stands higher up the façade. A per-screen base is owed with the user's pick.
+
+## `Q261` — A solid pointer hangs over every fare ring
+
+**Status.** 🟡 Built 2026-11-20 (`P3-104`) on the user's ask; the size and height are first guesses
+for his pick from frames. Extends `Q142`'s guide, reopens nothing.
+
+- A flat ring on the road is lost a block or two out. Over every ring — the destination's and each
+  pending customer's — `fare_guide.gd` hangs a four-sided spike, tip down, in the ring's own
+  colour (distance colour for the destination, `pending_colour` for the waiting); withheld pickups
+  get none, as they get no ring.
+- Opaque and unshaded, each face's shade baked as a vertex colour, so it reads as a solid at any
+  hour without the rig. Drawn as one mesh and one multimesh beside the rings'.
+- Its numbers are `guide.tres`'s `pointer_*`: 3.0 m from ring to tip, 2.0 × 1.4 m, a 0.4 m bob
+  that never sinks below the height, one turn in 4 s.
