@@ -28,6 +28,9 @@ const SCHEMA_VERSION: int = 1
 const TAXI_STAND: String = "taxi_stand"
 const PUDO: String = "pudo"
 const POI: String = "poi"
+## A railway station's exit (`Q268`): a destination named by its station and
+## letter, `place` the exit itself.
+const STATION_EXIT: String = "station_exit"
 ## A street spot's `kind`, under the document's `street` key rather than
 ## `nodes`: a kerb a passenger flags a cab at, off any published point.
 const STREET: String = "street"

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
+from string import Formatter
 from typing import Any
 
 from pipeline.config_blocks.base import (
@@ -33,7 +34,12 @@ PUDO = "pudo"
 POI = "poi"
 
 
-FARE_KINDS = (TAXI_STAND, PUDO, POI)
+# A railway station's exit, named by `Stations` (`P3-106`, `Q268`): a
+# destination a passenger names by its station and letter, not by a building.
+STATION_EXIT = "station_exit"
+
+
+FARE_KINDS = (TAXI_STAND, PUDO, POI, STATION_EXIT)
 
 
 # What a fare group must name in the publisher's schema, in roles the pipeline
@@ -195,6 +201,66 @@ class StreetSpots:
     max_speed_limit_kph: float
 
 
+_STATION_EXIT_ROLES = ("kind", "exit")
+
+
+# The placeholders a station exit's name may use, and must: a format naming
+# neither would publish one name for every exit of every station.
+_EXIT_NAME_FIELDS = {"lettered": ("station", "exit"), "unlettered": ("station",)}
+
+
+@dataclass(frozen=True)
+class Station:
+    """One station of the city's table: its names, and where it is.
+
+    `lon` / `lat` is the station's position, WGS84. An exit takes the station
+    nearest it within `Stations.reach_m`.
+    """
+
+    en: str
+    zh: str
+    lon: float
+    lat: float
+
+
+@dataclass(frozen=True)
+class Stations(LayerSpec):
+    """Railway station exits as named destinations (`P3-106`, `Q268`).
+
+    The publisher's layer gives an exit its position and letter — `A1`, `B` —
+    and no station: the station's name is the city's table, and each exit
+    takes the one station of it within `reach_m`. None in reach stops the
+    build (the table is missing a station), and so do two (the reach is too
+    long to say which). The table lists every station within `reach_m` of a
+    driven region, so the nearest station to an exit is always in it.
+    """
+
+    # Codes of the publisher's entrance-type column that are a station exit.
+    kinds: tuple[str, ...]
+    reach_m: float
+    # Furthest an exit may stand from its road. Tighter than `Fares.max_snap_m`
+    # because an exit is no kerb: `verify_join` bars a stop past 25 m from
+    # where the taxi stops, and three of Wan Chai's exits stand 25.5-29.2 m
+    # back across a plaza.
+    max_snap_m: float
+    # `{station}` and `{exit}` per language: `lettered` for an exit with a
+    # letter, `unlettered` for one published without.
+    names: dict[str, dict[str, str]]
+    pickup: bool
+    dropoff: bool
+    table: tuple[Station, ...]
+
+    def name(self, station: Station, exit_letter: str | None) -> dict[str, str]:
+        """What a passenger calls this exit, in each language."""
+        form = "lettered" if exit_letter else "unlettered"
+        return {
+            language: self.names[form][language].format(
+                station=getattr(station, language), exit=exit_letter
+            )
+            for language in ("en", "zh")
+        }
+
+
 @dataclass(frozen=True)
 class Fares:
     """How `P1-5` turns published point datasets into fare nodes."""
@@ -210,6 +276,8 @@ class Fares:
     places: Places | None
     # Optional: no `street:` block publishes `street: []`.
     street: StreetSpots | None = None
+    # Optional: no `stations:` block publishes no `station_exit` node.
+    stations: Stations | None = None
 
 
 def _fares(body: dict[str, Any], where: str) -> Fares:
@@ -232,6 +300,49 @@ def _fares(body: dict[str, Any], where: str) -> Fares:
         null_values=tuple(str(value) for value in (body.get("null_values") or ())),
         places=_places(body.get("places"), f"{where}:places"),
         street=_street(body.get("street"), f"{where}:street"),
+        stations=_stations(body.get("stations"), f"{where}:stations"),
+    )
+
+
+def _stations(body: Any, where: str) -> Stations | None:
+    if body is None:
+        return None
+    if not isinstance(body, dict):
+        raise ValueError(f"{where} must be a mapping, got {body!r}")
+    kinds = tuple(str(code) for code in _require(body, "kinds", where))
+    if not kinds:
+        raise ValueError(f"{where}:kinds is empty; no exit would ever be read")
+    measures = _measures(body, where, ("reach_m", "max_snap_m"), positive=True)
+
+    names_body = _require(body, "names", where)
+    names: dict[str, dict[str, str]] = {}
+    for form, placeholders in _EXIT_NAME_FIELDS.items():
+        entry = _require(names_body, form, f"{where}:names")
+        names[form] = {}
+        for language in ("en", "zh"):
+            text = str(_require(entry, language, f"{where}:names:{form}"))
+            used = {field for _, field, _, _ in Formatter().parse(text) if field is not None}
+            if used != set(placeholders):
+                raise ValueError(
+                    f"{where}:names:{form}:{language} is {text!r}: it must use exactly "
+                    f"{', '.join('{' + name + '}' for name in placeholders)}"
+                )
+            names[form][language] = text
+
+    table = tuple(
+        _station(row, f"{where}:table[{index}]")
+        for index, row in enumerate(_require(body, "table", where))
+    )
+    if not table:
+        raise ValueError(f"{where}:table is empty; no exit could be named")
+    return Stations(
+        **_spec_header(body, where, _STATION_EXIT_ROLES),
+        kinds=kinds,
+        **measures,
+        names=names,
+        pickup=bool(_require(body, "pickup", where)),
+        dropoff=bool(_require(body, "dropoff", where)),
+        table=table,
     )
 
 
@@ -269,6 +380,16 @@ def _places(body: Any, where: str) -> Places | None:
         keep_status=keep_status,
         max_distance_m=max_distance_m,
         block_suffix=block_suffix,
+    )
+
+
+def _station(row: dict[str, Any], where: str) -> Station:
+    lon, lat = _require(row, "at", where)
+    return Station(
+        en=str(_require(row, "en", where)),
+        zh=str(_require(row, "zh", where)),
+        lon=float(lon),
+        lat=float(lat),
     )
 
 

@@ -44,6 +44,7 @@ from __future__ import annotations
 
 import argparse
 import logging
+import math
 import re
 from collections.abc import Sequence
 from dataclasses import dataclass, field
@@ -55,11 +56,14 @@ import shapely
 
 from pipeline import gdb
 from pipeline.config import (
+    STATION_EXIT,
     TAXI_STAND,
     Config,
     FareCategory,
     FareGroup,
     Places,
+    Station,
+    Stations,
     StreetSpots,
     load_config,
 )
@@ -190,11 +194,18 @@ class FareReport:
     places_read: int = 0
     worst_place_m: float = 0.0
     street: StreetReport = field(default_factory=StreetReport)
+    # Station exits (`Q268`): read in the region, refused for a code outside
+    # `stations.kinds`, and kept per station. The furthest exit from the station
+    # that named it, against `stations.reach_m`.
+    exits_read: int = 0
+    exits_not_a_station: int = 0
+    exits_by_station: dict[str, int] = field(default_factory=dict)
+    worst_exit_m: float = 0.0
 
     @property
     def placed(self) -> int:
-        """Nodes that took a named footprint."""
-        return sum(1 for node in self.nodes if node.place is not None)
+        """Nodes that took a named footprint; a station exit's place is its own name."""
+        return sum(1 for node in self.nodes if node.place is not None and node.kind != STATION_EXIT)
 
     @property
     def unnamed(self) -> int:
@@ -272,23 +283,8 @@ def build_region(
                 report.outside += 1
                 continue
 
-            snap = segments.nearest(x, z)
-            if off_grade is not None:
-                margin = snap.distance_m - off_grade.nearest(x, z).distance_m
-                if margin > 0.0:
-                    # ⚠️ **Recorded before the refusal below, not after** —
-                    # `Q58`'s `drawn_gauge_m` trap. Measured under the guard,
-                    # this margin would be bounded by `max_snap_m` by
-                    # construction and could never report the point the limit
-                    # threw away. Pinned by the `max_snap_m` test, whose adrift
-                    # point reads a 2 m margin and is then refused.
-                    report.off_grade_nearer += 1
-                    report.worst_off_grade_margin_m = max(report.worst_off_grade_margin_m, margin)
-            if snap.distance_m > style.max_snap_m:
-                # Reported rather than raised: a point in a car park is the
-                # publisher's business, and one bad row should not cost the
-                # region its other fare nodes.
-                report.unsnapped += 1
+            snap = _snapped(x, z, segments, off_grade, style.max_snap_m, report)
+            if snap is None:
                 continue
 
             properties = feature.get("properties") or {}
@@ -313,6 +309,12 @@ def build_region(
             )
             report.add(node, category, snap.distance_m)
 
+    if style.stations is not None:
+        exits = read_station_exits(
+            city, style.stations, region_id, transform, report, sources_root=sources_root
+        )
+        _add_station_exits(exits, style.stations, city, transform, segments, off_grade, report)
+
     if style.street is not None and places:
         level0 = [edge for edge in graph["edges"] if int(edge["elevation_level"]) == 0]
         report.street = street_spots(
@@ -328,6 +330,152 @@ def build_region(
 
     _write(out_dir, city, region_id, report)
     return report
+
+
+def _snapped(
+    x: float,
+    z: float,
+    segments: Segments,
+    off_grade: Segments | None,
+    max_snap_m: float,
+    report: FareReport,
+) -> Snap | None:
+    """The level-0 snap of a published point, or None past `max_snap_m`."""
+    snap = segments.nearest(x, z)
+    if off_grade is not None:
+        margin = snap.distance_m - off_grade.nearest(x, z).distance_m
+        if margin > 0.0:
+            # ⚠️ **Recorded before the refusal below, not after** —
+            # `Q58`'s `drawn_gauge_m` trap. Measured under the guard,
+            # this margin would be bounded by `max_snap_m` by
+            # construction and could never report the point the limit
+            # threw away. Pinned by the `max_snap_m` test, whose adrift
+            # point reads a 2 m margin and is then refused.
+            report.off_grade_nearer += 1
+            report.worst_off_grade_margin_m = max(report.worst_off_grade_margin_m, margin)
+    if snap.distance_m > max_snap_m:
+        # Reported rather than raised: a point in a car park is the
+        # publisher's business, and one bad row should not cost the
+        # region its other fare nodes.
+        report.unsnapped += 1
+        return None
+    return snap
+
+
+@dataclass(frozen=True)
+class StationExit:
+    """One published station exit, in game plan metres."""
+
+    x: float
+    z: float
+    # The publisher's letter — `A1` — or None where it published none.
+    letter: str | None
+
+
+def read_station_exits(
+    city: Config,
+    spec: Stations,
+    region_id: str,
+    transform: GameTransform,
+    report: FareReport,
+    *,
+    sources_root: Path | None,
+) -> list[StationExit]:
+    """Every exit of the region's sheets whose code `spec.kinds` admits.
+
+    Sheets overlap at their edges, so an exit read twice at one position is
+    one exit.
+    """
+    reads = source_reads(city, spec, region_id, root=sources_root)
+    bbox = city.projected_bounds(region_id).bbox
+    exits: list[StationExit] = []
+    seen: set[tuple[float, float]] = set()
+    for path, member in reads:
+        layer = gdb.read_layer(
+            path,
+            spec.layer.layer,
+            columns=spec.layer.columns,
+            bbox=bbox,
+            zip_member=member,
+            expect_crs=city.projected_crs,
+        )
+        kinds = layer.column(spec.layer.field("kind"))
+        letters = layer.column(spec.layer.field("exit"))
+        owners, plan = gdb.points(layer)
+        if len(owners) == 0:
+            continue
+        game_x, _, game_z = transform.to_game(plan[:, 0], plan[:, 1])
+        for row, owner in enumerate(owners):
+            x, z = float(game_x[row]), float(game_z[row])
+            key = (round(x, 3), round(z, 3))
+            if key in seen or not (math.isfinite(x) and math.isfinite(z)):
+                continue
+            seen.add(key)
+            report.exits_read += 1
+            if str(kinds[owner]) not in spec.kinds:
+                report.exits_not_a_station += 1
+                continue
+            exits.append(StationExit(x, z, clean_text(letters[owner], _TABLE_NULLS)))
+    return exits
+
+
+def station_of(
+    x: float, z: float, stations: Sequence[tuple[Station, float, float]], reach_m: float
+) -> tuple[Station, float]:
+    """The one station within `reach_m` of `(x, z)`, and how far it is.
+
+    Raises where none is (the table is missing a station) or more than one is
+    (the reach cannot say which): either would name an exit after the wrong
+    station, so neither is guessed.
+    """
+    apart = [(station, math.hypot(sx - x, sz - z)) for station, sx, sz in stations]
+    near = [(station, metres) for station, metres in apart if metres <= reach_m]
+    if len(near) != 1:
+        found = ", ".join(f"{station.en} at {metres:.0f} m" for station, metres in near) or "none"
+        raise ValueError(
+            f"a station exit at ({x:.1f}, {z:.1f}) has {len(near)} stations within "
+            f"fares.stations.reach_m {reach_m:g} m ({found}); expected exactly one"
+        )
+    return near[0]
+
+
+def _add_station_exits(
+    exits: Sequence[StationExit],
+    spec: Stations,
+    city: Config,
+    transform: GameTransform,
+    segments: Segments,
+    off_grade: Segments | None,
+    report: FareReport,
+) -> None:
+    to_projected = transformer(city.geodetic_crs, city.projected_crs)
+    anchored = []
+    for station in spec.table:
+        x, _, z = transform.to_game(*to_projected.transform(station.lon, station.lat))
+        anchored.append((station, float(x), float(z)))
+    category = FareCategory(match="", id=STATION_EXIT, pickup=spec.pickup, dropoff=spec.dropoff)
+    for found in exits:
+        station, apart = station_of(found.x, found.z, anchored, spec.reach_m)
+        snap = _snapped(found.x, found.z, segments, off_grade, spec.max_snap_m, report)
+        if snap is None:
+            continue
+        report.worst_exit_m = max(report.worst_exit_m, apart)
+        report.exits_by_station[station.en] = report.exits_by_station.get(station.en, 0) + 1
+        name = spec.name(station, found.letter)
+        node = FareNode(
+            id=report.next_id(),
+            pos=(found.x, snap.y, found.z),
+            kind=STATION_EXIT,
+            stand_category=None,
+            name=dict(name),
+            nearest_edge=snap.edge,
+            edge_t=round(snap.t, 6),
+            pickup=category.pickup,
+            dropoff=category.dropoff,
+            # A passenger names the exit, not the building over it (`Q268`).
+            place=dict(name),
+        )
+        report.add(node, category, snap.distance_m)
 
 
 def street_spots(
@@ -733,6 +881,16 @@ def main(argv: list[str] | None = None) -> int:
             len(report.nodes),
             report.places_read,
             report.worst_place_m,
+        )
+    if city.fares.stations is not None:
+        log.info(
+            "  station exits: %d read, %d not a station's; by station %s; furthest %.0f m"
+            " from its station (reach %.0f m)",
+            report.exits_read,
+            report.exits_not_a_station,
+            dict(sorted(report.exits_by_station.items())),
+            report.worst_exit_m,
+            city.fares.stations.reach_m,
         )
     street = report.street
     if city.fares.street is not None:

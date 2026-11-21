@@ -1272,7 +1272,7 @@ func _add_stops(region: String, fares: Dictionary) -> void:
 			var category: Variant = node.get("stand_category", null)
 			if category != null and str(category) == GeneratedFares.CROSS_HARBOUR:
 				continue
-		elif kind != GeneratedFares.PUDO:
+		elif kind != GeneratedFares.PUDO and kind != GeneratedFares.STATION_EXIT:
 			continue
 		var stop: Fare.Stop = _stop(region, node)
 		if stop == null:

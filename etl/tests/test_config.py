@@ -1309,6 +1309,34 @@ class TestFares:
         with pytest.raises(ValueError, match="'fares'"):
             load_config(rewrite(lambda doc: doc.pop("fares")))
 
+    def test_a_station_exit_is_named_by_its_station_and_letter(self, hong_kong) -> None:
+        """`Q268`: the layer gives the letter, the table the station."""
+        spec = hong_kong.fares.stations
+        station = next(row for row in spec.table if row.en == "Causeway Bay")
+
+        assert spec.name(station, "F1") == {
+            "en": "Causeway Bay Station Exit F1",
+            "zh": "銅鑼灣站F1出口",
+        }
+        assert spec.name(station, None) == {"en": "Causeway Bay Station", "zh": "銅鑼灣站"}
+        assert (spec.pickup, spec.dropoff) == (False, True)
+
+    def test_a_name_form_missing_its_placeholder_is_rejected(self, rewrite) -> None:
+        """A lettered name without `{exit}` gives every exit of a station one name."""
+
+        def drop(doc: dict[str, Any]) -> None:
+            doc["fares"]["stations"]["names"]["lettered"]["en"] = "{station} Station"
+
+        with pytest.raises(ValueError, match="must use exactly"):
+            load_config(rewrite(drop))
+
+    def test_an_empty_station_table_is_rejected(self, rewrite) -> None:
+        def empty(doc: dict[str, Any]) -> None:
+            doc["fares"]["stations"]["table"] = []
+
+        with pytest.raises(ValueError, match="table is empty"):
+            load_config(rewrite(empty))
+
 
 class TestMaterialAssignment:
     """`Q34`'s `surveyed:` block — the rings and sectors, and their totality.

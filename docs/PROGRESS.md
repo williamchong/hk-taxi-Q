@@ -127,6 +127,10 @@ Phase 3 — `B2` and the road
   Times Square) on a generic animated shader; a neon tube round every board's face but a screen's at night
   in the board's own hue (+4,874 triangles in Wan Chai, 2026-11-22) — owed: the user's look, the
   handset, the screens' heights.
+- `P3-106` 🟡 MTR exits as destinations (`Q268`): iB1000's `RailwayEntrance` exits, each named by
+  the one station of `fares.stations.table` within 250 m ("Causeway Bay Station Exit F1" /
+  "銅鑼灣站F1出口"), drop-off only, within 25 m of a road; Wan Chai 17 of 20, Causeway Bay 3, Mong Kok 14, Sha Tin 4 of 5 —
+  owed: the user's fares driven to an exit.
 - `P3-105` 🟡 Overhead direction signs (`Q265`): TD's gantry boards filled from
   `DTAD_DS_PLATE_LINE`'s line-work (Chinese bold +1 cm at 4× AA) and hung on their `GS` beams on
   authored legs; Wan Chai 9 of 18 drawn (5 no leader, 3 off road, 1 under a deck), 3 moved ≤ 0.6 m

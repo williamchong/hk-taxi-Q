@@ -3891,3 +3891,28 @@ routable level. Nothing was left to build. What was missing was a witness: `veri
   (153 / 23), a deck's one-way driven both ways (48 / 8 arcs, thousands of car-ticks in the drives).
 - Refused: a ramp-centred seeded drive — the signal drives already reach the decks, and a 2-ban
   population is proved exhaustively, not by a seed's luck.
+
+## `Q268` — An MTR exit is a destination, named by a station table
+
+**Status.** Shipped 2026-11-22 (`P3-106`) on the user's call: "just do mtr, use table".
+
+- Source: iB1000 `RailwayEntrance`, already fetched with the basemap sheets. `TYPEOFENTRANCE` is
+  `MTE` on every exit; `ENTRANCENAME` is the letter only (`A1`, `B`, sometimes null). No station
+  name is published: `PlaceNameAnno` / `BuildingAnno` carry substations and a PTI, not stations.
+- The station is `fares.stations.table`'s: nine stations, bilingual, each at the mean of its own
+  exits. An exit takes the one station within `reach_m` 250 m; none or two stops the build. Over
+  the four driven regions' 42 exits: own station ≤ 140 m, any other ≥ 403 m. The table lists
+  every station within `reach_m` of a driven region (Mong Kok East, 233 m outside `mong_kok`), so
+  an exit's nearest station is always in it.
+- Named "Causeway Bay Station Exit F1" / "銅鑼灣站F1出口", or "… Station" with no letter; `place` is
+  the name, because a passenger names the exit, not the building over it.
+- Kind `station_exit`, drop-off only: a passenger is set down at an exit and does not hail at one.
+  Snapped like the other published points (level 0, `max_snap_m`), appended after them so no id
+  moves. `fares.json` stays schema 1: an older reader skips a kind it does not know.
+- `stations.max_snap_m` 25 m, under the groups' 30 m: `verify_join` bars a stop 25 m from where
+  the taxi stops, and three Exhibition Centre exits stand 25.5–29.2 m back across a plaza. Every
+  other node in the four regions is within 21 m.
+- Wan Chai 17 of 20 exits placed (Wan Chai 7, Exhibition Centre 3, Causeway Bay 7), Causeway Bay
+  3 (Tin Hau), Mong Kok 14, Sha Tin 4 of 5. The existing 48 / 7 / 28 / 4 nodes and every street
+  spot are byte-identical to `HEAD`'s.
+- Owed: the user's fares driven to an exit.

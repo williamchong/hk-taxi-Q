@@ -468,12 +468,14 @@ the road: `ribbons` (each strip's rails as drawn), `caps`, `carriageway[].kerb_h
 stand_category, name: {en, zh}, nearest_edge, edge_t, pickup, dropoff, place: {en, zh}}`; a street
 spot is `{id, pos, kind: "street", nearest_edge, edge_t, side, pickup, dropoff, place}`.
 
-- `kind` is `taxi_stand`, `pudo` or `poi`; `stand_category` is null unless `taxi_stand`.
+- `kind` is `taxi_stand`, `pudo`, `poi` or `station_exit`; `stand_category` is null unless `taxi_stand`.
 - `pos` is the kerbside where the passenger stands. The taxi stops at `nearest_edge`, `edge_t`
   (fraction of plan length). The snap considers level-0 edges only (`Q15`).
 - `place` (`Q142`): the named building nearest `pos` within `fares.places.max_distance_m`; null
   where none. The HUD leads with it; `name` is the publisher's description of the kerb.
 - `poi` is TD's tram stops: `name` null in both languages, `pickup` and `dropoff` both false.
+- `station_exit` (`Q268`) is an MTR exit, named by its station and letter; `place` is the same
+  name, and it is a drop-off only. Appended after the published points.
 - Honour `pickup`: a quarter of published PUDO points are drop-off only.
 - `street`: a kerb a passenger flags a cab at, every `fares.street.spacing_m` along a level-0 edge
   clear of junctions, no-stopping runs and bus lanes, beside a named building (`place` never null).

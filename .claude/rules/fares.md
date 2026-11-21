@@ -44,7 +44,8 @@ assertion (`Q72`); bars are asserted from BOTH sides. `TICK_S` 0.25 is exact in 
 ## Customers and pools
 
 - **The pools are the yaml's rules**: a stand is pickup and destination unless `cross_harbour`; a
-  PUDO point is what its `pickup` / `dropoff` say; a `poi` tram stop is neither; a street spot
+  PUDO point is what its `pickup` / `dropoff` say; a `poi` tram stop is neither; a `station_exit`
+  (`Q268`) is a destination only, named by `fares.stations.table`; a street spot
   (`fares.street`) is both where the legal router admits its edge. A fare's kind is its
   destination's and prices nothing (`Q203`). `street_share` 0 is the off switch, the one key
   `setup` does not refuse at zero.

@@ -230,6 +230,26 @@ func _check_pools() -> void:
 		"%d of the document's %d street spots are destinations" % [street, published]
 	)
 	_expect(not dropoffs.is_empty(), "pools", "the destination pool is non-empty")
+	# A station exit (`Q268`) is a destination: every published one joins the
+	# pool, as its name — the exit is what the passenger asks for.
+	var exits_published: int = 0
+	for node: Dictionary in _fares.get("nodes", []) as Array:
+		if str(node.get("kind", "")) == GeneratedFares.STATION_EXIT and bool(node.get("dropoff")):
+			exits_published += 1
+	var exits: int = 0
+	for stop: Fare.Stop in dropoffs:
+		if str(stop.node.get("kind", "")) == GeneratedFares.STATION_EXIT:
+			exits += 1
+			_expect(
+				stop.place("en") == stop.name("en") and not stop.name("en").is_empty(),
+				"pools",
+				"%s, a station exit, is called by its own name" % stop.id
+			)
+	_expect(
+		exits == exits_published,
+		"pools",
+		"%d of the document's %d station exits are destinations" % [exits, exits_published]
+	)
 	# A region every pickup of which is stranded has an empty pool by the reach
 	# rule, not by a load failure: `causeway_bay` alone is that region — its
 	# stands reach Wan Chai only across the join. Said, and never silent.
@@ -263,6 +283,7 @@ func _check_pools() -> void:
 	var nodes: Array = smuggled["nodes"]
 	nodes.append(_node("x_dropoff", GeneratedFares.PUDO, null, edge, false, true))
 	nodes.append(_node("x_tram", GeneratedFares.POI, null, edge, true, true))
+	nodes.append(_node("x_exit", GeneratedFares.STATION_EXIT, null, edge, false, true))
 	nodes.append(
 		_node(
 			"x_harbour", GeneratedFares.TAXI_STAND, GeneratedFares.CROSS_HARBOUR, edge, true, true
@@ -272,12 +293,12 @@ func _check_pools() -> void:
 	_expect(
 		probe.pool().size() + probe.stranded.size() == pickups.size(),
 		"pools",
-		"mutation caught: a drop-off-only point, a tram stop and a cross-harbour stand hail nobody"
+		"mutation caught: a drop-off-only point, a tram stop, a station exit and a cross-harbour stand hail nobody"
 	)
 	_expect(
-		probe.dropoffs().size() == dropoffs.size() + 1,
+		probe.dropoffs().size() == dropoffs.size() + 2,
 		"pools",
-		"mutation caught: only the drop-off-only point joins the destination pool"
+		"mutation caught: only the drop-off-only point and the station exit join the destinations"
 	)
 	probe.free()
 

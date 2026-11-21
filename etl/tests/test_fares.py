@@ -812,3 +812,88 @@ class TestStreetSpots:
         assert sorted(spot.edge_t * 200.0 for spot in neither.spots) == pytest.approx(
             [10.0, 70.0, 130.0, 190.0]
         )
+
+
+class TestStationExits:
+    """`P3-106`, `Q268`: a railway exit is a drop-off named by its station."""
+
+    def _spec(self, testville, reach_m: float = 250.0):
+        from pipeline.config_blocks.base import SourceLayer
+        from pipeline.config_blocks.fares import Station, Stations
+
+        def station(en: str, zh: str, x: float, z: float) -> Station:
+            lon, lat = testville._at(x, z)
+            return Station(en=en, zh=zh, lon=lon, lat=lat)
+
+        return Stations(
+            source="sheets",
+            member="{tile}/{tile}.gdb",
+            layer=SourceLayer("RailwayEntrance", {"kind": "T", "exit": "E"}),
+            kinds=("MTE",),
+            reach_m=reach_m,
+            max_snap_m=25.0,
+            names={
+                "lettered": {"en": "{station} Station Exit {exit}", "zh": "{station}站{exit}出口"},
+                "unlettered": {"en": "{station} Station", "zh": "{station}站"},
+            },
+            pickup=False,
+            dropoff=True,
+            # West and east of the middle road, 300 m apart.
+            table=(station("West", "西", 150.0, 320.0), station("East", "東", 450.0, 320.0)),
+        )
+
+    def _run(self, testville, monkeypatch, exits, **spec):
+        from pipeline import fares as stage
+
+        object.__setattr__(testville.city.fares, "stations", self._spec(testville, **spec))
+        monkeypatch.setattr(stage, "read_station_exits", lambda *args, **kwargs: exits)
+        return testville(stands=[testville.feature(300.0, 305.0, "Urban", "Stand", "站")])
+
+    def test_an_exit_takes_its_station_and_is_a_drop_off(self, testville, monkeypatch) -> None:
+        from pipeline.fares import StationExit
+
+        report = self._run(
+            testville,
+            monkeypatch,
+            [StationExit(160.0, 310.0, "A1"), StationExit(440.0, 310.0, None)],
+        )
+        nodes = _written(testville.out_dir)["nodes"]
+
+        # Appended after the published points, so no stand is renumbered.
+        assert [node["kind"] for node in nodes] == ["taxi_stand", "station_exit", "station_exit"]
+        west, east = nodes[1], nodes[2]
+        assert west["name"] == {"en": "West Station Exit A1", "zh": "西站A1出口"}
+        assert east["name"] == {"en": "East Station", "zh": "東站"}
+        # The passenger names the exit, not a building.
+        assert west["place"] == west["name"]
+        assert (west["pickup"], west["dropoff"], west["stand_category"]) == (False, True, None)
+        assert west["nearest_edge"] == _FIRST_EDGE_ID
+        assert report.exits_by_station == {"West": 1, "East": 1}
+        assert report.by_category["station_exit"] == 2
+
+    def test_an_exit_with_no_station_in_reach_stops_the_build(self, testville, monkeypatch) -> None:
+        """The table is missing a station: naming the exit after the nearest
+        listed one would be wrong, so nothing is guessed."""
+        from pipeline.fares import StationExit
+
+        with pytest.raises(ValueError, match="0 stations within"):
+            self._run(testville, monkeypatch, [StationExit(300.0, 310.0, "A")], reach_m=100.0)
+
+    def test_an_exit_two_stations_reach_stops_the_build(self, testville, monkeypatch) -> None:
+        from pipeline.fares import StationExit
+
+        with pytest.raises(ValueError, match=r"2 stations within.*West.*East"):
+            self._run(testville, monkeypatch, [StationExit(300.0, 310.0, "A")], reach_m=200.0)
+
+    def test_an_exit_too_far_from_any_road_is_dropped_and_counted(
+        self, testville, monkeypatch
+    ) -> None:
+        from pipeline.fares import StationExit
+
+        # 27 m off: inside the groups' 30 m, past the exits' own 25 m.
+        report = self._run(
+            testville, monkeypatch, [StationExit(160.0, 200.0, "B"), StationExit(160.0, 327.0, "C")]
+        )
+
+        assert [node["kind"] for node in _written(testville.out_dir)["nodes"]] == ["taxi_stand"]
+        assert report.unsnapped == 2

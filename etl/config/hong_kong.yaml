@@ -5194,6 +5194,47 @@ fares:
     # the name is looked for in it. Full-width letters, as the publisher types them.
     block_suffix: "\\s*(Tower|Block)\\s+[A-Z0-9-]+$|[Ａ-Ｚ0-9—-]+座$"
 
+  # MTR exits as destinations (`P3-106`, `Q268`). iB1000's `RailwayEntrance`
+  # publishes each exit's position and its letter (`ENTRANCENAME`: `A1`, `B`,
+  # sometimes none) and no station, so the station is this table's: an exit
+  # takes the one station within `reach_m`. Measured over the four driven
+  # regions' 42 exits (2026-11-22): every exit within 140 m of its own station,
+  # none nearer than 403 m to another. The table lists every station within
+  # `reach_m` of a driven region (Mong Kok East is 233 m outside `mong_kok`), so
+  # an exit's nearest station is always listed; a new region whose exit finds no
+  # station, or two, stops the build. `at` is lon, lat: the mean of the station's
+  # published exits, read 2026-11-22.
+  # Drop-off only: a passenger is set down at the exit and does not hail at one.
+  stations:
+    source: topography
+    member: "{tile}/{tile}.gdb"
+    layer: RailwayEntrance
+    fields:
+      kind: TYPEOFENTRANCE
+      exit: ENTRANCENAME
+    # The data dictionary's `MTE`, "Railway Entrance" — the domain's only code.
+    kinds: [MTE]
+    reach_m: 250.0
+    # `verify_join`'s bar on a stop's distance from its road, tighter than the
+    # groups' 30 m: refuses three of Wan Chai's exits, 25.5-29.2 m back across a
+    # plaza. Every other node in the four regions is within 21 m.
+    max_snap_m: 25.0
+    names:
+      lettered: {en: "{station} Station Exit {exit}", zh: "{station}站{exit}出口"}
+      unlettered: {en: "{station} Station", zh: "{station}站"}
+    pickup: false
+    dropoff: true
+    table:
+      - {en: Wan Chai, zh: 灣仔, at: [114.1731, 22.2775]}
+      - {en: Exhibition Centre, zh: 會展, at: [114.1755, 22.2814]}
+      - {en: Causeway Bay, zh: 銅鑼灣, at: [114.1840, 22.2803]}
+      - {en: Tin Hau, zh: 天后, at: [114.1919, 22.2827]}
+      - {en: Mong Kok, zh: 旺角, at: [114.1694, 22.3196]}
+      - {en: Yau Ma Tei, zh: 油麻地, at: [114.1705, 22.3131]}
+      - {en: Mong Kok East, zh: 旺角東, at: [114.1725, 22.3221]}
+      - {en: Sha Tin, zh: 沙田, at: [114.1876, 22.3827]}
+      - {en: Sha Tin Wai, zh: 沙田圍, at: [114.1950, 22.3771]}
+
   # Street hails (the user's ask, 2026-11-12): a passenger at any kerb no
   # restriction covers, beside a named building, on a road with no bus lane.
   # Every no-stopping run refuses, single as well as double, because `NSR`'s
