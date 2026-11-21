@@ -118,4 +118,5 @@ length_s = 840.0
 day_at = 0.174
 update_hz = 10.0
 loop_at = 1.714
+night_at = 1.214
 keyframes = Array[ExtResource("1_v281m")]([SubResource("Resource_morn"), SubResource("Resource_noon"), SubResource("Resource_aftn"), SubResource("Resource_late"), SubResource("Resource_52pmp"), SubResource("Resource_yhufu"), SubResource("Resource_shxbh"), SubResource("Resource_moon"), SubResource("Resource_mset"), SubResource("Resource_first"), SubResource("Resource_dawn")])

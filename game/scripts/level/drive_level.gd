@@ -218,6 +218,7 @@ func capture_run() -> RunSave:
 	if clock != null:
 		run.mode = clock.mode
 		run.elapsed_s = clock.elapsed_s
+		run.day_from_s = clock.day_from_s
 		run.hour_h = clock.hour_now()
 	run.pose = vehicle.global_transform
 	run.books = fares.snapshot()
@@ -233,7 +234,7 @@ func capture_run() -> RunSave:
 func continue_run(run: RunSave) -> void:
 	if clock != null:
 		clock.mode = run.mode
-		clock.resume_at(run.elapsed_s)
+		clock.resume_at(run.elapsed_s, run.day_from_s)
 	_played = true
 	var lifted := Transform3D(
 		run.pose.basis.orthonormalized(), run.pose.origin + Vector3.UP * RoadSpawn.DROP_CLEARANCE_M

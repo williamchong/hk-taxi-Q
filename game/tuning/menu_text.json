@@ -86,6 +86,10 @@
       "en": "ALWAYS DAY",
       "zh": "全日白晝"
     },
+    "time_night": {
+      "en": "ALWAYS NIGHT",
+      "zh": "全日黑夜"
+    },
     "sound": {
       "en": "SOUND",
       "zh": "聲音"

@@ -777,6 +777,7 @@ func _parse_args() -> bool:
 				var pages: PackedStringArray = [
 					"home",
 					"play",
+					"free",
 					"guide",
 					"options",
 					"credits",
@@ -793,7 +794,7 @@ func _parse_args() -> bool:
 				if not pages.has(value):
 					_fail(
 						(
-							"--menu-page=%s is not home, play, guide, options, credits, notices, report, record, pause, sound, controls, display, language or privacy"
+							"--menu-page=%s is not home, play, free, guide, options, credits, notices, report, record, pause, sound, controls, display, language or privacy"
 							% value
 						)
 					)
@@ -943,8 +944,8 @@ func _parse_args() -> bool:
 			"--day-cycle":
 				# `day_clock.gd` reads this one itself (`Q160`); a typo would
 				# leave the saved option deciding whether the sun moves.
-				if not ["off", "on"].has(value):
-					_fail("--day-cycle=%s is not off or on" % value)
+				if not ["off", "on", "night"].has(value):
+					_fail("--day-cycle=%s is not off, on or night" % value)
 					return false
 			"--mode":
 				# `day_clock.gd` reads this one itself (`Q162`) and plays free for

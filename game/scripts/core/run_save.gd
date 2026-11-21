@@ -31,6 +31,9 @@ static var _path: String = PATH
 var mode: DayClock.Mode = DayClock.Mode.FREE
 ## Game seconds the run's clock had counted (`DayClock.elapsed_s`).
 var elapsed_s: float = 0.0
+## The game second a free drive's day counts from (`DayClock.day_from_s`);
+## 0 in a shift, and in a save from before it was kept.
+var day_from_s: float = 0.0
 ## The shift's clock as it stood, for CONTINUE's caption; NAN in free mode.
 var hour_h: float = NAN
 ## The car's transform where it stood.
@@ -65,6 +68,7 @@ func write() -> bool:
 	file.set_value(SECTION, "regions", regions)
 	file.set_value(SECTION, "mode", mode)
 	file.set_value(SECTION, "elapsed_s", elapsed_s)
+	file.set_value(SECTION, "day_from_s", day_from_s)
 	if not is_nan(hour_h):
 		file.set_value(SECTION, "hour_h", hour_h)
 	file.set_value(SECTION, "pose", pose)
@@ -102,6 +106,7 @@ static func load_saved(resident: PackedStringArray = GeneratedRegions.resident()
 		else DayClock.Mode.FREE
 	)
 	run.elapsed_s = float(file.get_value(SECTION, "elapsed_s", 0.0))
+	run.day_from_s = float(file.get_value(SECTION, "day_from_s", 0.0))
 	run.hour_h = float(file.get_value(SECTION, "hour_h", NAN))
 	var saved_pose: Variant = file.get_value(SECTION, "pose", Transform3D.IDENTITY)
 	run.pose = saved_pose if saved_pose is Transform3D else Transform3D.IDENTITY

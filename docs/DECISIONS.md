@@ -2443,7 +2443,7 @@ See `game/tuning/day_to_night.md`, `.claude/rules/facade.md`.
 - The day does not stretch: a delivery adds money, never time (replaces `P3-2b`'s timer). No countdown on screen; the HUD shows the hour over "交更 21:00", then 最後一程 / LAST FARE.
 - 交更: `FareSystem.close()` hails no one and lets the passenger aboard finish; `finished` follows, `DriveHarness` relays `shift_over`, `Main` opens REPORT.
 - The best is in `Settings`' `records` section, a player's only: a scripted run (`--menu=off`) writes nothing. A tie is not a record.
-- Free mode keeps daylight by default (`Settings.day_cycle()` false); fares stay on.
+- Free mode keeps daylight by default (`Settings.free_time()` "day"); fares stay on. Its hour is picked as it begins, never in OPTIONS (`Q266`).
 - Dev flags: `--mode=shift`, `--shift-s=<seconds>`, `--menu-page=`.
 - Out: an online leaderboard (zero network calls at runtime).
 
@@ -3846,3 +3846,20 @@ before-side builder script was skipped on the user's call; the battery recipe st
 - Refused: roadsignfactory.hk (a vendor's catalogue, not the government's data, and no licence to
   ship); rewording a stale board to match Street View (the user: ship TD's).
 - Owed: the PCK delta, the handset's frame time, the scale on more boards, the 5 leaderless boards.
+
+## `Q266` — Free mode's hour is picked as the drive begins, and on its pause
+
+**Status.** Shipped 2026-11-22 on the user's ask: "set when beginning a new free roam session, and
+maybe ingame pause menu… don't put day/night in main menu option", "3 options: day/night shift,
+always day, always night".
+
+- PLAY → FREE opens a page of three: DAY TO NIGHT, ALWAYS DAY, ALWAYS NIGHT. Each starts the
+  drive; the last pick is saved (`Settings.free_time()`, falling back to the old `day_cycle`
+  switch) and focused next time. HOME's OPTIONS no longer carries the hour, so a desk's boot menu
+  has no DISPLAY group.
+- A free drive's pause offers the same three under OPTIONS → DISPLAY (a desk's free pause now
+  lists SOUND and DISPLAY). A shift's pause does not: 特更 always runs the day (`Q162`).
+- ALWAYS NIGHT holds the rig at `day_to_night.tres`' `night_at` 1.214 (00:00), written once.
+  DAY TO NIGHT picked mid-drive runs on from the look held (`day_at` or `night_at`) through
+  `DayClock.day_from_s`, which `RunSave` keeps so CONTINUE does not jump the hour.
+- `--day-cycle=night` holds the night for a scripted run.

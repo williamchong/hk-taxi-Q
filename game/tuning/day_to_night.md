@@ -21,6 +21,9 @@ is the look at `day_at`, read off the scene. A rig nobody moves is resting and w
 - `loop_at` 1.714 (`Q225`): where a free drive's day comes round to 07:00, 24 hours on the scale
   where 1.0 is the shift's 14, so the night runs at the day's pace. A shift never passes 1.0;
   `DayClock` caps it and only a free drive wraps. 0 would hold the last keyframe.
+- `night_at` 1.214 (00:00): where free mode's ALWAYS NIGHT holds the rig (the user's ask). Midnight,
+  between the 20:00 moon and the 03:30 one, so the moon is up and lit: the night keyframes'
+  `night_lights` is 1.00 either side. Held, not run: the clock writes it once and moves nothing.
 - `update_hz` 10: how often the rig is moved. Each move re-renders the sky's radiance, so it is
   the cost lever. About 0.15 ms a frame on an iPhone Air (`Q222`); the floor handset is not
   measured.

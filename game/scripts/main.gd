@@ -150,12 +150,19 @@ func pause() -> void:
 		shown.pause_tally = level.fares.tally
 	shown.resumed.connect(_release_pause)
 	shown.reset.connect(_on_reset)
-	# The one option under a pause that something outside the menu must hear.
-	# Never the side: that is a new HUD, which the pause does not offer.
+	# The options under a pause that something outside the menu must hear: the
+	# steering response and a free drive's hour. Never the side: that is a new HUD, which the pause does not offer.
 	shown.steering_changed.connect(_on_steering_changed)
+	shown.free_time_changed.connect(_on_free_time_changed)
 	shown.ended.connect(_on_run_ended)
 	_gui.add_child(shown)
 	_pause_menu = shown
+
+
+## A free drive's hour picked on its pause: the clock takes it at once.
+func _on_free_time_changed() -> void:
+	if level.clock != null:
+		level.clock.set_free_time(DayClock.free_time())
 
 
 ## RESUME, and the first half of the way out: the pause menu has freed itself

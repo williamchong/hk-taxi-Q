@@ -180,7 +180,7 @@ neighbouring region continues is never closed.
 | Mode | Status | Notes |
 |---|---|---|
 | **特更 / THE SHIFT** | Built (`Q162`) | The main mode: 07:00 to 21:00, then 交更 and the total against the best |
-| **兜風 / FREE MODE** | Built (`Q162`) | Fares on, no end; ALWAYS DAY unless OPTIONS picks DAY TO NIGHT. Ends from PAUSE on its own report (`Q189`) |
+| **兜風 / FREE MODE** | Built (`Q162`) | Fares on, no end; DAY TO NIGHT, ALWAYS DAY or ALWAYS NIGHT, picked as it begins and on its pause (`Q266`). Ends from PAUSE on its own report (`Q189`) |
 | Free roam (dev) | Built | `--fares=off`: no fare or guide |
 | Time trial, daily challenge | Not built | Fixed A→B; seeded fare sequence |
 

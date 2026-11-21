@@ -29,10 +29,14 @@ signal closed
 ## How a run is played (`Q162`). FREE is the drive as it always was — no end,
 ## the hour the option's; SHIFT is 特更, morning to night, then the total.
 enum Mode { FREE, SHIFT }
+## Free mode's hour (the user's ask), picked as the drive begins and changed on
+## its pause: the day running to night, the daylight held, the night held.
+enum FreeTime { CYCLE, DAY, NIGHT }
 
-## `--day-cycle=off` holds the authored daylight, `on` runs the day, and either
-## beats the saved option — `drive.sh` appends `off`, so every scripted frame
-## is the daylight one it always was unless a run asks for the hour to move.
+## `--day-cycle=off` holds the authored daylight, `on` runs the day, `night`
+## holds the night (free mode's alone), and each beats the saved option —
+## `drive.sh` appends `off`, so every scripted frame is the daylight one it
+## always was unless a run asks for the hour to move.
 ## In a shift it holds the light alone: the shift still runs and still ends.
 const CYCLE_ARG: String = "--day-cycle="
 ## `--mode=shift` plays a shift with no menu to pick it; anything else, free.
@@ -51,6 +55,10 @@ const SHIFT_S_ARG: String = "--shift-s="
 var mode: Mode = Mode.FREE
 ## Game seconds driven.
 var elapsed_s: float = 0.0
+## The game second a free drive's day counts its hour from: 0 for a day run
+## from the start, later where the pause turned it on mid-drive
+## (`set_free_time`). Always 0 in a shift.
+var day_from_s: float = 0.0
 
 var _due_s: float = 0.0
 ## Whether the mode has been read. Not at `_ready`: the menu saves the option
@@ -64,13 +72,26 @@ var _shift_s: float = 0.0
 var _closed: bool = false
 
 
-## Whether the day runs in free mode: the flag, then the saved option.
-static func wanted() -> bool:
+## Free mode's hour: the flag, then the saved option.
+static func free_time() -> FreeTime:
 	if Cmdline.off(CYCLE_ARG):
-		return false
-	if Cmdline.value(CYCLE_ARG).to_lower() == "on":
-		return true
-	return Settings.day_cycle()
+		return FreeTime.DAY
+	match Cmdline.value(CYCLE_ARG).to_lower():
+		"on":
+			return FreeTime.CYCLE
+		"night":
+			return FreeTime.NIGHT
+	return free_time_of(Settings.free_time())
+
+
+## The hour `code` in `Settings.FREE_TIMES` names: `FreeTime.CYCLE` for "cycle".
+static func free_time_of(code: String) -> FreeTime:
+	return FreeTime[code.to_upper()] as FreeTime
+
+
+## `time`'s name in `Settings.FREE_TIMES`: "cycle" for `FreeTime.CYCLE`.
+static func free_time_code(time: FreeTime) -> String:
+	return str(FreeTime.find_key(time)).to_lower()
 
 
 ## The mode a run without a menu plays: `--mode=shift`, or free.
@@ -84,9 +105,11 @@ func _ready() -> void:
 
 ## Back to the first second, in `mode`: the next shift, or a free drive after
 ## one. The rig is put back to what the run opens on — the morning where the
-## day will run, the authored daylight where it is held (`Q222`).
+## day will run, the authored daylight where it is held (`Q222`), the night
+## where free mode holds that.
 func restart() -> void:
 	elapsed_s = 0.0
+	day_from_s = 0.0
 	_due_s = 0.0
 	_decided = false
 	_closed = false
@@ -101,18 +124,45 @@ func restart() -> void:
 		if _runs_day():
 			rig.time_of_day = 0.0
 		else:
-			rig.rest()
+			_hold(_held_time())
 	set_physics_process(_moves_rig() or mode == Mode.SHIFT)
 
 
-## A saved run's clock (`Q253`): `restart`, then `at_s` game seconds on. The
+## A saved run's clock (`Q253`): `restart`, then `at_s` game seconds on, its
+## day counted from `from_s` (`day_from_s`). The
 ## first tick off the parked car decides the run as for a new one, and the
 ## rig's next move reads the hour from these seconds, so the sky catches up
 ## within one `RigCycle.update_hz` step. A shift saved past 交更 closes again
 ## on that tick, the passenger aboard still the last.
-func resume_at(at_s: float) -> void:
+func resume_at(at_s: float, from_s: float = 0.0) -> void:
 	restart()
 	elapsed_s = maxf(at_s, 0.0)
+	day_from_s = from_s
+
+
+## A free drive's hour switched under its pause (the user's ask). A day turned
+## on runs from the look the drive stands in — `RigCycle.day_at`, the authored
+## daylight, or `night_at` — so the sky does not jump; a day turned off holds
+## the daylight or the night at once, and the clock stops counting. A shift's day is not the
+## option's, and a clock not yet decided reads the saved option at the
+## drive-off anyway.
+func set_free_time(time: FreeTime) -> void:
+	if not _free() or not _decided or not _moves_rig():
+		return
+	if time != FreeTime.CYCLE:
+		_cycling = false
+		_hold(time)
+		set_physics_process(false)
+		return
+	if _cycling:
+		return
+	_cycling = true
+	# A resting rig reads `time_of_day` 0, not the daylight it shows.
+	var held_at: float = rig.cycle.day_at if rig.resting else rig.time_of_day
+	day_from_s = elapsed_s - held_at * rig.cycle.length_s
+	rig.time_of_day = held_at
+	_due_s = 1.0 / rig.cycle.update_hz
+	set_physics_process(true)
 
 
 ## Stand the rig at `at` with no game time passing: the boot menu's hour
@@ -182,7 +232,7 @@ func _physics_process(delta: float) -> void:
 	# Through the shift's own length where one runs, so `--shift-s=` speeds the
 	# sky with the clock.
 	var length_s: float = _shift_s if _shift_s > 0.0 else rig.cycle.length_s
-	var at: float = elapsed_s / length_s
+	var at: float = (elapsed_s - day_from_s) / length_s
 	if _shift_s <= 0.0 and rig.cycle.loop_at > 0.0:
 		# A free drive's day comes round (`Q225`): night, a dawn, the morning.
 		rig.time_of_day = fposmod(at, rig.cycle.loop_at)
@@ -213,15 +263,35 @@ func _decide() -> void:
 	# showed its guess.
 	_cycling = _moves_rig() and _runs_day()
 	if _moves_rig() and not _cycling:
-		rig.rest()
+		_hold(_held_time())
+
+
+## Whether the run plays free: free mode, or a shift with no usable table.
+func _free() -> bool:
+	return mode != Mode.SHIFT or _shift == null
+
+
+## What a run that does not move its sky holds: a free drive's pick, or a
+## shift's daylight under `--day-cycle=off`.
+func _held_time() -> FreeTime:
+	return free_time() if _free() else FreeTime.DAY
+
+
+## Stand the rig at the held `time`: the authored daylight at rest, or the
+## cycle's night where it has one.
+func _hold(time: FreeTime) -> void:
+	if time == FreeTime.NIGHT and rig.cycle.night_at > 0.0:
+		rig.time_of_day = rig.cycle.night_at
+		return
+	rig.rest()
 
 
 ## Whether this run's sky will move, as far as a parked clock can tell: a
 ## shift's unless the flag holds it, a free drive's by the option.
 func _runs_day() -> bool:
-	if mode == Mode.SHIFT and _shift != null:
+	if not _free():
 		return not Cmdline.off(CYCLE_ARG)
-	return wanted()
+	return free_time() == FreeTime.CYCLE
 
 
 ## A rig with no usable cycle, or one pinned to an hour for a frame, has

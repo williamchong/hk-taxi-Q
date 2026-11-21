@@ -100,7 +100,7 @@ Owed: three frames at `--debug-view=off` — boarding at the boot stand, carryin
 
 Owed: a frame at `--menu=on --seconds=3 --shots=2 --debug-view=off` in each language (`--lang=zh`,
 `--lang=en`), and a default `drive.sh` run showing the car drives from tick one. Pages:
-`--menu-page=home|play|guide|options|sound|controls|display|language|privacy|credits|notices|record|report|pause`;
+`--menu-page=home|play|free|guide|options|sound|controls|display|language|privacy|credits|notices|record|report|pause`;
 `--menu-sample=on` fills the 成績表; `--mode=free` shoots free mode's REPORT; CONTROLS needs
 `--touch=on`; shoot `pause` at `--debug-view=minimal`. A standing shot must sway or the capture
 stalls. A run naming either flag saves no record.
@@ -120,7 +120,8 @@ stalls. A run naming either flag saves no record.
   under it lands on release. The boot menu is not held: its cover counts frames.
 - A language change is a new HUD, not a relabel. `--lang=` beats the saved option and the OS's.
 - Two modes behind PLAY (`Q162`); a shift's end opens a fresh menu on REPORT; the shift's clock is
-  the hour, never a countdown; TIME OF DAY is free mode's alone.
+  the hour, never a countdown; TIME OF DAY is free mode's alone, picked on PLAY → FREE and on a free
+  drive's pause DISPLAY, never in HOME's OPTIONS (`Q266`).
 - OPTIONS is a list of groups, a page each, never a scroll (`Q223`). A pick that changes a drive
   (`ControlOptions`) takes a `drive.sh` flag that beats it. Sound is the Master bus (`Q221`); MUSIC's
   switch and slider on the same page are the `Music` bus alone (`Q246`).

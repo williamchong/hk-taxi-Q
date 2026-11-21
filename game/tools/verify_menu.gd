@@ -109,6 +109,7 @@ const KEYS: PackedStringArray = [
 	"time",
 	"time_cycle",
 	"time_day",
+	"time_night",
 	"sound",
 	"sound_on",
 	"sound_off",
@@ -408,6 +409,7 @@ func _check_options() -> void:
 		await _check_music(menu, master)
 	menu.queue_free()
 	await _check_groups()
+	await _check_free_page()
 	_forget_settings_file()
 	SettingsScript.use_file(SettingsScript.PATH)
 	for bus: int in [master, AudioServer.get_bus_index(SettingsScript.MUSIC_BUS)]:
@@ -481,14 +483,15 @@ func _check_music(menu: Node, master: int) -> void:
 ## OPTIONS is a list of groups, a page each (`Q223`): which are listed is the
 ## device's and the menu's, a list of one is skipped, the way back is one
 ## step, and a pause never offers what needs a new HUD — the language, the
-## thumbs' sides — nor the hour.
+## thumbs' sides. The hour is a free drive's pause's alone (the user's ask):
+## never HOME's OPTIONS, never a shift's pause.
 func _check_groups() -> void:
 	var pages: Dictionary = StartMenuScript.Page
 	var desk: StartMenuScript = await _menu_for(false, false, false)
 	_expect(
-		desk._shown_groups == [pages.SOUND, pages.DISPLAY, pages.LANGUAGE, pages.PRIVACY],
+		desk._shown_groups == [pages.SOUND, pages.LANGUAGE, pages.PRIVACY],
 		"groups",
-		"a desk lists SOUND, DISPLAY, LANGUAGE and PRIVACY"
+		"a desk lists SOUND, LANGUAGE and PRIVACY: its DISPLAY has nothing"
 	)
 	var list: Control = desk._pages[pages.OPTIONS]
 	_expect(
@@ -500,12 +503,7 @@ func _check_groups() -> void:
 		"groups",
 		"the list carries a choice per group and none for CONTROLS"
 	)
-	var display: Control = desk._pages[pages.DISPLAY]
-	_expect(
-		display.get_node_or_null("Times") != null and display.get_node_or_null("FrameCaps") == null,
-		"groups",
-		"a desk's DISPLAY is the hour, with no frame cap"
-	)
+	_expect(not desk._pages.has(pages.DISPLAY), "groups", "a desk's boot menu builds no DISPLAY")
 	desk._show(pages.SOUND)
 	var cancel := InputEventAction.new()
 	cancel.action = &"ui_cancel"
@@ -543,6 +541,11 @@ func _check_groups() -> void:
 		),
 		"groups",
 		"a phone lists all five"
+	)
+	_expect(
+		phone._pages[pages.DISPLAY].get_node_or_null("Times") == null,
+		"groups",
+		"a phone's boot DISPLAY is the frame cap alone, never the hour"
 	)
 	var steerings: Array[int] = [0]
 	var sides: Array[int] = [0]
@@ -612,11 +615,11 @@ func _check_groups() -> void:
 			held._pages[pages.CONTROLS].get_node_or_null("Steerings") != null
 			and held._pages[pages.CONTROLS].get_node_or_null("Sides") == null
 			and held._pages[pages.DISPLAY].get_node_or_null("FrameCaps") != null
-			and held._pages[pages.DISPLAY].get_node_or_null("Times") == null
+			and held._pages[pages.DISPLAY].get_node_or_null("Times") != null
 			and not held._pages.has(pages.LANGUAGE)
 		),
 		"groups",
-		"its CONTROLS has no sides, its DISPLAY no hour, and it built no LANGUAGE"
+		"its CONTROLS has no sides, its DISPLAY the frame cap and the hour, and no LANGUAGE"
 	)
 	SettingsScript.set_wheel("")
 	_expect(
@@ -626,25 +629,135 @@ func _check_groups() -> void:
 	)
 	held.queue_free()
 
-	var held_desk: StartMenuScript = await _menu_for(false, false, true)
+	var held_desk: StartMenuScript = await _menu_for(false, false, true, true)
 	held_desk._show(held_desk._options_page())
 	var on_sound: bool = held_desk._page == pages.SOUND
 	held_desk._show(held_desk._back_of(held_desk._page))
 	_expect(
 		held_desk._shown_groups == [pages.SOUND] and on_sound and held_desk._page == pages.PAUSE,
 		"groups",
-		"a desk's pause has the sound alone: OPTIONS opens it, and its way back is the pause"
+		"a desk's shift pause has the sound alone: OPTIONS opens it, and its way back is the pause"
 	)
 	held_desk.queue_free()
+	await _check_pause_hour()
+
+
+## A free drive's pause at a desk (the user's ask): OPTIONS lists SOUND and
+## DISPLAY, and DISPLAY's three hours mark the saved one; a pick is saved, said
+## once to the drive, and marked on the rebuilt page.
+func _check_pause_hour() -> void:
+	var pages: Dictionary = StartMenuScript.Page
+	SettingsScript.set_free_time("day")
+	var held: StartMenuScript = await _menu_for(false, false, true)
+	var changes: Array[int] = [0]
+	held.free_time_changed.connect(func() -> void: changes[0] += 1)
+	_expect(
+		held._shown_groups == [pages.SOUND, pages.DISPLAY],
+		"hour",
+		"a desk's free pause lists SOUND and DISPLAY"
+	)
+	var times: Node = held._pages[pages.DISPLAY].get_node_or_null("Times")
+	_expect(
+		(
+			times != null
+			and times.get_child_count() == 3
+			and (times.get_node("Day/Button") as Button).disabled
+			and held._pages[pages.DISPLAY].get_node_or_null("FrameCaps") == null
+		),
+		"hour",
+		"its DISPLAY offers the three hours with ALWAYS DAY marked, and no frame cap"
+	)
+	if times != null:
+		(times.get_node("Night/Button") as Button).pressed.emit()
+		(times.get_node("Day/Button") as Button).pressed.emit()
+		await process_frame
+		times = held._pages[pages.DISPLAY].get_node("Times")
+		_expect(
+			(
+				SettingsScript.free_time() == "day"
+				and changes[0] == 2
+				and (times.get_node("Day/Button") as Button).disabled
+			),
+			"hour",
+			"NIGHT and then DAY are saved and said once each, and the page marks the last"
+		)
+		(times.get_node("Cycle/Button") as Button).pressed.emit()
+		_expect(
+			SettingsScript.free_time() == "cycle" and changes[0] == 3,
+			"hour",
+			"DAY TO NIGHT is saved and said"
+		)
+	held.queue_free()
+	SettingsScript.set_free_time("day")
+	await process_frame
+
+
+## FREE MODE's hour (the user's ask): PLAY's FREE opens a page of the three,
+## the saved one focused; a pick saves it and starts a free drive, once; BACK
+## and the cancel key are PLAY.
+func _check_free_page() -> void:
+	var pages: Dictionary = StartMenuScript.Page
+	SettingsScript.set_free_time("day")
+	var menu: StartMenuScript = await _menu_for(false, false, false)
+	var modes: Array[int] = []
+	menu.started.connect(func(mode: int) -> void: modes.append(mode))
+	menu._show(pages.PLAY)
+	(menu._pages[pages.PLAY].get_node("Free/Button") as Button).pressed.emit()
+	var free: Control = menu._pages.get(pages.FREE)
+	_expect(
+		(
+			menu._page == pages.FREE
+			and modes.is_empty()
+			and free.get_node_or_null("Cycle/Button") != null
+			and menu._first.get(pages.FREE) == free.get_node("Day/Button")
+		),
+		"free",
+		"FREE opens the hours, starts nothing, and focuses the saved ALWAYS DAY"
+	)
+	var cancel := InputEventAction.new()
+	cancel.action = &"ui_cancel"
+	cancel.pressed = true
+	menu._unhandled_input(cancel)
+	var back_on_play: bool = menu._page == pages.PLAY
+	menu._show(pages.FREE)
+	(free.get_node("Back/Button") as Button).pressed.emit()
+	_expect(
+		back_on_play and menu._page == pages.PLAY, "free", "the cancel key and BACK lead to PLAY"
+	)
+	menu._show(pages.FREE)
+	(free.get_node("Night/Button") as Button).pressed.emit()
+	_expect(
+		(
+			modes.size() == 1
+			and modes[0] == DayClockScript.Mode.FREE
+			and SettingsScript.free_time() == "night"
+			and menu.is_queued_for_deletion()
+		),
+		"free",
+		"ALWAYS NIGHT is saved, a free drive starts once, and the menu leaves"
+	)
+	await process_frame
+	var again: StartMenuScript = await _menu_for(false, false, false)
+	_expect(
+		again._first.get(pages.FREE) == again._pages[pages.FREE].get_node("Night/Button"),
+		"free",
+		"the next FREE focuses the hour last picked"
+	)
+	again.queue_free()
+	SettingsScript.set_free_time("day")
+	await process_frame
 
 
 ## A menu in the tree for `_check_groups`: on a touch screen or not, a phone
-## or not, the boot menu or the pause.
-func _menu_for(touch: bool, phone: bool, pausing: bool) -> StartMenuScript:
+## or not, the boot menu or the pause, a shift's or a free drive's.
+func _menu_for(
+	touch: bool, phone: bool, pausing: bool, pausing_shift: bool = false
+) -> StartMenuScript:
 	var menu := StartMenuScript.new()
 	menu.stacked = touch
 	menu.phone = phone
 	menu.pausing = pausing
+	menu.pausing_shift = pausing_shift
 	root.add_child(menu)
 	await process_frame
 	return menu
@@ -1271,7 +1384,14 @@ func _check_settings() -> void:
 		)
 
 	# Free mode keeps the daylight until the option says otherwise (`Q162`).
-	_expect(not SettingsScript.day_cycle(), "settings", "free mode's day cycle is off unsaved")
+	_expect(SettingsScript.free_time() == "day", "settings", "free mode's hour is the day unsaved")
+	SettingsScript.set_free_time("night")
+	SettingsScript.set_free_time("dusk")
+	_expect(
+		SettingsScript.free_time() == "night",
+		"settings",
+		"ALWAYS NIGHT is saved, and a word that is no hour is not"
+	)
 	# The sound: on and full until the options say otherwise, and a level off
 	# the slider's ends is held to them.
 	_expect(
@@ -1579,6 +1699,7 @@ func _check_run_save() -> void:
 	run.mode = DayClockScript.Mode.SHIFT
 	run.elapsed_s = 412.5
 	run.hour_h = 13.25
+	run.day_from_s = -61.5
 	run.pose = Transform3D(Basis(Vector3.UP, 0.7), Vector3(12.0, 6.5, -40.0))
 	run.books = {"earned_hkd": 210.5, "tally": tally.to_dict(), "fare": {"pickup": "a/f_001"}}
 	run.regions = PackedStringArray(["a"])
@@ -1590,6 +1711,7 @@ func _check_run_save() -> void:
 			and back.mode == DayClockScript.Mode.SHIFT
 			and is_equal_approx(back.elapsed_s, 412.5)
 			and is_equal_approx(back.hour_h, 13.25)
+			and is_equal_approx(back.day_from_s, -61.5)
 			and back.pose.is_equal_approx(run.pose)
 			and is_equal_approx(back.earned_hkd(), 210.5)
 			and is_equal_approx(back.driven_s(), 300.0)

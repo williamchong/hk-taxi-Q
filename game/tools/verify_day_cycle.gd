@@ -202,6 +202,7 @@ func _run() -> void:
 	_expect(moved[0] == before_rest + 1, "day", "a resting rig asked to rest writes nothing")
 
 	await _check_the_clock(rig)
+	await _check_the_free_hour(rig)
 	_check_the_showroom(rig)
 	await _check_the_shift(rig)
 	await _check_the_pause(rig)
@@ -372,7 +373,7 @@ func _check_the_phone() -> void:
 func _check_the_clock(rig: LightingRig) -> void:
 	SettingsScript.use_file(SCRATCH)
 	for on: bool in [true, false]:
-		SettingsScript.set_day_cycle(on)
+		SettingsScript.set_free_time("cycle" if on else "day")
 		rig.time_of_day = 0.0
 		var clock := DayClock.new()
 		clock.rig = rig
@@ -407,14 +408,14 @@ func _check_the_clock(rig: LightingRig) -> void:
 	# The option changed under the menu, after `restart` read it: the first
 	# tick of the drive decides, both ways.
 	for on: bool in [true, false]:
-		SettingsScript.set_day_cycle(not on)
+		SettingsScript.set_free_time("day" if on else "cycle")
 		var flipped := DayClock.new()
 		flipped.rig = rig
 		# No frame between the two: a physics tick of the tree's own would
 		# decide on the old option before this one is turned.
 		root.add_child(flipped)
 		var shown_resting: bool = rig.resting
-		SettingsScript.set_day_cycle(on)
+		SettingsScript.set_free_time("cycle" if on else "day")
 		_tick(flipped, 1)
 		_expect(
 			shown_resting == on and rig.resting != on,
@@ -429,12 +430,95 @@ func _check_the_clock(rig: LightingRig) -> void:
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(SCRATCH))
 
 
+## Free mode's three hours (the user's ask): ALWAYS NIGHT holds `night_at` at
+## the drive-off and moves nothing after; the pause's DAY TO NIGHT runs on from
+## the look held, ALWAYS DAY rests the rig, and a shift ignores the pick.
+func _check_the_free_hour(rig: LightingRig) -> void:
+	SettingsScript.use_file(SCRATCH)
+	var cycle: RigCycle = rig.cycle
+	var settle: int = ceili(30.0 / TICK_S)
+	var names: PackedStringArray = []
+	for key: String in DayClock.FreeTime.keys():
+		names.append(key.to_lower())
+	names.sort()
+	var saved_names: PackedStringArray = SettingsScript.FREE_TIMES.duplicate()
+	saved_names.sort()
+	_expect(
+		names == saved_names,
+		"free hour",
+		"Settings.FREE_TIMES names every DayClock.FreeTime and no other"
+	)
+	_expect(cycle.night_at > cycle.day_at, "free hour", "the cycle has a night to hold")
+	SettingsScript.set_free_time("night")
+	var clock := DayClock.new()
+	clock.rig = rig
+	root.add_child(clock)
+	await process_frame
+	var parked_at_night: bool = is_equal_approx(rig.time_of_day, cycle.night_at)
+	_tick(clock, settle)
+	_expect(
+		(
+			parked_at_night
+			and is_equal_approx(rig.time_of_day, cycle.night_at)
+			and not rig.resting
+			and not clock.is_physics_processing()
+		),
+		"free hour",
+		(
+			"ALWAYS NIGHT stands the rig at night_at %.3f, parked and driven, and stops"
+			% cycle.night_at
+		)
+	)
+	clock.set_free_time(DayClock.FreeTime.CYCLE)
+	var turned_at: float = rig.time_of_day
+	_tick(clock, settle)
+	_expect(
+		(
+			is_equal_approx(turned_at, cycle.night_at)
+			and rig.time_of_day > cycle.night_at
+			and clock.is_physics_processing()
+		),
+		"free hour",
+		"DAY TO NIGHT from the night runs on from it (read %.3f)" % rig.time_of_day
+	)
+	clock.set_free_time(DayClock.FreeTime.DAY)
+	var stopped: bool = not clock.is_physics_processing()
+	_tick(clock, settle)
+	var rested: bool = rig.resting and stopped
+	clock.set_free_time(DayClock.FreeTime.CYCLE)
+	var from_day: float = rig.time_of_day
+	_tick(clock, settle)
+	_expect(
+		rested and is_equal_approx(from_day, cycle.day_at) and rig.time_of_day > cycle.day_at,
+		"free hour",
+		"ALWAYS DAY rests the rig and stops the clock, and DAY TO NIGHT from it starts at day_at"
+	)
+	clock.free()
+	var shift := DayClock.new()
+	shift.rig = rig
+	shift.mode = DayClock.Mode.SHIFT
+	root.add_child(shift)
+	await process_frame
+	_tick(shift, 1)
+	shift.set_free_time(DayClock.FreeTime.NIGHT)
+	var before: float = rig.time_of_day
+	_tick(shift, ceili(5.0 / TICK_S))
+	_expect(
+		rig.time_of_day > before and before < cycle.day_at,
+		"free hour",
+		"a shift ignores free mode's pick and runs its morning"
+	)
+	shift.free()
+	SettingsScript.use_file(SettingsScript.PATH)
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(SCRATCH))
+
+
 ## The boot menu's hour (`DriveLevel.showroom_time_of_day`): the level lights
 ## the parked rig at it, the clock's restart at PLAY puts the run's own hour
 ## back, and a negative one or a pinned rig is left alone.
 func _check_the_showroom(rig: LightingRig) -> void:
 	SettingsScript.use_file(SCRATCH)
-	SettingsScript.set_day_cycle(false)
+	SettingsScript.set_free_time("day")
 	var clock := DayClock.new()
 	clock.rig = rig
 	# Never in the tree: only the level's light is asked for, not its boot.
@@ -482,7 +566,7 @@ func _check_the_shift(rig: LightingRig) -> void:
 		"the parked roster's clock is the shift's, %s to %s" % [shift.opens_h, shift.closes_h]
 	)
 	SettingsScript.use_file(SCRATCH)
-	SettingsScript.set_day_cycle(false)
+	SettingsScript.set_free_time("day")
 	rig.time_of_day = 0.0
 	var clock := DayClock.new()
 	clock.rig = rig

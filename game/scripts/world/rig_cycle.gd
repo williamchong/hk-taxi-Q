@@ -33,6 +33,10 @@ const PATH: String = "res://tuning/day_to_night.tres"
 ## its last keyframe. Only a free drive runs past 1.0 (`Q225`): the night goes
 ## on through a dawn to the first keyframe, and the day starts over.
 @export_range(0.0, 4.0, 0.001) var loop_at: float
+## Where free mode's ALWAYS NIGHT holds the rig (the user's ask), on the
+## keyframes' scale: a night past the dusk and inside `span()`, or 0 for a
+## cycle with no night to hold, where ALWAYS NIGHT holds the daylight.
+@export_range(0.0, 4.0, 0.001) var night_at: float
 ## The looks either side of the authored day, in the order they are reached.
 @export var keyframes: Array[RigKeyframe]
 
@@ -73,6 +77,14 @@ func usable() -> bool:
 			(
 				"RigCycle: %s loop_at %s is not past 1.0 and its last keyframe at %s."
 				% [resource_path, loop_at, last]
+			)
+		)
+		return false
+	if night_at != 0.0 and (night_at <= day_at or night_at > span()):
+		push_error(
+			(
+				"RigCycle: %s night_at %s is not past day_at %s and within the span %s."
+				% [resource_path, night_at, day_at, span()]
 			)
 		)
 		return false

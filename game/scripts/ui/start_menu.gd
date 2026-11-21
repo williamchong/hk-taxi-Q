@@ -6,14 +6,17 @@ extends CanvasLayer
 ## **Two ways to play** (`Q162`): 特更 / THE SHIFT, morning to night with the
 ## total weighed against the best at 交更, and 兜風 / FREE MODE, the drive with
 ## no end — one PLAY on HOME, the two behind it on PLAY (the user's call), and
-## the shift's best on HOME. `Main` opens a fresh one on the REPORT page when a shift ends; its
+## the shift's best on HOME. FREE MODE asks its hour before it starts (the
+## user's ask): DAY TO NIGHT, ALWAYS DAY or ALWAYS NIGHT, and the pause over a
+## free drive offers the same three under DISPLAY. Never HOME's OPTIONS: the
+## hour is a drive's, not the game's. `Main` opens a fresh one on the REPORT page when a shift ends; its
 ## AGAIN is a `started` like the first.
 ##
 ## **And over a paused drive** (the user's ask): `Main` opens a fresh one with
 ## `pausing` set on the PAUSE page, over a tree it has paused, so this one
 ## alone runs — RESUME, HOW TO PLAY, OPTIONS, and the way out of the run. Its
 ## OPTIONS are the ones a held drive can take (`Q223`): the sound, the
-## steering thumb's response, a phone's frame cap. Never the language nor the
+## steering thumb's response, a phone's frame cap, a free drive's hour. Never the language nor the
 ## thumbs' sides: each is a new HUD (`Main._renew_hud`), and a HUD readied
 ## mid-fare would never hear the fare's signals already sent.
 ##
@@ -32,7 +35,7 @@ extends CanvasLayer
 ##
 ## ⚠️ **`--menu=off` boots straight into the drive**, and `drive.sh` passes it
 ## unless a run names the flag, so every scripted drive is what it was.
-## `--menu-page=<home|play|guide|options|credits|notices|report|record|pause|sound|controls|display|language>`
+## `--menu-page=<home|play|free|guide|options|credits|notices|report|record|pause|sound|controls|display|language|privacy>`
 ## opens on that page, so a frame of any sheet is one `drive.sh` run and never a click; the
 ## report so opened is an empty shift's, and the pause `Main`'s over the car on
 ## the start line. `--menu-sample=on` fills the 成績表 on any of them for a frame,
@@ -49,6 +52,9 @@ signal started(mode: DayClock.Mode)
 ## The player picked CONTINUE (`Q253`): `Main` puts `run`, the save HOME
 ## read, back.
 signal continued(run: RunSave)
+## Free mode's hour picked on its pause; `DayClock.free_time()` already answers
+## it, and `Main` tells the running clock.
+signal free_time_changed
 ## The player picked a language; `Locale.language()` already answers it.
 signal language_changed(code: String)
 ## The player picked the steering thumb's response; `ControlOptions.steering()`
@@ -100,7 +106,8 @@ enum Page {
 	CONTROLS,
 	DISPLAY,
 	LANGUAGE,
-	PRIVACY
+	PRIVACY,
+	FREE
 }
 
 ## OPTIONS' groups in the order listed, each with the key of its name.
@@ -252,6 +259,7 @@ func _build() -> void:
 	else:
 		_pages[Page.HOME] = _home()
 		_pages[Page.PLAY] = _play()
+		_pages[Page.FREE] = _free()
 		_pages[Page.CREDITS] = _credits()
 		_pages[Page.NOTICES] = _notices()
 		_pages[Page.REPORT] = _report()
@@ -306,7 +314,7 @@ func _show(page: Page) -> void:
 ## The camera's place round the parked car for the page up now.
 func shot() -> MenuShot:
 	match _page:
-		Page.PLAY:
+		Page.PLAY, Page.FREE:
 			return _profile.shot_play
 		Page.OPTIONS, Page.SOUND, Page.CONTROLS, Page.DISPLAY, Page.LANGUAGE, Page.PRIVACY:
 			return _profile.shot_options
@@ -339,6 +347,8 @@ func _home_page() -> Page:
 func _back_of(page: Page) -> Page:
 	if page == Page.NOTICES:
 		return Page.CREDITS
+	if page == Page.FREE:
+		return Page.PLAY
 	if page in _shown_groups and _shown_groups.size() > 1:
 		return Page.OPTIONS
 	return _home_page()
@@ -350,15 +360,21 @@ func _groups() -> Array[Page]:
 	# The thumbs' own: nothing in it for a keyboard or a pad.
 	if stacked:
 		groups.append(Page.CONTROLS)
-	# The hour is the boot menu's and the frame cap a phone's, so a pause at a
-	# desk has nothing to show here.
-	if phone or not pausing:
+	# The frame cap is a phone's and the hour a free drive's pause's (it is
+	# picked as the drive begins, never on HOME), so a desk's boot menu and its
+	# shift's pause have nothing to show here.
+	if phone or _pausing_free():
 		groups.append(Page.DISPLAY)
 	# The language and the usage events (`Q256`) are the boot menu's alone.
 	if not pausing:
 		groups.append(Page.LANGUAGE)
 		groups.append(Page.PRIVACY)
 	return groups
+
+
+## Whether this is the pause over a free drive, whose hour can change.
+func _pausing_free() -> bool:
+	return pausing and not pausing_shift
 
 
 ## Where the OPTIONS choice leads: the list, or the one group there is.
@@ -446,10 +462,45 @@ func _play() -> Control:
 	var column: VBoxContainer = _column("Play")
 	_heading(column, "Heading", _text.say("start", _language))
 	_first[Page.PLAY] = _button(column, "Shift", "shift", _on_start.bind(DayClock.Mode.SHIFT))
-	_button(column, "Free", "free", _on_start.bind(DayClock.Mode.FREE))
+	_button(column, "Free", "free", _show.bind(Page.FREE))
 	column.add_child(_gap("Gap", _profile.button_gap_px))
 	_button(column, "Back", "back", _show.bind(Page.HOME))
 	return column
+
+
+## FREE MODE's hour, picked as it begins (the user's ask): each of the three
+## starts the drive, the last one picked focused, and BACK is PLAY.
+func _free() -> Control:
+	var column: VBoxContainer = _column("Free")
+	_heading(column, "Heading", _text.say("time", _language))
+	var saved: int = _free_times().find(DayClock.free_time())
+	var rows: Array = _time_choices(_on_free)
+	for index: int in rows.size():
+		var row: Array = rows[index]
+		var choice: Button = _button(column, row[0], row[1], row[2])
+		if index == saved:
+			_first[Page.FREE] = choice
+	column.add_child(_gap("Gap", _profile.button_gap_px))
+	_button(column, "Back", "back", _show.bind(Page.PLAY))
+	return column
+
+
+## Free mode's hours in `Settings.FREE_TIMES`' order.
+static func _free_times() -> Array[DayClock.FreeTime]:
+	var times: Array[DayClock.FreeTime] = []
+	for code: String in Settings.FREE_TIMES:
+		times.append(DayClock.free_time_of(code))
+	return times
+
+
+## A row per hour for a choice: its node name, its text key, and `pick` bound
+## to it.
+static func _time_choices(pick: Callable) -> Array:
+	var rows: Array = []
+	for time: DayClock.FreeTime in _free_times():
+		var code: String = DayClock.free_time_code(time)
+		rows.append([code.capitalize(), "time_" + code, pick.bind(time)])
+	return rows
 
 
 ## OPTIONS: its groups, a choice each, and the way back (`Q223`).
@@ -557,9 +608,9 @@ func _pick_analytics(on: bool) -> void:
 	_relabel.call_deferred()
 
 
-## What is drawn: a phone's frame cap (`Q223`), and the hour (`Q160`) —
-## whether the day runs to night as game time passes in free mode; a shift
-## always runs it (`Q162`), and a drive under way keeps the hour it has.
+## What is drawn: a phone's frame cap (`Q223`), and on a free drive's pause its
+## hour (`Q160`, the user's ask) — the day running to night, or the daylight or
+## the night held; a shift always runs the day (`Q162`).
 func _display(column: VBoxContainer) -> void:
 	if phone:
 		var offered: PackedInt32Array = ControlOptions.frame_caps()
@@ -567,17 +618,9 @@ func _display(column: VBoxContainer) -> void:
 		for fps: int in offered:
 			caps.append(["Fps%d" % fps, "frame_%d" % fps, _pick_frame_cap.bind(fps)])
 		_choices(column, "FrameCaps", "frame_rate", caps, offered.find(ControlOptions.frame_cap()))
-	if not pausing:
-		_choices(
-			column,
-			"Times",
-			"time",
-			[
-				["Cycle", "time_cycle", _pick_time.bind(true)],
-				["Day", "time_day", _pick_time.bind(false)],
-			],
-			0 if Settings.day_cycle() else 1
-		)
+	if _pausing_free():
+		var current: int = _free_times().find(DayClock.free_time())
+		_choices(column, "Times", "time", _time_choices(_pick_time), current)
 
 
 ## The thumbs (`Q223`): how sharply the steering one answers, whether their
@@ -722,15 +765,22 @@ func _pick_frame_cap(fps: int) -> void:
 	_relabel.call_deferred()
 
 
-## Save the hour's mode and redraw the page so the marker moves. `DayClock`
-## reads the saved option when the car first drives off.
-func _pick_time(cycle: bool) -> void:
-	if cycle == Settings.day_cycle():
+## Save free mode's hour, say so to the drive under the pause, and redraw the
+## page so the marker moves.
+func _pick_time(time: DayClock.FreeTime) -> void:
+	if time == DayClock.free_time():
 		return
-	Settings.set_day_cycle(cycle)
+	_save_time(time)
+	free_time_changed.emit()
+	_relabel.call_deferred()
+
+
+## `time` saved as free mode's hour. `DayClock` reads it when the car first
+## drives off, and a `--day-cycle=` flag beats it this run.
+func _save_time(time: DayClock.FreeTime) -> void:
+	Settings.set_free_time(DayClock.free_time_code(time))
 	if not Cmdline.value(DayClock.CYCLE_ARG).is_empty():
 		push_warning("menu: --day-cycle= pins the hour this run; the choice is saved for the next")
-	_relabel.call_deferred()
 
 
 ## A switch of the sound's or the music's: `save` it where it differs from
@@ -1171,6 +1221,12 @@ func _shown_tally(tally: SessionTally) -> SessionTally:
 func _on_start(mode: DayClock.Mode) -> void:
 	_leave()
 	started.emit(mode)
+
+
+## A free drive begun at `time`, saved so the next one offers it first.
+func _on_free(time: DayClock.FreeTime) -> void:
+	_save_time(time)
+	_on_start(DayClock.Mode.FREE)
 
 
 func _on_continue() -> void:

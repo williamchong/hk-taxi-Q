@@ -202,7 +202,7 @@ Phase 4–6
 - ✅ `P5-1`–`P5-7`, `P5-9a`–`d`, `f`, `g`, `P5-10`–`P5-13`, `P5-15`–`P5-28`. `P5-9e` 🚫 shared
   libraries (+3 to +11 draw calls at the seam). Owed: the drive across the seam (`P5-9f`).
 - `P5-8` ⬜ Content — behind `P3-9`, `Q6`. `P5-14` ⬜ Textures as an option on tiles.
-- `P6-1` 🟡 Start menu, options, credits, pause — owed: Android's back button (`P0-3b`).
+- `P6-1` 🟡 Start menu, options, credits, pause; free mode's hour picked at FREE and on its pause (`Q266`) — owed: Android's back button (`P0-3b`).
 - `P6-2` 🟡 Saved run and CONTINUE (`Q253`) — owed: a handset kill mid-fare and its resume.
 - `P6-3` 🟡 Anonymous usage events to PostHog (`Q256`) — owed: a played run's `run_started` /
   `fare_*` / `run_ended` seen in PostHog, a device run on iOS, Android and the itch.io build, the

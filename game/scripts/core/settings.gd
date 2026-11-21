@@ -11,7 +11,11 @@ extends RefCounted
 const PATH: String = "user://settings.cfg"
 const SECTION: String = "options"
 const KEY_LANGUAGE: String = "language"
+## Read alone, where a save from before `KEY_FREE_TIME` holds the old switch.
 const KEY_DAY_CYCLE: String = "day_cycle"
+const KEY_FREE_TIME: String = "free_time"
+## Free mode's three hours (the user's ask), in the order PLAY offers them.
+const FREE_TIMES: PackedStringArray = ["cycle", "day", "night"]
 const KEY_SOUND: String = "sound"
 const KEY_VOLUME: String = "volume"
 const KEY_MUSIC: String = "music"
@@ -60,15 +64,24 @@ static func set_language(code: String) -> void:
 	_write(KEY_LANGUAGE, code)
 
 
-## Whether the day runs to night as game time passes in free mode (`Q160`,
-## `Q162`). Off where none was ever saved: free mode keeps the daylight (the
-## user's ask), and 特更 runs the day whatever this says.
-static func day_cycle() -> bool:
-	return bool(_read().get_value(SECTION, KEY_DAY_CYCLE, false))
+## Free mode's hour (`Q160`, `Q162`, the user's ask), one of `FREE_TIMES`:
+## the day running to night as game time passes, the daylight held, or the
+## night held. Picked as a free drive begins, and changed on its pause. Where
+## none was ever saved, the old ON/OFF switch's, and with neither the daylight
+## (the user's ask). 特更 runs the day whatever this says.
+static func free_time() -> String:
+	var file: ConfigFile = _read()
+	var saved: String = str(file.get_value(SECTION, KEY_FREE_TIME, ""))
+	if saved in FREE_TIMES:
+		return saved
+	return "cycle" if bool(file.get_value(SECTION, KEY_DAY_CYCLE, false)) else "day"
 
 
-static func set_day_cycle(on: bool) -> void:
-	_write(KEY_DAY_CYCLE, on)
+static func set_free_time(code: String) -> void:
+	if code not in FREE_TIMES:
+		push_warning("settings: %s is not one of %s; not saved" % [code, FREE_TIMES])
+		return
+	_write(KEY_FREE_TIME, code)
 
 
 ## Whether the game sounds at all (the user's ask, 2026-11-16). On where none

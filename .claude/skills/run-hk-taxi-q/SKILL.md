@@ -103,11 +103,11 @@ frame does not depend on this machine's saved options.
 | `--push=off\|on` | whether the taxi knocks moving cars and trams by mass; `off` makes them walls |
 | `--mode=free\|shift` | the mode a run with no menu plays; default free. `shift` ends with `shift over: HK$…` |
 | `--shift-s=<seconds>` | run the whole shift in that many game seconds; needs `--mode=shift` |
-| `--day-cycle=off\|on` | whether the day runs to night |
+| `--day-cycle=off\|on\|night` | whether the day runs to night; `night` holds free mode at `night_at` |
 | `--time-of-day=<0..2>` | hold the lighting rig at one point of `tuning/day_to_night.tres`: 0 morning (07:00), 0.174 the authored day, 0.36 noon, 0.79 dusk, 0.86 twilight, 0.93–1 night, 1.464 moon low, 1.661 dawn |
 | `--lang=en\|zh` | language of the callout, street plate and menu |
 | `--menu=off\|on` | the start menu; `--menu=on --seconds=3 --shots=2` is a menu frame |
-| `--menu-page=home\|play\|guide\|options\|credits\|notices\|report\|record\|pause\|sound\|controls\|display\|language\|privacy` | the sheet the menu opens on; needs `--menu=on`. `pause` drives 1 s first — shoot it after 1 s at `--debug-view=minimal`. `controls` shows nothing without `--touch=on` |
+| `--menu-page=home\|play\|free\|guide\|options\|credits\|notices\|report\|record\|pause\|sound\|controls\|display\|language\|privacy` | the sheet the menu opens on; needs `--menu=on`. `pause` drives 1 s first — shoot it after 1 s at `--debug-view=minimal`. `controls` shows nothing without `--touch=on` |
 | `--menu-sample=on` | fill the report sheet with a made-up result; saves no record |
 | `--touch=mouse\|on\|off` | `on` lays out for touch; `mouse` also drives the touch scheme with the mouse as one finger |
 | `--touch-steer=gentle\|normal\|sharp`, `--touch-side=left\|right`, `--touch-anchor=relative\|fixed`, `--touch-wheel=spin\|slide` | touch steering curve, steering thumb's side, whether the controls follow the thumbs, whether the wheel is spun or slid |
