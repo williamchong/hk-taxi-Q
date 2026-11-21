@@ -34,7 +34,8 @@ is its second implementation.
   player profile that obeys one-way from one that does not.
 - **The exact diff is the survey population**: `Profile.survey(bar)` is level 0, every rule, no
   U-turn. `legal` and `player` admit level-1 edges the tool never routes (`DRIVABLE_LEVEL`), so
-  they are pinned by monotonicity (lane ⊆ legal ⊆ player).
+  they are pinned by monotonicity (lane ⊆ legal ⊆ player). Off grade, `verify_traffic`'s
+  `_check_arcs` reads every `legal()` arc and ban in reach off `RoadGraph` alone (`Q267`).
 - **`prepare(edge, t)` is one reverse Dijkstra** (`PREPARE_BUDGET_USEC`; 0.7 ms legal / 1.9 ms
   player on Wan Chai); `route()` is then microseconds. `prepare` at the hail, `route` off the 5 Hz
   `Hit`, never per frame. `TREE_CACHE` trees are kept: a new `prepare` can evict one in use.

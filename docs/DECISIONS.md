@@ -3863,3 +3863,23 @@ always day, always night".
   DAY TO NIGHT picked mid-drive runs on from the look held (`day_at` or `night_at`) through
   `DayClock.day_from_s`, which `RunSave` keeps so CONTINUE does not jump the hour.
 - `--day-cycle=night` holds the night for a scripted run.
+
+## `Q267` — Traffic across levels is graded off the graph alone
+
+**Status.** Closed 2026-11-22 · `P4-4` · reopens on a traffic move that is not a `moves_from` arc
+
+Traffic already moved only by `RoadRouter.moves_from` under `Profile.legal()`, which admits every
+routable level. Nothing was left to build. What was missing was a witness: `verify_traffic`'s
+`graph:` gate asked the same router the cars drive by, so a rule the router dropped passed.
+
+- `_witness_move` / `_witness_way` read each move off `RoadGraph` alone: the shared node, a one-way
+  its signed way, no U-turn, no published ban. The drive checks every move; the `checks` part
+  (`_check_arcs`) walks every arc the legal profile offers and every ban in reach.
+- Deciding numbers: Wan Chai 1,077 routed arcs, 60 off grade, 153 bans in reach, 2 off grade
+  (`336→312`, `424→248`); Causeway Bay 314, 9, 23, 0. The signal drives take 12–26 level moves in
+  Wan Chai and 15–41 in Causeway Bay (`levels:`); the back-street drive takes none.
+- Mutations of `road_router.gd`, the old gate silent on every one: bans dropped where a deck is
+  touched (Wan Chai's 2 caught by `_check_arcs`; the drives never pick them), every ban dropped
+  (153 / 23), a deck's one-way driven both ways (48 / 8 arcs, thousands of car-ticks in the drives).
+- Refused: a ramp-centred seeded drive — the signal drives already reach the decks, and a 2-ban
+  population is proved exhaustively, not by a seed's luck.

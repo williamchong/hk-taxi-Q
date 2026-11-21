@@ -41,7 +41,7 @@ Keep rows to one line. A row that needs a paragraph belongs in `DECISIONS.md`.
 - `P0-3b`: FPS on an A13, an Android build, then `P2-6` and the handset re-take of `traffic.tres`
   `cars`.
 - `P3-9` (authenticity round 1, the Phase 3 gate): different drivers from `P3-9a`, on a handset.
-- Not started: `P3-1b`, the one-handed layout (`P3-5b`), `P4-4`, `P4-5`, `P5-8`, `P5-14`.
+- Not started: `P3-1b`, the one-handed layout (`P3-5b`), `P4-5`, `P5-8`, `P5-14`.
 - Known gaps: signal heads at 16 of Wan Chai's 72 staged junctions and 7 of Causeway Bay's 21 do
   not show every stage (`P3-3e`); a new driver cut (below).
 
@@ -197,8 +197,9 @@ Phase 4–6
 
 - `P4-1`, `P4-2` ✅ (`Q15` closed). `P4-3` 🟡 ramp traversal (`Q264`): 0 of 29 Wan Chai and 0 of 5
   Causeway Bay open level changes step over 0.15 m on the drawn road (was 10 of 30, worst 0.87 m);
-  `e425` closed — owed: the user's drive over nodes 269 and 369. `P4-4`, `P4-5` ⬜ — `P4-5`
-  streaming distances and LOD0's cell.
+  `e425` closed — owed: the user's drive over nodes 269 and 369. `P4-4` ✅ (`Q267`): every routed
+  arc read off the graph alone, 60 of 1,077 off grade in Wan Chai and 9 of 314 in Causeway Bay;
+  the seeded drives take 12–41 level moves each. `P4-5` ⬜ — streaming distances and LOD0's cell.
 - ✅ `P5-1`–`P5-7`, `P5-9a`–`d`, `f`, `g`, `P5-10`–`P5-13`, `P5-15`–`P5-28`. `P5-9e` 🚫 shared
   libraries (+3 to +11 draw calls at the seam). Owed: the drive across the seam (`P5-9f`).
 - `P5-8` ⬜ Content — behind `P3-9`, `Q6`. `P5-14` ⬜ Textures as an option on tiles.
@@ -285,8 +286,8 @@ change. Closed questions are not listed here: see the headings in `DECISIONS.md`
   is left.
 - **Occluder is dead weight on the web cut** — Medium. Stock web templates omit the raycast
   module (`Q122`).
-- **Open elevated network is unfinished** — Medium. Traffic does not yet obey ramp rules (`P4-4`);
-  the streamer is tuned without the extra area (`P4-5`).
+- **Open elevated network is unfinished** — Medium. The streamer is tuned without the extra area
+  (`P4-5`).
 - **Podium floors measure the treatment band** — Medium. `Q47`; true fill owed.
 - **TAM too small** — Medium. Hong Kong only (`Q100`); scale by regions behind the IAP boundary.
 - **GPLv3 forecloses the App Store** — Medium. Contributions come in under MIT

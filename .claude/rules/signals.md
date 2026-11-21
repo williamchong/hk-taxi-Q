@@ -101,7 +101,10 @@ By `verify_traffic` line:
   the instance and the beam take it, `car.pose` and every rule keep the road's heading, so the
   seeded drives do not move. Do not fold the steer into `pose`. A grade is drawn the same way
   (`Q258`, `Car.pitch`), and a knock never folds it in: `_centre_of` reads the upright pose.
-- `graph:` — a turn runs mouth to mouth (`trim_m`); a stub is crossed, never driven.
+- `graph:` — a turn runs mouth to mouth (`trim_m`); a stub is crossed, never driven. The second
+  witness (`_witness_move`, `Q267`) reads the graph, never the router: a check that asks
+  `system.router` passes whatever the router dropped. `levels:` and `arcs:` say how much was off
+  grade; the signal drives must take a ramp.
 - `queue:` — the lane is the turn's (left nearside, right offside); a lane change needs room to
   stop from the closing speed (`_lane_blocked`, `_moving_onto`); a car ahead on its own edge is as
   far as the road says (`_leads_on_edge`).

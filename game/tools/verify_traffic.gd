@@ -11,6 +11,12 @@
 ##   `RoadRouter.moves_from` from the edge left, and every way driven is one the
 ##   legal profile admits. A turn that crossed a road inside the junction
 ##   (`RoadGraph.is_stub`) is that chain of arcs, each legal.
+## - 🔴 **The graph alone agrees** (`P4-4`): every way driven and every arc in
+##   that chain is read again off `RoadGraph` with no router — a one-way its
+##   signed way, the node shared, no U-turn, no published turn ban — so a rule
+##   `RoadRouter` dropped cannot pass because the check asked the router too.
+##   The `levels:` line says how much of it was off grade; round the signals
+##   some car must drive a ramp between levels where the router routes a deck.
 ## - 🔴 **No car drives along a road inside a junction**: a stub is crossed in
 ##   the turn's curve, never stood on (the user's drive, 2026-10-29).
 ## - **No car runs into the one ahead in its own lane**: two cars on one edge,
@@ -190,6 +196,7 @@ func _run() -> void:
 		return
 	if checks:
 		_check_lane(graph)
+		_check_arcs(graph)
 	var layers: Array[Node] = _stand_parked(graph)
 	if checks:
 		_check_knock(graph, table, layers)
@@ -1294,6 +1301,20 @@ func _drive(system: TrafficSystem, at_signals: bool, routed: bool = false) -> vo
 	var seen: Array[Seen] = []
 	for _car: TrafficSystem.Car in system.cars:
 		seen.append(Seen.new())
+	# `P4-4`: the same moves read again off the graph alone, with no router, so a
+	# rule `RoadRouter` lost would not pass because the checker asked it too; and
+	# how much of the drive was off grade, so a pass there is not a run that
+	# never reached a deck.
+	var graph: RoadGraph = system.graph
+	var banned_from: Dictionary[Vector2i, bool] = {}
+	for ban: Vector3i in _turn_bans(graph):
+		banned_from[Vector2i(ban.x, ban.y)] = true
+	var unwitnessed: int = 0
+	var off_ticks: int = 0
+	var off_edges: Dictionary[int, bool] = {}
+	var off_moves: int = 0
+	var level_moves: int = 0
+	var off_bans_faced: int = 0
 	# The routed drive runs `ROUTED_RUNS` as long: a bus is found mid-dwell, and in
 	# 90 s a departure may not yet have reached its next stop (Causeway Bay,
 	# 2026-11-06); in 180 s at 60 cars none had (`Q219`).
@@ -1469,6 +1490,23 @@ func _drive(system: TrafficSystem, at_signals: bool, routed: bool = false) -> vo
 				_problem(
 					"tick %d: car %d drives edge %d a way it may not" % [tick, index, car.edge]
 				)
+			var new_way: bool = (
+				not before.live
+				or before.lives != car.lives
+				or before.edge != car.edge
+				or before.along != car.along
+			)
+			if new_way and not _witness_way(graph, Vector2i(car.edge, int(car.along))):
+				unwitnessed += 1
+				_problem(
+					(
+						"tick %d: car %d drives edge %d a way the graph forbids"
+						% [tick, index, car.edge]
+					)
+				)
+			if graph.level_of(car.edge) != 0:
+				off_ticks += 1
+				off_edges[car.edge] = true
 			if not car.turning and system.graph.is_stub(car.edge):
 				on_stub += 1
 			var front: float = car.s + car.half_length
@@ -1477,12 +1515,26 @@ func _drive(system: TrafficSystem, at_signals: bool, routed: bool = false) -> vo
 				before.live = false
 				before.lives = car.lives
 			if before.live and (before.edge != car.edge or before.along != car.along):
-				if not _legal_chain(
-					system.router,
-					Vector2i(before.edge, 1 if before.along else 0),
-					car.crossed,
-					Vector2i(car.edge, 1 if car.along else 0)
-				):
+				var left: Vector2i = Vector2i(before.edge, 1 if before.along else 0)
+				var joined: Vector2i = Vector2i(car.edge, 1 if car.along else 0)
+				var here: Vector2i = left
+				for step: Vector2i in car.crossed + [joined]:
+					if not _witness_move(graph, here, step):
+						unwitnessed += 1
+						_problem(
+							(
+								"tick %d: car %d moved %d -> %d, an arc the graph forbids"
+								% [tick, index, here.x, step.x]
+							)
+						)
+					if graph.level_of(here.x) != 0 or graph.level_of(step.x) != 0:
+						off_moves += 1
+						if banned_from.has(Vector2i(here.x, _exit_node(graph, here))):
+							off_bans_faced += 1
+					if graph.level_of(here.x) != graph.level_of(step.x):
+						level_moves += 1
+					here = step
+				if not _legal_chain(system.router, left, car.crossed, joined):
 					bad_move += 1
 					_problem(
 						(
@@ -1578,6 +1630,27 @@ func _drive(system: TrafficSystem, at_signals: bool, routed: bool = false) -> vo
 		"some car gave way at its line (%d car-ticks)" % held_give_way
 	)
 	_expect(bad_move == 0 and bad_way == 0, "graph", "every move a legal arc, every way admitted")
+	_expect(
+		unwitnessed == 0,
+		"graph",
+		"read off the graph alone, no move against a one-way, a turn ban or a U-turn"
+	)
+	var off_routed: int = 0
+	for edge: int in system.router.admitted_edge_ids():
+		off_routed += int(graph.level_of(edge) != 0)
+	print(
+		(
+			(
+				"  levels: %d car-ticks on %d of %d routed off-grade edges, %d moves off grade,"
+				+ " %d between levels, %d past a turn ban"
+			)
+			% [off_ticks, off_edges.size(), off_routed, off_moves, level_moves, off_bans_faced]
+		)
+	)
+	# Round the signals the ring takes in the flyovers' ramps in both regions; on
+	# the back streets it reaches none, which is that run's point, not a gap.
+	if at_signals and off_routed > 0:
+		_expect(level_moves > 0, "levels", "some car drove a ramp between levels")
 	_expect(on_stub == 0, "graph", "no car drove a road inside a junction (%d car-ticks)" % on_stub)
 	_expect(rear_end == 0, "queue", "no car stood inside the one ahead (%d car-ticks)" % rear_end)
 	_expect(too_fast == 0, "speed", "no car over its cruise (%d car-ticks)" % too_fast)
@@ -2116,6 +2189,68 @@ static func _overlap(a: Array[Vector2], b: Array[Vector2]) -> float:
 	return least
 
 
+## The node a car leaves `way` (edge, 1 along) by.
+static func _exit_node(graph: RoadGraph, way: Vector2i) -> int:
+	return graph.to_node_of(way.x) if way.y == 1 else graph.from_node_of(way.x)
+
+
+## The node a car joins `way` (edge, 1 along) at.
+static func _entry_node(graph: RoadGraph, way: Vector2i) -> int:
+	return graph.from_node_of(way.x) if way.y == 1 else graph.to_node_of(way.x)
+
+
+## Whether the graph alone lets a car drive `way` (edge, 1 along): an edge the
+## lane bar routes, and a one-way only its signed way (`P4-4`).
+static func _witness_way(graph: RoadGraph, way: Vector2i) -> bool:
+	return graph.is_routable(way.x) and (way.y == 1 or not graph.is_one_way(way.x))
+
+
+## Whether the graph alone allows leaving `from` onto `to`: the two meet at the
+## node left by, `to` may be driven its way, it is not `from` turned round, and
+## the source bans no such turn (`P4-4`). It reads no router, so it is a second
+## witness to `_legal_chain` rather than the same answer asked twice.
+static func _witness_move(graph: RoadGraph, from: Vector2i, to: Vector2i) -> bool:
+	var node: int = _exit_node(graph, from)
+	return (
+		node == _entry_node(graph, to)
+		and to.x != from.x
+		and _witness_way(graph, to)
+		and not graph.is_turn_banned(from.x, node, to.x)
+	)
+
+
+## Every published turn ban the graph holds, as (from edge, via node, to edge):
+## `RoadGraph` answers a ban only when asked, so the edges at each node are asked.
+static func _turn_bans(graph: RoadGraph) -> Array[Vector3i]:
+	var at_node: Dictionary[int, PackedInt32Array] = {}
+	for edge: int in graph.edge_ids():
+		for node: int in [graph.from_node_of(edge), graph.to_node_of(edge)]:
+			if not at_node.has(node):
+				at_node[node] = PackedInt32Array()
+			at_node[node].append(edge)
+	var found: Array[Vector3i] = []
+	for node: int in at_node:
+		for from: int in at_node[node]:
+			for to: int in at_node[node]:
+				if graph.is_turn_banned(from, node, to) and not found.has(Vector3i(from, node, to)):
+					found.append(Vector3i(from, node, to))
+	return found
+
+
+## Whether `router` drives `edge` some way that leaves it by `node` (or, with
+## `leaving` false, joins it at `node`). Both ways are asked: an edge can start
+## and end at one node.
+static func _routed_at(
+	router: RoadRouter, graph: RoadGraph, edge: int, node: int, leaving: bool
+) -> bool:
+	for along: int in [1, 0]:
+		var way := Vector2i(edge, along)
+		var at: int = _exit_node(graph, way) if leaving else _entry_node(graph, way)
+		if at == node and router.admits_way(edge, along == 1):
+			return true
+	return false
+
+
 ## Whether `from`, through each of `via` in turn, to `to` is a chain of legal
 ## arcs.
 static func _legal_chain(
@@ -2148,6 +2283,57 @@ static func _rear_ends(system: TrafficSystem) -> int:
 			if absf(one.s - two.s) < one.half_length + two.half_length:
 				found += 1
 	return found
+
+
+## Every arc the traffic's router offers, read off the graph alone (`P4-4`): the
+## drive meets a ban on a deck a few times and its pick seldom lands on the
+## banned arc, so a router that dropped one would pass there. Here every way the
+## legal profile drives is walked, every move it offers must be one
+## `_witness_move` allows, and every published ban in reach — both ways routed
+## and meeting at the ban's node — must be missing from the moves.
+func _check_arcs(graph: RoadGraph) -> void:
+	var router := RoadRouter.new(graph, RoadRouter.Profile.legal())
+	var arcs: int = 0
+	var off_arcs: int = 0
+	var unwitnessed: int = 0
+	var offered: Dictionary[Vector3i, bool] = {}
+	for edge: int in router.admitted_edge_ids():
+		for along: int in [1, 0]:
+			if not router.admits_way(edge, along == 1):
+				continue
+			var from := Vector2i(edge, along)
+			for to: Vector2i in router.moves_from(edge, along == 1):
+				arcs += 1
+				off_arcs += int(graph.level_of(edge) != 0 or graph.level_of(to.x) != 0)
+				offered[Vector3i(edge, _exit_node(graph, from), to.x)] = true
+				if not _witness_move(graph, from, to):
+					unwitnessed += 1
+					_problem("router offers %s -> %s, an arc the graph forbids" % [from, to])
+	var in_reach: int = 0
+	var off_in_reach: int = 0
+	var offered_banned: int = 0
+	for ban: Vector3i in _turn_bans(graph):
+		if (
+			ban.x == ban.z
+			or not _routed_at(router, graph, ban.x, ban.y, true)
+			or not _routed_at(router, graph, ban.z, ban.y, false)
+		):
+			continue
+		in_reach += 1
+		off_in_reach += int(graph.level_of(ban.x) != 0 or graph.level_of(ban.z) != 0)
+		if offered.has(ban):
+			offered_banned += 1
+			_problem("router offers banned turn %d -> %d -> %d" % [ban.x, ban.y, ban.z])
+	_expect(
+		arcs > 0 and unwitnessed == 0,
+		"arcs",
+		"every one of %d routed arcs (%d off grade) the graph alone allows" % [arcs, off_arcs]
+	)
+	_expect(
+		offered_banned == 0,
+		"arcs",
+		"none of %d turn bans in reach (%d off grade) offered" % [in_reach, off_in_reach]
+	)
 
 
 ## `lane_at` against `nearest_edge`'s lane centre at each edge's middle, both
