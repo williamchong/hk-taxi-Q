@@ -40,6 +40,11 @@ const TEXT_SHADER: String = "res://assets/shaders/signboards_text.gdshader"
 const SCREEN_PREFIX: String = "signboards_screen"
 const SCREEN_MATERIAL: String = "res://tuning/signboards_screen.tres"
 
+## The neon tubes: their own primitive a cell, named `signboards_neon_<cell>`
+## (`NEON_MESH_NAME` in `etl/pipeline/signboards.py`), on the screens' terms.
+const NEON_PREFIX: String = "signboards_neon"
+const NEON_MATERIAL: String = "res://tuning/signboards_neon.tres"
+
 
 func _init() -> void:
 	VerifyLayer.run(self, GeneratedLayer.SIGNBOARDS, _check)
@@ -56,7 +61,10 @@ func _check(scene_root: Node3D) -> PackedStringArray:
 			problems.append_array(_check_lettering(mesh, cell))
 			continue
 		if cell.begins_with(SCREEN_PREFIX):
-			problems.append_array(_check_screen(mesh, cell))
+			problems.append_array(_check_quads(mesh, cell, SCREEN_MATERIAL))
+			continue
+		if cell.begins_with(NEON_PREFIX):
+			problems.append_array(_check_quads(mesh, cell, NEON_MATERIAL))
 			continue
 		for surface: int in mesh.get_surface_count():
 			var where: String = "%s surface %d" % [cell, surface]
@@ -95,16 +103,16 @@ func _check_lettering(mesh: Mesh, cell: String) -> PackedStringArray:
 	return problems
 
 
-## A screen left on its imported material draws a flat dark quad; one with no
-## UVs plays every LED at the face's corner.
-func _check_screen(mesh: Mesh, cell: String) -> PackedStringArray:
+## A screen or a neon tube: UVs, a colour, and its own material. A screen left
+## on its imported material draws a flat dark quad, a tube a solid face over its
+## board; with no UVs a screen plays every LED at the face's corner and a tube
+## draws nothing.
+func _check_quads(mesh: Mesh, cell: String, material: String) -> PackedStringArray:
 	var problems: PackedStringArray = []
 	for surface: int in mesh.get_surface_count():
 		var where: String = "%s surface %d" % [cell, surface]
 		if not (mesh.surface_get_format(surface) & Mesh.ARRAY_FORMAT_TEX_UV):
 			problems.append("%s carries no UVs" % where)
 		problems.append_array(MeshContract.check_surface(mesh, surface, where, true))
-		problems.append_array(
-			MeshContract.check_shader_material(mesh, surface, where, SCREEN_MATERIAL)
-		)
+		problems.append_array(MeshContract.check_shader_material(mesh, surface, where, material))
 	return problems

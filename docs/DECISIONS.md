@@ -3705,6 +3705,14 @@ handset, the screens' heights. Canopies are a later task. Canopies come later an
   the loop stays in the shader for when it is switched off.
 - ⚠️ A screen's height is a wall board's authored 3 m base, so Times Square's sits at street level
   where the real one stands higher up the façade. A per-screen base is owed with the user's pick.
+- **Neon at night (2026-11-22), on the user's ask: a tube round the face, the face keeping its
+  colour.** Every board but a screen carries one quad per lit face, `neon_lift_m` 0.03 off it, its
+  own primitive on `signboards_neon.gdshader`, which cuts it to a rounded tube 0.15 m in from the
+  rim and draws nothing by day. The tube is the board's colour pushed from grey (`saturation` 5.0)
+  and burns at `neon_glow` 3.0. The rig's night switch hides its meshes by day and they cast no
+  shadow (`GeneratedLayer.NIGHT_ONLY`), saving 3 draws by day and 2 at night under the HKCEC
+  footbridge. A brighter face would not do it: the surveyed colours are muted,
+  and at unpushed saturation the tubes burned white. Wan Chai +4,874 triangles in 16 cells.
 
 ## `Q261` — A solid pointer hangs over every fare ring
 

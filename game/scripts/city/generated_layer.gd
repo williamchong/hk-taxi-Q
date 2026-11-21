@@ -434,7 +434,20 @@ static func has_placements(layer: String) -> bool:
 ## Whether the layer's mesh of that name is drawn into the shadow passes — any
 ## mesh of a layer that names none in `shadow_meshes`. `true` for an id the
 ## table does not know, which is the engine's own default.
+## Library meshes drawn only at night, by name prefix: the rig's night switch
+## hides them by day (`LightingRig.show_at_night`), so they cost no draw and no
+## fragment under the sun, and they cast no shadow — the signboards' neon tube
+## is a thin ring 3 cm off its board.
+const NIGHT_ONLY: Dictionary[String, String] = {SIGNBOARDS: "signboards_neon"}
+
+
+static func night_only(layer: String, mesh_name: String) -> bool:
+	return layer in NIGHT_ONLY and mesh_name.begins_with(NIGHT_ONLY[layer])
+
+
 static func casts_shadow(layer: String, mesh_name: String) -> bool:
+	if night_only(layer, mesh_name):
+		return false
 	var row: Dictionary = _row(layer)
 	if row.is_empty():
 		return true

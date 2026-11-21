@@ -12,6 +12,8 @@ paths:
   - "game/tools/verify_signboards.gd"
   - "game/tuning/signboards.{tres,md}"
   - "game/assets/shaders/signboards.gdshader"
+  - "game/assets/shaders/signboards_neon.gdshader"
+  - "game/tuning/signboards_neon.{tres,md}"
 ---
 
 # Signboards — before marking work done
@@ -52,4 +54,8 @@ their two faces lit at night, lettered with a generic shop name — **off** (`te
   HK facts: a new street or trade is his call, shown on a frame.
 - **Screens are authored** (`screens:`, by `OBJECTID`): the register does not say which board is
   one. A screen's loop is generic — never a brand, a logo or a real advert — and it is not lettered.
+- **The neon tube** (`neon_lift_m`, `signboards_neon.gdshader`) is the board's hue pushed from
+  grey: the surveyed colours are muted, and unpushed the tube burns white. Judge `saturation` and
+  `neon_glow` on a night frame of a beige and a saturated board side by side; the face keeps its
+  own colour and is not touched by them.
 - A shader change owes a night render (`--time-of-day=0.95`) and `grep -i "shader error"`.

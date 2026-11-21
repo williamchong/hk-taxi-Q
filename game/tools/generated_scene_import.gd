@@ -120,6 +120,7 @@ const SHADERS: Dictionary = {
 	# checks the dispatch by `resource_path`.
 	"signboards": "res://tuning/signboards.tres",
 	"signboards_screen": "res://tuning/signboards_screen.tres",
+	"signboards_neon": "res://tuning/signboards_neon.tres",
 	# TD's gantry boards (`P3-105`): `FRAME_MATERIAL` in
 	# `etl/pipeline/direction_signs.py` — the steel and the boards' backs, in the
 	# signs' own galvanised grey on the signs' own material, so a gantry and a

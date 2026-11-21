@@ -22,6 +22,7 @@ from pipeline.railings import facing_away
 from pipeline.signboard_text import build_atlas, characters, ink, pick_name
 from pipeline.signboards import (
     LIT_ALPHA,
+    NEON_MATERIAL,
     Board,
     SignboardReport,
     Walls,
@@ -229,7 +230,7 @@ def test_every_face_is_wound_the_way_it_is_lit_and_only_the_faces_glow(spec, kin
         item = _place(spec, normal_wall)
         stack(spec, [item], NOWHERE, SignboardReport())
         item.colour = (200, 16, 46)
-        (mesh,), lettering, screens = build_meshes(spec, [item])
+        (mesh,), lettering, screens, _ = build_meshes(spec, [item])
         assert lettering == [] and screens == []
         assert facing_away(mesh) == 0
         assert len(mesh.triangles) == 12
@@ -390,7 +391,7 @@ def test_the_lettering_faces_out_of_its_board_and_stays_on_it(spec, kind, sizes,
     item.colour = (200, 16, 46)
     item.name = "金興茶餐廳"
     atlas = build_atlas(spec.text, CONFIG_PATH.parents[2])
-    (board,), (lettering,), _ = build_meshes(spec, [item], atlas)
+    (board,), (lettering,), _, _ = build_meshes(spec, [item], atlas)
     assert facing_away(lettering) == 0
     assert len(lettering.triangles) == 2 * len(item.name) * faces
     assert (lettering.colours[:, 3] == LIT_ALPHA).all()
@@ -419,8 +420,8 @@ def test_an_authored_screen_is_drawn_as_a_screen_and_not_lettered(spec, kind, fa
     stack(screened, [item], NOWHERE, SignboardReport())
     item.name = "金興茶餐廳"
     atlas = build_atlas(spec.text, CONFIG_PATH.parents[2])
-    _, lettering, (screen,) = build_meshes(screened, [item], atlas)
-    assert lettering == []
+    _, lettering, (screen,), tubes = build_meshes(screened, [item], atlas)
+    assert lettering == [] and tubes == []
     assert facing_away(screen) == 0 and len(screen.triangles) == 2 * faces
     assert (screen.colours[:, 3] == LIT_ALPHA).all()
     # UVs in metres: the face's own width and height.
@@ -430,6 +431,46 @@ def test_an_authored_screen_is_drawn_as_a_screen_and_not_lettered(spec, kind, fa
     report = SignboardReport()
     name_boards(screened.text, screened.screens, [item], None, report)
     assert report.lettered == 0
+
+
+# --------------------------------------------------------------------------
+# The neon
+# --------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("kind", "sizes", "faces"),
+    [
+        ("WALL SIGNBOARD", {"length": 6.0, "height": 1.0}, 1),
+        ("PROJECTING SIGNBOARD", {"length": 1.0, "height": 4.0}, 2),
+        ("SIGNBOARD ON ROOF", {"length": 8.0, "height": 2.0}, 1),
+    ],
+)
+def test_a_board_carries_a_neon_quad_over_each_lit_face(spec, kind, sizes, faces) -> None:
+    item = _place(spec, _board(spec, 5.0, 9.8, kind=kind, **sizes))
+    stack(spec, [item], NOWHERE, SignboardReport())
+    item.colour = (200, 16, 46)
+    (board,), _, _, (tube,) = build_meshes(spec, [item])
+    assert facing_away(tube) == 0 and len(tube.triangles) == 2 * faces
+    assert tube.material == NEON_MATERIAL and tube.texture is None
+    assert (tube.colours == [200, 16, 46, LIT_ALPHA]).all()
+    # UVs are metres from the face's centre: every vertex's `abs(UV)` is the
+    # face's half-size, which is what the shader insets the tube from.
+    half = [sizes["length"] / 2, sizes["height"] / 2]
+    assert np.abs(tube.uvs) == pytest.approx(np.tile(half, (4 * faces, 1)))
+    # Over the face, never past its outline.
+    low, high = board.positions.min(axis=0), board.positions.max(axis=0)
+    margin = spec.neon_lift_m + 1e-4
+    assert (tube.positions >= low - margin).all() and (tube.positions <= high + margin).all()
+
+
+def test_no_neon_without_its_lift(spec) -> None:
+    from dataclasses import replace
+
+    unlit = replace(spec, neon_lift_m=None)
+    item = _place(unlit, _board(unlit, 5.0, 9.8))
+    stack(unlit, [item], NOWHERE, SignboardReport())
+    assert build_meshes(unlit, [item])[3] == []
 
 
 def test_the_screens_are_the_two_named_boards(spec) -> None:

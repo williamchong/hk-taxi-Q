@@ -172,6 +172,8 @@ func _boot() -> void:
 				(found as GeometryInstance3D).cast_shadow = (
 					GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 				)
+			if GeneratedLayer.night_only(layer, String(found.name)):
+				LightingRig.show_at_night(found as Node3D)
 			if GeneratedLayer.beyond_far(layer):
 				# The material draws it past the far plane; the engine culls
 				# by the box, which lies past it. The margin's own ceiling.

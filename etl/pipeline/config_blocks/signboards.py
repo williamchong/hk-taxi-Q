@@ -165,6 +165,9 @@ class Signboards:
     # `screen_lift_m` off it, and not lettered.
     screens: tuple[str, ...] = ()
     screen_lift_m: float = 0.0
+    # Every board but a screen carries a neon tube round its lit face, on a quad
+    # `neon_lift_m` off it; None draws none.
+    neon_lift_m: float | None = None
 
 
 def _signboards(body: Any, where: str) -> Signboards | None:
@@ -205,7 +208,11 @@ def _signboards(body: Any, where: str) -> Signboards | None:
     raw_screens = body.get("screens") or []
     if not isinstance(raw_screens, list) or not all(isinstance(i, (int, str)) for i in raw_screens):
         raise ValueError(f"{where}:screens must be a list of board ids, got {raw_screens!r}")
+    neon_lift = None
+    if body.get("neon_lift_m") is not None:
+        neon_lift = _measures(body, where, ("neon_lift_m",), positive=True)["neon_lift_m"]
     return Signboards(
+        neon_lift_m=neon_lift,
         text=_text(body.get("text"), f"{where}:text"),
         screens=tuple(str(ident) for ident in raw_screens),
         source=str(_require(body, "source", where)),

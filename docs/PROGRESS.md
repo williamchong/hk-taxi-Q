@@ -124,8 +124,9 @@ Phase 3 — `B2` and the road
   with a generic shop name in the brush face, weighted by mount, FEHD licences and street. Street
   viewpoint +20,438 primitives and +10 draws for both, the lettering since switched off
   (`text.lettered: false`, colour only, the user's call 2026-11-20); two authored LED screens (East Point Centre,
-  Times Square) on a generic animated shader — owed: the user's look, the handset, the screens'
-  heights.
+  Times Square) on a generic animated shader; a neon tube round every board's face but a screen's at night
+  in the board's own hue (+4,874 triangles in Wan Chai, 2026-11-22) — owed: the user's look, the
+  handset, the screens' heights.
 - `P3-105` 🟡 Overhead direction signs (`Q265`): TD's gantry boards filled from
   `DTAD_DS_PLATE_LINE`'s line-work (Chinese bold +1 cm at 4× AA) and hung on their `GS` beams on
   authored legs; Wan Chai 9 of 18 drawn (5 no leader, 3 off road, 1 under a deck), 3 moved ≤ 0.6 m

@@ -1,0 +1,14 @@
+[gd_resource type="ShaderMaterial" format=3]
+
+[ext_resource type="Shader" path="res://assets/shaders/signboards_neon.gdshader" id="1_signboards_neon"]
+
+[resource]
+resource_name = "signboards_neon"
+render_priority = 0
+shader = ExtResource("1_signboards_neon")
+shader_parameter/tube_inset_m = 0.15
+shader_parameter/tube_width_m = 0.06
+shader_parameter/corner_m = 0.2
+shader_parameter/roughness_value = 0.3
+shader_parameter/saturation = 5.0
+shader_parameter/neon_glow = 3.0

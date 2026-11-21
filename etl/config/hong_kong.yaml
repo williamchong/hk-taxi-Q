@@ -3979,6 +3979,10 @@ signboards:
   # board facing Russell Street at Times Square.
   screens: [2297, 1934]
   screen_lift_m: 0.03
+  # Every board but a screen carries a neon tube round its lit face, drawn at night by
+  # `signboards_neon.gdshader` in the board's own hue, on a quad this far off
+  # the face, over the lettering's `lift_m`. Drop the key to draw none.
+  neon_lift_m: 0.03
   # The lettering (`P3-103` step 2): a generic shop name, never a real one,
   # seeded by the board's id. Two picks from `prefixes` and a trade's suffix,
   # the trade weighted by mount, by a restaurant licence nearby and by street.

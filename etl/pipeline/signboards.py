@@ -78,6 +78,10 @@ SIGNBOARDS_MATERIAL = "signboards"
 # The screens (step 3): their own primitive on `signboards_screen.gdshader`.
 SCREEN_MESH_NAME = "signboards_screen"
 SCREEN_MATERIAL = "signboards_screen"
+# The neon tube round every board's lit face but a screen's (`neon_lift_m`): its own
+# primitive on `signboards_neon.gdshader`, which draws the tube and only at night.
+NEON_MESH_NAME = "signboards_neon"
+NEON_MATERIAL = "signboards_neon"
 # Where `tools/signboard_colour.py` writes under the sources tree: a stage name,
 # on `buildings.HUE_SOURCE_ID`'s terms.
 COLOUR_SOURCE_ID = "signboard_colour"
@@ -158,6 +162,8 @@ class SignboardReport:
     text_triangles: int = 0
     # Boards drawn as screens (`screens:`), and none lettered.
     screens: int = 0
+    # The neon tubes' triangles (`neon_lift_m`).
+    neon_triangles: int = 0
 
 
 # --------------------------------------------------------------------------
@@ -640,34 +646,62 @@ def _built(
     ]
 
 
-def screen(builder: signboard_text.QuadBuilder, item: Placed, spec: Signboards) -> None:
-    """The screen on the board's lit face (both faces of a blade), `screen_lift_m`
-    off it. Its UVs are metres across and down the face, so the shader's LED
-    pitch is the same on every screen; `COLOR_0`'s red is a seed from the id,
-    so two screens do not show the same frame."""
+def _face_quads(
+    builder: signboard_text.QuadBuilder,
+    item: Placed,
+    spec: Signboards,
+    lift_m: float,
+    rgba: tuple[int, int, int, int],
+    *,
+    centred: bool,
+) -> None:
+    """A quad over the board's lit face (both faces of a blade), `lift_m` off
+    it, its UVs in metres: from the face's top-left corner, or `centred` from
+    its middle."""
     board = box(item, spec)
     _, across, _, (low, high) = board
-    digest = hashlib.blake2b(item.board.ident.encode("utf-8"), digest_size=1).digest()
-    rgba = (digest[0], 0, 0, LIT_ALPHA)
     width, height = 2.0 * float(np.linalg.norm(across)), high - low
-    size, cell = (width, height), (0.0, 0.0, width, height)
+    left, top = (-0.5 * width, -0.5 * height) if centred else (0.0, 0.0)
+    cell = (left, top, left + width, top + height)
     up = np.array([0.0, 1.0, 0.0])
-    for middle, out in signboard_text.faces(board, item.board.mount.mount, spec.screen_lift_m):
-        builder.quad(middle, np.cross(up, out), up, size, cell, rgba)
+    for middle, out in signboard_text.faces(board, item.board.mount.mount, lift_m):
+        builder.quad(middle, np.cross(up, out), up, (width, height), cell, rgba)
+
+
+def screen(builder: signboard_text.QuadBuilder, item: Placed, spec: Signboards) -> None:
+    """The screen on the board's lit face, `screen_lift_m` off it. Its UVs are
+    metres across and down the face, so the shader's LED pitch is the same on
+    every screen; `COLOR_0`'s red is a seed from the id, so two screens do not
+    show the same frame."""
+    digest = hashlib.blake2b(item.board.ident.encode("utf-8"), digest_size=1).digest()
+    _face_quads(
+        builder, item, spec, spec.screen_lift_m, (digest[0], 0, 0, LIT_ALPHA), centred=False
+    )
+
+
+def neon(builder: signboard_text.QuadBuilder, item: Placed, spec: Signboards) -> None:
+    """The quad the shader draws the neon tube round the rim of, `neon_lift_m`
+    off the lit face. Its UVs are metres from the face's centre, so a vertex's
+    `abs(UV)` is the face's half-size and the tube's inset and width are metres
+    on every board; `COLOR_0` is the board's colour."""
+    if spec.neon_lift_m is not None:
+        _face_quads(builder, item, spec, spec.neon_lift_m, (*item.colour, LIT_ALPHA), centred=True)
 
 
 def build_meshes(
     spec: Signboards, placed: list[Placed], atlas: signboard_text.Atlas | None = None
-) -> tuple[list[MeshData], list[MeshData], list[MeshData]]:
-    """The boards, their lettering and the screens, a mesh each a plan cell.
+) -> tuple[list[MeshData], list[MeshData], list[MeshData], list[MeshData]]:
+    """The boards, their lettering, the screens and the neon, a mesh each a
+    plan cell.
 
-    The lettering and the screens are their own primitives: they need
+    The lettering, the screens and the neon are their own primitives: they need
     `TEXCOORD_0` and their own shaders, and the boards need neither
-    (`verify_signs.gd`'s reason for the signs).
+    (`verify_signs.gd`'s reason for the signs). A screen takes no neon.
     """
     cells: dict[Cell, ColouredBuilder] = {}
     letters: dict[Cell, signboard_text.QuadBuilder] = {}
     screens: dict[Cell, signboard_text.QuadBuilder] = {}
+    tubes: dict[Cell, signboard_text.QuadBuilder] = {}
     for item in placed:
         cell: Cell = (
             math.floor(item.foot[0] / spec.cell_m),
@@ -678,7 +712,9 @@ def build_meshes(
         draw(cells[cell], item, spec)
         if item.board.ident in spec.screens:
             screen(screens.setdefault(cell, signboard_text.QuadBuilder()), item, spec)
-        elif atlas is not None and spec.text is not None and item.name:
+            continue
+        neon(tubes.setdefault(cell, signboard_text.QuadBuilder()), item, spec)
+        if atlas is not None and spec.text is not None and item.name:
             signboard_text.letter(
                 letters.setdefault(cell, signboard_text.QuadBuilder()),
                 spec.text,
@@ -699,7 +735,12 @@ def build_meshes(
         lettering = _built(
             letters, signboard_text.TEXT_MESH_NAME, signboard_text.TEXT_MATERIAL, texture
         )
-    return meshes, lettering, _built(screens, SCREEN_MESH_NAME, SCREEN_MATERIAL, None)
+    return (
+        meshes,
+        lettering,
+        _built(screens, SCREEN_MESH_NAME, SCREEN_MATERIAL, None),
+        _built(tubes, NEON_MESH_NAME, NEON_MATERIAL, None),
+    )
 
 
 # --------------------------------------------------------------------------
@@ -756,16 +797,17 @@ def build_region(
         )
     report.drawn = len(placed)
 
-    meshes, lettering, screens = build_meshes(spec, placed, atlas)
+    meshes, lettering, screens, tubes = build_meshes(spec, placed, atlas)
     report.screens = sum(item.board.ident in spec.screens for item in placed)
+    report.neon_triangles = sum(len(mesh.triangles) for mesh in tubes)
     report.cells = len(meshes)
     report.triangles = sum(len(mesh.triangles) for mesh in meshes)
     report.vertices = sum(len(mesh.positions) for mesh in meshes)
     report.text_triangles = sum(len(mesh.triangles) for mesh in lettering)
-    report.facing_away = sum(facing_away(mesh) for mesh in [*meshes, *lettering, *screens])
+    report.facing_away = sum(facing_away(mesh) for mesh in [*meshes, *lettering, *screens, *tubes])
     _clear(out_dir)
     if meshes:
-        report.bytes = write_glb(out_dir / SIGNBOARDS_NAME, [*meshes, *lettering, *screens])
+        report.bytes = write_glb(out_dir / SIGNBOARDS_NAME, [*meshes, *lettering, *screens, *tubes])
     if lettering and atlas is not None:
         report.text_atlas_px = atlas.pixels
         report.text_atlas_bytes = len(atlas.png)
@@ -853,6 +895,8 @@ def _write_manifest(out_dir: Path, city: Config, region_id: str, report: Signboa
         "text_triangles": report.text_triangles,
         # The authored screens drawn (step 3).
         "screens": report.screens,
+        # The neon tubes, every board but a screen.
+        "neon_triangles": report.neon_triangles,
     }
     return write_document(out_dir / SIGNBOARDS_MANIFEST_NAME, document)
 
