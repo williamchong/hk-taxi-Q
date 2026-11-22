@@ -1,0 +1,6 @@
+• MTR station exits are now fare destinations, each drawn as a street entrance with the station's name over the door
+• Shop signboards hang on the buildings and glow in neon at night, and two giant outdoor screens light up Causeway Bay
+• Overhead direction signs span the roads, and the words painted on the road surface are there too
+• A marker now floats over your destination and over every waiting passenger, so you can spot them from a distance
+• Free Mode: pick Day to Night, Always Day or Always Night before you set off, and change it any time from the pause menu
+• Streets now rise smoothly to meet the flyovers where they join

@@ -36,7 +36,7 @@ def review_information
 end
 
 platform :ios do
-  desc "Send the name, description, keywords, URLs, categories, age rating, review notes and screenshots to App Store Connect"
+  desc "Send the name, description, release notes, keywords, URLs, categories, age rating, review notes and screenshots to App Store Connect"
   lane :metadata do
     # With no .json key, the action reads the .p8 and its two IDs from the
     # environment and hands the key on to deliver.
