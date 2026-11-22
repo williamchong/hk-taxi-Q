@@ -1,6 +1,6 @@
 ## Where the ETL's one-mesh layers live, and how to load them (`P5-1`).
 ##
-## One table for the nine `.glb` layers that ship as a single mesh — or a
+## One table for the `.glb` layers that ship as a single mesh — or a
 ## library of props — per region, replacing a file each. Every one of those files carried the same three
 ## functions and the same reason for existing: two things want a layer for
 ## different purposes — the preview draws it, its verify tool checks it — and a
@@ -34,7 +34,7 @@
 ## all time plates draws none and is correct to (`P3-16`). Lamps are the opposite: `UTILITYPOINTTYPE` **has** a published
 ## domain, so a region drawing none has declared no block or failed to find a
 ## kerb, never misread a vocabulary (`P3-26`). `verify_city.gd` carries the same
-## three notes at its guards.
+## two notes at its guards.
 ##
 ## ⚠️ **`is_present` and `load_layer` returning null answer different
 ## questions.** The first is "did the build ship this layer", which an optional
@@ -136,7 +136,8 @@ const BACKDROP: String = "backdrop"
 ## empty for a layer whose every mesh follows `casts_shadow`: a sign's post
 ## casts and its plates and lettering do not (`P3-66`) — each library mesh is a
 ## draw call a shadow pass, and 22 plates cost 12-20 of the frame's 150 for a
-## shadow 288 px of one audit frame could show.
+## shadow 288 px of one audit frame could show. `beyond_far` is whether the
+## layer is drawn past the camera's far plane (`Q249`).
 ## Every row carries every key, and the accessors index rather than
 ## `get`, so a row missing one fails loudly instead of defaulting.
 const LAYERS: Dictionary[String, Dictionary] = {
@@ -149,6 +150,7 @@ const LAYERS: Dictionary[String, Dictionary] = {
 		"placements": "",
 		"casts_shadow": false,
 		"shadow_meshes": [],
+		"beyond_far": false,
 	},
 	ARROWS:
 	{
@@ -160,6 +162,7 @@ const LAYERS: Dictionary[String, Dictionary] = {
 		"placements": "arrows_placements.json",
 		"casts_shadow": false,
 		"shadow_meshes": [],
+		"beyond_far": false,
 	},
 	BOXJUNCTIONS:
 	{
@@ -171,6 +174,7 @@ const LAYERS: Dictionary[String, Dictionary] = {
 		"placements": "",
 		"casts_shadow": false,
 		"shadow_meshes": [],
+		"beyond_far": false,
 	},
 	CROSSINGS:
 	{
@@ -182,6 +186,7 @@ const LAYERS: Dictionary[String, Dictionary] = {
 		"placements": "",
 		"casts_shadow": false,
 		"shadow_meshes": [],
+		"beyond_far": false,
 	},
 	STOPMARKS:
 	{
@@ -193,6 +198,7 @@ const LAYERS: Dictionary[String, Dictionary] = {
 		"placements": "",
 		"casts_shadow": false,
 		"shadow_meshes": [],
+		"beyond_far": false,
 	},
 	ROADTEXT:
 	{
@@ -204,6 +210,7 @@ const LAYERS: Dictionary[String, Dictionary] = {
 		"placements": "",
 		"casts_shadow": false,
 		"shadow_meshes": [],
+		"beyond_far": false,
 	},
 	ROADMARKS:
 	{
@@ -215,6 +222,7 @@ const LAYERS: Dictionary[String, Dictionary] = {
 		"placements": "",
 		"casts_shadow": false,
 		"shadow_meshes": [],
+		"beyond_far": false,
 	},
 	# No shadow (`P2-6`): a 1.1 m fence of bars throws a strip the shadow map
 	# blurs to nothing — a sunlit frame of the harbour railings could not tell
@@ -229,6 +237,7 @@ const LAYERS: Dictionary[String, Dictionary] = {
 		"placements": "railings_placements.json",
 		"casts_shadow": false,
 		"shadow_meshes": [],
+		"beyond_far": false,
 	},
 	LAMPS:
 	{
@@ -240,6 +249,7 @@ const LAYERS: Dictionary[String, Dictionary] = {
 		"placements": "lamps_placements.json",
 		"casts_shadow": true,
 		"shadow_meshes": [],
+		"beyond_far": false,
 	},
 	SIGNS:
 	{
@@ -251,6 +261,7 @@ const LAYERS: Dictionary[String, Dictionary] = {
 		"placements": "signs_placements.json",
 		"casts_shadow": true,
 		"shadow_meshes": ["pole"],
+		"beyond_far": false,
 	},
 	# Authored flags and shelters at published stops (`P3-94`, `Q242`), a
 	# library on the signs' terms. Only the shelter casts: its roof is shade, and a
@@ -264,6 +275,7 @@ const LAYERS: Dictionary[String, Dictionary] = {
 		"placements": "stops_placements.json",
 		"casts_shadow": true,
 		"shadow_meshes": ["tram_shelter"],
+		"beyond_far": false,
 	},
 	# The harbour (2026-09-25, the user's call): the basemap's sea, flat at sea
 	# level. `casts_shadow` false for the paint's reason — a plane at the bottom
@@ -277,6 +289,7 @@ const LAYERS: Dictionary[String, Dictionary] = {
 		"placements": "",
 		"casts_shadow": false,
 		"shadow_meshes": [],
+		"beyond_far": false,
 	},
 	# The published trees (`P3-77`, `Q171`): a library of kinds, a crown and a
 	# trunk each. They cast: a canopy's shadow is most of what reads as shade
@@ -290,6 +303,7 @@ const LAYERS: Dictionary[String, Dictionary] = {
 		"placements": "trees_placements.json",
 		"casts_shadow": true,
 		"shadow_meshes": [],
+		"beyond_far": false,
 	},
 	# HyD's roadside planters (`P3-98`, `Q247`): one merged mesh and the one
 	# `-colonly` body a row of this table carries — the walls, so a car hits a
@@ -303,6 +317,7 @@ const LAYERS: Dictionary[String, Dictionary] = {
 		"placements": "",
 		"casts_shadow": true,
 		"shadow_meshes": [],
+		"beyond_far": false,
 	},
 	# The pedestrian lines (`P3-101`, `Q250`): the topographic map's pavement
 	# margins and footpaths, a ribbon on the ground a plan cell. No body, and no
@@ -316,6 +331,7 @@ const LAYERS: Dictionary[String, Dictionary] = {
 		"placements": "",
 		"casts_shadow": false,
 		"shadow_meshes": [],
+		"beyond_far": false,
 	},
 	# The signboards (`P3-103`, `Q260`): the Buildings Department's boards on
 	# the walls, a mesh a plan cell. No body: a blade overhangs the pavement over
@@ -330,6 +346,7 @@ const LAYERS: Dictionary[String, Dictionary] = {
 		"placements": "",
 		"casts_shadow": true,
 		"shadow_meshes": [],
+		"beyond_far": false,
 	},
 	# TD's gantry boards over the road (`P3-105`, `Q265`): one mesh of steel and
 	# board backs, one of faces on the atlas, and the legs' `-colonly` body, so a
@@ -346,6 +363,7 @@ const LAYERS: Dictionary[String, Dictionary] = {
 		"placements": "",
 		"casts_shadow": true,
 		"shadow_meshes": ["direction_signs"],
+		"beyond_far": false,
 	},
 	# The region's far version (`P3-100`, `Q249`): its skyline and the water
 	# round it, past the camera's far plane. `beyond_far`, so the engine does
@@ -431,9 +449,6 @@ static func has_placements(layer: String) -> bool:
 	return not placements_path(layer).is_empty()
 
 
-## Whether the layer's mesh of that name is drawn into the shadow passes — any
-## mesh of a layer that names none in `shadow_meshes`. `true` for an id the
-## table does not know, which is the engine's own default.
 ## Library meshes drawn only at night, by name prefix: the rig's night switch
 ## hides them by day (`LightingRig.show_at_night`), so they cost no draw and no
 ## fragment under the sun, and they cast no shadow — the signboards' neon tube
@@ -445,6 +460,9 @@ static func night_only(layer: String, mesh_name: String) -> bool:
 	return layer in NIGHT_ONLY and mesh_name.begins_with(NIGHT_ONLY[layer])
 
 
+## Whether the layer's mesh of that name is drawn into the shadow passes — any
+## mesh of a layer that names none in `shadow_meshes`. `true` for an id the
+## table does not know, which is the engine's own default.
 static func casts_shadow(layer: String, mesh_name: String) -> bool:
 	if night_only(layer, mesh_name):
 		return false
@@ -465,7 +483,8 @@ const FAR_VISUAL_LAYER: int = 1 << 1
 ## Whether the layer is drawn past the camera's far plane
 ## (`far_shore.gdshaderinc`), and so must not be culled at it.
 static func beyond_far(layer: String) -> bool:
-	return bool(_row(layer).get("beyond_far", false))
+	var row: Dictionary = _row(layer)
+	return false if row.is_empty() else bool(row["beyond_far"])
 
 
 ## The library meshes a casting layer's shadow is narrowed to; empty when every

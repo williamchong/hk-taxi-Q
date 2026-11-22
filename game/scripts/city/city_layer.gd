@@ -1,7 +1,7 @@
 ## Stands one of the ETL's one-mesh layers in a region (`P5-1`). `layer` names a
 ## row of `generated_layer.gd`'s table.
 ##
-## The game's own layer node — ten of `region.tscn`'s, with their colliders and
+## The game's own layer node — every one of `region.tscn`'s, with their colliders and
 ## lamp pools — and not the streamer. It began as a dev preview and was named
 ## `layer_preview.gd` until 2026-11-14. Each of these layers is region-wide — the
 ## tramway as one mesh; the road marks, the boxes and the crossings as a mesh
