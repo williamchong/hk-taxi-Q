@@ -154,7 +154,7 @@ Phase 3 — `B2` and the road
   line). Window glass takes none of the crown, so it parts from the hull (`glass_crown` 0) — owed:
   the handset, the web build.
 - `P3-98` 🟡 Roadside planters (`Q247`): 19 beds and 30 walls in Wan Chai, 1 and 5 in Causeway Bay —
-  owed: the user's drive into one, the PCK.
+  owed: the user's drive into one. Cut into 300 m plan cells 2026-11-22 (web PCK −10,160 B).
 - `P3-93` 🟡 Stop furniture: flags at bus and minibus stops, tram shelters on solid posts
   (`Q242`; sizes the user's pick) — owed: his drive into a pole and a shelter post. `P3-96` 🟡 cost: 9 draws, 2.30 MB of PCK, desktop frame time unmoved, the iPhone Air at its 120 fps cap with and without.
 - `P3-92` 🟡 Stand signs: `TS324` taxi stand, `TS322` / `TS323` minibus stand, `TS3643` pick-up
@@ -348,7 +348,7 @@ Bundle, from `etl/out` (schemas: `city.json` 46, `roadgraph.json` 15, `roadsurfa
 | Counter | `wan_chai` / `causeway_bay` |
 |---|---|
 | Road graph | 792 edges, 614 nodes, 217 turn restrictions / 207, 166, 35 |
-| Road surface triangles | 92,611 / 31,355 |
+| Road surface triangles | 92,611 / 31,355; welded to 111,312 / 37,098 vertices (from 155,590 / 54,435, 2026-11-22) |
 | Measured width, level 0 | 393 of 734 (53.5%) / 124 of 196 (63.3%) |
 | Signs drawn | 840 of 3,276 published, 614 poles, 110 text plates / 279 of 1,009, 213, 51 |
 | Lamps drawn | 997 of 1,263 candidates, `on_deck` 92, `min_kerb_clearance_m` 0.0397 / 361 of 441, 16, 0.1 |
@@ -362,7 +362,8 @@ Bundle, from `etl/out` (schemas: `city.json` 46, `roadgraph.json` 15, `roadsurfa
 | Signals | 73 junctions, 72 staged, 178 approaches, 514 head posts / 22, 21, 41, 89 |
 | Parked placed | 716 of 1,346 candidates / 340 of 705; no parked trams |
 | Trees drawn | 2,254 of 2,331 / 3,317 of 3,427 |
-| Planters | 19 beds of 22 rings, 30 walls, 897 m² planted, 10,166 triangles / 1 of 1, 5, 26 m², 374 |
+| Planters | 19 beds of 22 rings, 30 walls, 897 m² planted, 10,166 triangles in 10 plan cells, 19,331 vertices (from 25,370) / 1 of 1, 5, 26 m², 374 in 3 |
+| Welded paint and props (2026-11-22) | road lettering 70,129 → 48,857 vertices, stop library 39,993 → 16,121 / 1,224, 1,845; every written triangle unchanged |
 | Bus route directions kept | 464 of 486 / 241 of 251 |
 | Fare nodes, street spots | 48, 221 / 7, 166 |
 | Harbour | 748,723 m² of sea / 177,055 m² |
