@@ -45,7 +45,7 @@ from pipeline.documents import write_document
 from pipeline.fetch import source_reads
 from pipeline.gltf import MeshData, write_glb
 from pipeline.mesh import weld
-from pipeline.meshbuild import MIN_TWICE_AREA_M2, Cell, ColouredBuilder, cell_name
+from pipeline.meshbuild import MIN_TWICE_AREA_M2, Cell, ColouredBuilder, cell_name, cell_of
 from pipeline.polyline import true_runs
 from pipeline.surface_region import read as read_carriageway_region
 from pipeline.trees import Faces, tile_corners
@@ -209,10 +209,7 @@ class _Cells:
         wider than its bend's radius folds, a quad is a bow-tie and one
         winding for both halves leaves one facing down, which `cull_back`
         draws as nothing."""
-        cell: Cell = (0, 0)
-        if self._cell_m > 0.0:
-            centre = points[:, [0, 2]].mean(axis=0) / self._cell_m
-            cell = (int(np.floor(centre[0])), int(np.floor(centre[1])))
+        cell = cell_of(*points[:, [0, 2]].mean(axis=0), self._cell_m)
         if cell not in self._cells:
             self._cells[cell] = ColouredBuilder(PATHS_MATERIAL)
         for corners in (points[[0, 1, 2]], points[[0, 2, 3]]):

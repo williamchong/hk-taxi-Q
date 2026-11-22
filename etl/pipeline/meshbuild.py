@@ -155,10 +155,7 @@ class CellBuilder:
     def polygon(self, plan: np.ndarray, height: np.ndarray) -> None:
         if len(plan) < 3:
             return
-        cell: Cell = (0, 0)
-        if self._cell_m > 0.0:
-            centre = plan.mean(axis=0) / self._cell_m
-            cell = (int(np.floor(centre[0])), int(np.floor(centre[1])))
+        cell = cell_of(*plan.mean(axis=0), self._cell_m)
         if cell not in self._cells:
             self._cells[cell] = FlatBuilder(self._material)
         self._cells[cell].polygon(plan, height)
@@ -182,6 +179,14 @@ class CellBuilder:
         if report is not None:
             report.slivers_dropped = dropped
         return meshes
+
+
+def cell_of(x: float, z: float, cell_m: float) -> Cell:
+    """The plan cell a point falls in, or `(0, 0)` at a `cell_m` of zero, which is
+    one mesh. A piece goes whole to the cell of its middle."""
+    if cell_m <= 0.0:
+        return (0, 0)
+    return (int(np.floor(x / cell_m)), int(np.floor(z / cell_m)))
 
 
 def cell_name(name: str, cell: Cell) -> str:

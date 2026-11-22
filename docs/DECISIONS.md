@@ -3411,6 +3411,7 @@ share `twilight.tres`, a rose horizon; a shift never sees the 06:15 dawn.
 - Only where surveyed, as `Q171`: a bed is a ring one feature's walls close; an open wall stands bare.
 - Never on the drawn road: cut back to 0.05 m outside the level-0 carriageway region (58.9 m² in Wan Chai), refused whole over half on it (3 of 22 rings). Cut by the tiles' walls that stand through it (5.2 m²): a ring round a lift tower is not planted through.
 - Built: Wan Chai 19 beds, 30 walls, 897 m² planted, 10,166 triangles; Causeway Bay 1 bed, 5 walls, 26 m², 374. One draw a region.
+- Since 2026-11-22 a mesh a 300 m plan cell (`cell_m`, `paths`' rule), welded; the collider stays one body. Wan Chai 10 cells, 25,370 → 19,331 vertices, every triangle kept.
 - A planter is a crash: the walls ship as `planters_collision-colonly` in the same `.glb` (3,481 / 213 triangles), the first generated layer after the road to carry its own body. The planting collides with nothing.
 - `city.json` schema 49 names `planters`.
 - Walls under a deck (checked 2026-11-18): 22 of Wan Chai's 48 features, 710 of 2,224 m. In plan the 17 under a flyover are street-level islands (the large ones cross the deck's carriageway); four under footbridges, 139 m, sit on street islands but are not settled by shape; one (10 m under) was not looked at. None found on a deck.

@@ -4130,6 +4130,10 @@ planters:
   min_wall_m2: 0.3
   # The wall goes this far under the lowest ground beneath it.
   sink_m: 0.1
+  # The plan cell the drawn planters are cut into, so the engine culls a cell
+  # out of view: `paths.cell_m`'s reasoning. A bed or wall goes whole to its
+  # middle's cell. The collider stays one body: it draws nothing.
+  cell_m: 300.0
 
 # Hero buildings shipped as authored models (P3-6) — the landmarks.json
 # contract in docs/ARCHITECTURE.md. The building stage excludes every stem

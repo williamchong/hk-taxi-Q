@@ -8,6 +8,7 @@ of the planting, and that a wall follows the ground under it.
 from __future__ import annotations
 
 import copy
+from dataclasses import replace
 
 import numpy as np
 import pytest
@@ -202,3 +203,13 @@ def test_a_refused_rings_cuts_are_not_counted(spec) -> None:
     road = shapely.box(0.0, 0.0, 100.0, 11.0)
     _, report = _build(spec, [_ring(150.0, 10.0, 160.0, 14.0)], road=road)
     assert report.no_ground == 1 and report.road_cut_m2 == 0.0
+
+
+def test_beds_in_two_cells_are_two_meshes_and_one_collider(spec) -> None:
+    spec = replace(spec, cell_m=50.0)
+    meshes, report = _build(spec, [_ring(10.0, 10.0, 20.0, 14.0), _ring(70.0, 10.0, 80.0, 14.0)])
+    *drawn, collider = meshes
+    assert [mesh.name for mesh in drawn] == ["planters_c0_r0", "planters_c1_r0"]
+    assert is_collider(collider) and not any(is_collider(mesh) for mesh in drawn)
+    assert report.beds == 2
+    assert report.triangles == sum(len(mesh.triangles) for mesh in drawn)

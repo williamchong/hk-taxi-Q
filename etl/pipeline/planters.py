@@ -37,7 +37,8 @@ from pipeline.config import Config, GameTransform, Planters, load_config
 from pipeline.documents import write_document
 from pipeline.fetch import cached_source
 from pipeline.gltf import COLLISION_ONLY_SUFFIX, MeshData, write_glb
-from pipeline.meshbuild import ColouredBuilder, polygons_of, prism
+from pipeline.mesh import weld
+from pipeline.meshbuild import Cell, ColouredBuilder, cell_name, cell_of, polygons_of, prism
 from pipeline.railings import facing_away
 from pipeline.surface_region import read as read_carriageway_region
 from pipeline.trees import Faces, tile_corners
@@ -287,9 +288,9 @@ def build_planters(
     standing: Walls,
     report: PlanterReport,
 ) -> list[MeshData]:
-    """The drawn mesh and its collider, or nothing where no wall stood."""
+    """A drawn mesh a plan cell and one collider, or nothing where no wall stood."""
     kept_clear = carriageway.buffer(spec.kerb_clear_m)
-    drawn = ColouredBuilder(PLANTERS_MATERIAL)
+    drawn: dict[Cell, ColouredBuilder] = {}
     solid = ColouredBuilder(PLANTERS_MATERIAL)
     wall_colour = spec.wall_material.colour
 
@@ -310,10 +311,15 @@ def build_planters(
         def floor(plan: np.ndarray) -> np.ndarray:
             return heights[tree.nearest(shapely.points(plan))]
 
-        for builder in (drawn, solid):
-            prism(builder, shape, floor, spec.sink_m, spec.wall_height_m, wall_colour, wall_colour)
+        middle = shape.centroid
+        cell = cell_of(middle.x, middle.y, spec.cell_m)
+        if cell not in drawn:
+            drawn[cell] = ColouredBuilder(PLANTERS_MATERIAL)
+        builder = drawn[cell]
+        for into in (builder, solid):
+            prism(into, shape, floor, spec.sink_m, spec.wall_height_m, wall_colour, wall_colour)
         if planted:
-            _clumps(drawn, spec, shape, floor, report)
+            _clumps(builder, spec, shape, floor, report)
         report.max_ground_fall_m = max(
             report.max_ground_fall_m, float(heights.max() - heights.min())
         )
@@ -375,16 +381,21 @@ def build_planters(
             report.road_cut_m2 += road_cut
             report.building_cut_m2 += building_cut
 
-    mesh = drawn.build(PLANTERS_MESH_NAME)
+    # Welded: a builder lays each face with its own corners. Lossless.
+    meshes = [
+        weld(mesh)
+        for cell in sorted(drawn)
+        if (mesh := drawn[cell].build(cell_name(PLANTERS_MESH_NAME, cell))) is not None
+    ]
     walls = solid.build(PLANTERS_COLLIDER_NAME)
-    if mesh is None or walls is None:
+    if not meshes or walls is None:
         return []
     collider = replace(walls, colours=None, material=None)
-    report.facing_away = facing_away(mesh)
-    report.triangles = len(mesh.triangles)
-    report.vertices = len(mesh.positions)
+    report.facing_away = sum(facing_away(mesh) for mesh in meshes)
+    report.triangles = sum(len(mesh.triangles) for mesh in meshes)
+    report.vertices = sum(len(mesh.positions) for mesh in meshes)
     report.collider_triangles = len(collider.triangles)
-    return [mesh, collider]
+    return [*meshes, collider]
 
 
 def _write_manifest(out_dir: Path, city: Config, region_id: str, report: PlanterReport) -> int:

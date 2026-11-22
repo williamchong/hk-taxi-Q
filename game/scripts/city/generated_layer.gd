@@ -305,7 +305,7 @@ const LAYERS: Dictionary[String, Dictionary] = {
 		"shadow_meshes": [],
 		"beyond_far": false,
 	},
-	# HyD's roadside planters (`P3-98`, `Q247`): one merged mesh and the one
+	# HyD's roadside planters (`P3-98`, `Q247`): a mesh a plan cell and the one
 	# `-colonly` body a row of this table carries — the walls, so a car hits a
 	# planter. It casts: a hedge with no shadow floats.
 	PLANTERS:

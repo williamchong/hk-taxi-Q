@@ -26,7 +26,7 @@ _SIZES = (
     "min_bed_m2",
     "min_wall_m2",
 )
-_MARGINS = ("shrub_inset_m", "kerb_clear_m", "sink_m")
+_MARGINS = ("shrub_inset_m", "kerb_clear_m", "sink_m", "cell_m")
 _SHARES = ("side_darken", "tint_darken", "max_on_road")
 
 
@@ -58,6 +58,9 @@ class Planters:
     min_bed_m2: float
     min_wall_m2: float
     sink_m: float
+    # The plan cell a region's planters are cut into, so the engine can cull
+    # them; zero is one mesh.
+    cell_m: float
 
 
 def _planters(body: Any, where: str, table: _MaterialTable) -> Planters | None:
