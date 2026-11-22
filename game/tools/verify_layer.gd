@@ -40,6 +40,7 @@ static func run(tree: SceneTree, layer: String, check: Callable) -> void:
 
 	var scene_root: Node3D = packed.instantiate()
 	var problems: PackedStringArray = check.call(scene_root)
+	problems.append_array(shadow_meshes_follow_casting(scene_root, layer))
 	# Instantiated outside the tree, so nothing else will free it — and a
 	# headless run that leaks buries its own result under exit warnings.
 	scene_root.free()
@@ -48,6 +49,27 @@ static func run(tree: SceneTree, layer: String, check: Callable) -> void:
 	if problems.is_empty():
 		print("  ok    ", GeneratedLayer.path(layer))
 	tree.quit(1 if not problems.is_empty() else 0)
+
+
+## A mesh kept out of the shadow passes ships no shadow mesh, and a casting
+## one keeps the importer's (`generated_scene_import._drop_unused_shadow`).
+## Both directions: a missing one on a caster would fall back to the full
+## mesh in every cascade, a kept one on paint is bytes nothing reads.
+static func shadow_meshes_follow_casting(root: Node, layer: String) -> PackedStringArray:
+	var problems := PackedStringArray()
+	for node: Node in root.find_children("*", "MeshInstance3D", true, false):
+		var mesh := (node as MeshInstance3D).mesh as ArrayMesh
+		if mesh == null:
+			continue
+		var casts: bool = GeneratedLayer.casts_shadow(layer, String(node.name))
+		if casts != (mesh.shadow_mesh != null):
+			problems.append(
+				(
+					"%s mesh %s casts %s but %s a shadow mesh"
+					% [layer, node.name, casts, "ships" if mesh.shadow_mesh != null else "lacks"]
+				)
+			)
+	return problems
 
 
 ## The bodies under `node` whose name matches `pattern`, counted, with every

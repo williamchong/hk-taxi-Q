@@ -384,6 +384,17 @@ const LAYERS: Dictionary[String, Dictionary] = {
 }
 
 
+## The layer whose asset a source file is, by its file name, or "" for any
+## other scene — a tile, a road chunk, an authored asset. Asked by the
+## importer (`generated_scene_import.gd`), which knows a path and no layer.
+static func of_file(source: String) -> String:
+	var file: String = source.get_file()
+	for layer: String in LAYERS:
+		if String(LAYERS[layer]["file"]) == file:
+			return layer
+	return ""
+
+
 ## Every layer id, in table order — what `verify_city.gd` holds the two dev
 ## scenes' `city_layer` nodes against, in both directions.
 static func ids() -> PackedStringArray:

@@ -25,6 +25,11 @@
 ## keeps the vertex-colour behaviour this file has always applied.
 extends EditorScenePostImport
 
+## Preloaded rather than named: the class cache may not exist yet on a fresh
+## clone's first import, and `generated_layer.gd` reaches its own dependencies
+## by `preload` too.
+const GeneratedLayer = preload("res://scripts/city/generated_layer.gd")
+
 ## Material names the ETL writes to request a specific shader, and what to give
 ## them. Mirrors `FACADE_MATERIAL` in `etl/pipeline/buildings.py`,
 ## `SURFACE_MATERIAL` in `etl/pipeline/surface.py` and `BODY_MATERIAL` in
@@ -232,6 +237,7 @@ const VEHICLE_BODY: String = "vehicle_body"
 
 
 func _post_import(scene: Node) -> Object:
+	var layer: String = GeneratedLayer.of_file(get_source_file())
 	for instance: MeshInstance3D in scene.find_children("*", "MeshInstance3D", true, false):
 		if instance.mesh == null:
 			continue
@@ -240,7 +246,24 @@ func _post_import(scene: Node) -> Object:
 			instance.mesh = body
 			continue
 		_apply(instance.mesh)
+		_drop_unused_shadow(instance, layer)
 	return scene
+
+
+## Drops the shadow mesh of a layer mesh `GeneratedLayer.casts_shadow` keeps
+## out of the shadow passes. The importer builds one for every mesh
+## (`meshes/create_shadow_meshes`), and the node's `cast_shadow` off never
+## reads it, so on the paint it is bundle and resident memory for nothing:
+## 5.4 MB of import across the never-casting layers. Read from the same call
+## `city_layer.gd` sets the node from, so the two cannot drift;
+## `verify_layer.gd` holds every layer to it. A tile, a road chunk or an
+## authored asset is no layer and keeps its own.
+static func _drop_unused_shadow(instance: MeshInstance3D, layer: String) -> void:
+	var mesh := instance.mesh as ArrayMesh
+	if layer.is_empty() or mesh == null:
+		return
+	if not GeneratedLayer.casts_shadow(layer, String(instance.name)):
+		mesh.shadow_mesh = null
 
 
 ## The vehicle door. Null where the mesh is not a body — no slot carries a

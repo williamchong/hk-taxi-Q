@@ -3969,3 +3969,20 @@ drive4.
   16 parts move (a replan's rolls move every later car); signalled meetings Wan Chai drive3 1 → 0,
   drive4 (printed, not gated, `Q182`) 2 → 3, every other drive 0 both sides; no other check fails.
 - Not a seed swap, and no tuning moved (`signals.md`: never retune to clear an overlap).
+
+## `Q271` — A mesh that casts no shadow ships no shadow mesh
+
+**Status.** Built 2026-11-22.
+
+- The importer builds a shadow mesh for every mesh (`meshes/create_shadow_meshes`), and a node with
+  `cast_shadow` off never reads it. `generated_scene_import._drop_unused_shadow` drops it where
+  `GeneratedLayer.casts_shadow(layer, node name)` is false — the same call `city_layer.gd` sets the
+  node from, so there is no second table. Tiles, road chunks and authored assets are no layer and
+  keep theirs (tiles cast; dropping theirs is held, unmeasured).
+- Web PCK 110,760,456 → 105,034,984 bytes (−5,725,472). The paint is never streamed (`Q135`), so
+  the saving is resident memory too.
+- Frames from Hennessy Road on Mobile and on Compatibility are byte-identical before and after.
+- `verify_layer.shadow_meshes_follow_casting` holds every layer both ways; keeping the shadow
+  meshes fails `verify_arrows` on every library mesh.
+- `generated_layer.gd` is preloaded, never named: a fresh clone's first import may run before the
+  class cache exists.
