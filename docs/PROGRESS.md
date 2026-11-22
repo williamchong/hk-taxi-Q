@@ -283,14 +283,14 @@ change. Closed questions are not listed here: see the headings in `DECISIONS.md`
 
 ## Risk register
 
-- **`verify_traffic` drive3 / drive4 fail on a bundle rebuilt 2026-11-22** — Medium. drive3 (seed 7,
-  back streets): "no two cars met in a signalled junction (12 car-ticks)", a real meeting, not a
-  lucky seed; drive4 (seed 23, routed, 08:00): "a routed minibus wears green … (0 car-ticks)", no
-  routed minibus drawn. Identical with the `station_exit` nodes and portals off, with the game at
-  `db7a3a65`, and with `verify_traffic.gd` from before `P4-4`; no road or bus source was
-  refetched. So an ETL change moved the graph or the routes — `cd755a42` (`P4-3`, streets raised
-  to meet decks) is the first suspect. Owed: a battery A/B of `roadgraph.json` / `bus_routes.json`
-  across `cd755a42`, then fix the meeting; never a seed swap to hide it.
+- **`verify_traffic` drive3 / drive4 fail since `P3-106`** — Medium. Bisected on full rebuilds of
+  both regions: `cd755a42` and `db7a3a65` pass, `3d6beca0` (`P3-106`) fails. The `station_exit`
+  nodes are drop-offs, so `parked.py` clears a `fare_m` 25 m ring round each and the parked fleet
+  changes; the seeded drives then run differently. drive3 (seed 7): two cars meet in a signalled
+  junction (12 car-ticks) — a real meeting the new layout reaches, not a lucky seed; drive4 (seed
+  23, routed): no routed minibus drawn (0 car-ticks). An earlier A/B here rebuilt only `fares` and
+  `stops` and wrongly cleared `P3-106`. Owed: the meeting fixed in the traffic, and the ring at an
+  exit set where its taxi stops rather than at the building (`pos` is up to 25 m back).
 - **Doesn't read as HK to locals** — High until `P3-9`: different drivers, handset, arrow off.
 - **Building meshes blow the triangle budget** — High. `wan_chai` 128%, `mong_kok` 184% of 300k;
   LOD0 carries 84–91%. The lever is LOD0's cell and radius (`P4-5`), not the LOD1 ratio.
