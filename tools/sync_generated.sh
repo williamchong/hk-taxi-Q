@@ -96,6 +96,23 @@ fi
 LIST="$(mktemp)"
 trap 'rm -f "$LIST"' EXIT
 
+# Rewrites each JSON file named, in place, with no whitespace: the ETL indents
+# what it writes so etl/out/ reads by eye, and the bundle ships the same values
+# in less than half the bytes (8.85 MB -> 4.15 MB installed, Q272). Every reader
+# parses, none compares bytes, and Python's float repr round-trips exactly.
+compact_json() {
+	"$PYTHON" - "$@" <<'PY'
+import json
+import sys
+
+for path in sys.argv[1:]:
+    with open(path, encoding="utf-8") as handle:
+        document = json.load(handle)
+    with open(path, "w", encoding="utf-8") as handle:
+        json.dump(document, handle, ensure_ascii=False, separators=(",", ":"))
+PY
+}
+
 sync_region() {
 	local REGION="$1"
 	local SRC="$ROOT/etl/out/$REGION"
@@ -123,6 +140,15 @@ sync_region() {
 
 	mkdir -p "$DST"
 	rsync -a --files-from="$LIST" "$SRC/" "$DST/"
+	# Captured, not a process substitution, so a grep that fails stops the sync
+	# rather than shipping the JSON indented. city.json is always listed.
+	local NAMES
+	NAMES="$(grep '\.json$' "$LIST")"
+	local JSON=()
+	while IFS= read -r name; do
+		JSON+=("$DST/$name")
+	done <<<"$NAMES"
+	compact_json "${JSON[@]}"
 
 	# Anything the manifest does not name. Left behind it costs bundle size and
 	# nothing complains, because every check in the project starts from the
@@ -172,6 +198,7 @@ for REGION in ${FAR[@]+"${FAR[@]}"}; do
 	# synced whole before leaves directories — keeping the glb's import sidecar.
 	find "$DST" -mindepth 1 -maxdepth 1 ! -name 'backdrop.glb.import' -exec rm -rf {} +
 	cp "$SRC/backdrop.glb" "$SRC/backdrop.json" "$DST/"
+	compact_json "$DST/backdrop.json"
 	echo "==> $REGION -> ${DST#"$ROOT/"} (far only)"
 done
 

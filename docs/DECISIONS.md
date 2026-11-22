@@ -3986,3 +3986,13 @@ drive4.
   meshes fails `verify_arrows` on every library mesh.
 - `generated_layer.gd` is preloaded, never named: a fresh clone's first import may run before the
   class cache exists.
+
+## `Q272` — The bundle's JSON ships compact
+
+**Status.** Built 2026-11-22.
+
+- `sync_generated.sh` rewrites every JSON file it copies with no whitespace; `etl/out/` stays
+  indented to read by eye. 38 files, 8,847,233 → 4,149,384 bytes; web PCK 105,034,984 →
+  100,337,144 (−4,697,840). A zipped download gains little — the saving is installed size.
+- Every reader parses and none compares bytes; all 37 synced documents load equal to their
+  `etl/out/` source.
