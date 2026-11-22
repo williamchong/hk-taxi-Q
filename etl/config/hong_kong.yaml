@@ -3341,6 +3341,11 @@ stops:
     depth_m: 0.15
     letter_m: 0.45
     letter_mount_m: 1.7
+    letter_fill: 0.7
+    # The fascia's lines, the Chinese twice the English as the photos set them.
+    zh_m: 0.30
+    en_m: 0.15
+    trim_m: 0.08
     # Off the most proud wall facing its way across its width.
     off_wall_m: 0.03
     lift_m: 0.006

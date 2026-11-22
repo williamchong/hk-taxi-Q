@@ -368,6 +368,8 @@ class ExitStand:
     out: np.ndarray
     ground_y: float
     on_post: bool
+    # How far the wall is from the surveyed exit; None on a post.
+    wall_m: float | None = None
 
 
 def road_point(edges: dict[int, dict[str, Any]], node: dict[str, Any]) -> np.ndarray:
@@ -378,6 +380,37 @@ def road_point(edges: dict[int, dict[str, Any]], node: dict[str, Any]) -> np.nda
     return np.array([stop.x, stop.y])
 
 
+def _facing(toward: np.ndarray) -> np.ndarray:
+    length = float(np.linalg.norm(toward))
+    return toward / length if length > 1e-6 else np.array([0.0, -1.0])
+
+
+def _clamped(sign: ExitSign, walls: Walls, index: int, foot: np.ndarray) -> np.ndarray:
+    """`foot` along wall `index`, inside its ends by half the portal: past them
+    it runs into the return of a recess the 3D map models round a doorway."""
+    a, b = walls.a[index], walls.b[index]
+    span = float(np.linalg.norm(b - a))
+    along = (b - a) / span
+    reach = 0.5 * span - 0.5 * sign.width_m
+    share = float(np.dot(foot - a, along)) - 0.5 * span
+    return a + along * (0.5 * span + (float(np.clip(share, -reach, reach)) if reach > 0 else 0.0))
+
+
+def _proud_m(sign: ExitSign, walls: Walls, index: int, foot: np.ndarray) -> float:
+    """How far out the most proud wall facing wall `index`'s way stands across
+    the portal's width: the 3D map draws some facades out of plane, and a frame
+    laid on one triangle is buried by the next."""
+    out = walls.normal[index]
+    along = np.array([-out[1], out[0]])
+    proud = 0.0
+    for end in (-0.5 * sign.width_m, 0.0, 0.5 * sign.width_m):
+        probe = foot + along * end
+        for other, _, nearest in walls.near(float(probe[0]), float(probe[1]), 1.0):
+            if float(np.dot(walls.normal[other], out)) > 0.9:
+                proud = max(proud, float(np.dot(nearest - foot, out)))
+    return proud
+
+
 def exit_stand(
     sign: ExitSign,
     at: np.ndarray,
@@ -385,65 +418,42 @@ def exit_stand(
     road: np.ndarray,
     walls: Walls,
     ground: Faces,
-    report: StopReport,
 ) -> ExitStand:
-    """The wall the exit's sign hangs on, or the post it tops.
+    """The wall the exit's portal is drawn on, or the post its fascia tops.
 
     A wall within `wall_reach_m` whose foot is near the road's height, the one
     facing the road preferred by `facing_weight_m`; none, and a post stands at
     the surveyed point facing the road."""
-    toward = road - at
-    length = float(np.linalg.norm(toward))
-    toward = toward / length if length > 1e-6 else np.array([0.0, -1.0])
+    toward = _facing(road - at)
     candidates = [
         entry
         for entry in walls.near(float(at[0]), float(at[1]), sign.wall_reach_m)
         if walls.low[entry[0]] <= road_y + sign.door_height_m
     ]
-    if candidates:
-
-        def cost(entry: tuple[int, float, np.ndarray]) -> float:
-            index, distance, _ = entry
-            return distance + sign.facing_weight_m * (
-                1.0 - float(np.dot(walls.normal[index], toward))
-            )
-
-        index, distance, foot = min(candidates, key=lambda entry: (cost(entry), entry[0]))
-        out = walls.normal[index]
-        # Along the wall, inside its ends: a plate past them runs into the
-        # return of a recess the 3D map models round a doorway.
-        a, b = walls.a[index], walls.b[index]
-        span = float(np.linalg.norm(b - a))
-        along = (b - a) / span
-        reach = 0.5 * span - 0.5 * sign.width_m
-        share = float(np.dot(foot - a, along)) - 0.5 * span
-        foot = a + along * (
-            0.5 * span + (float(np.clip(share, -reach, reach)) if reach > 0 else 0.0)
-        )
-        ground_y = wall_ground_y(walls, ground, index, foot)
-        # Under the wall's top: a stair head the 3D map draws lower than the
-        # portal takes its fascia at its brow, the door shortened under it.
-        top = min(ground_y + sign.door_height_m + sign.fascia_m, float(walls.high[index]))
-        middle_y = max(top, ground_y + sign.fascia_m) - 0.5 * sign.fascia_m
-        # Out past every wall facing its way across its width: the 3D map draws
-        # some facades out of plane, and a plate laid on one triangle is
-        # buried by the next.
-        proud = 0.0
-        for end in (-0.5 * sign.width_m, 0.0, 0.5 * sign.width_m):
-            probe = foot + along * end
-            for other, _, nearest in walls.near(float(probe[0]), float(probe[1]), 1.0):
-                if float(np.dot(walls.normal[other], out)) > 0.9:
-                    proud = max(proud, float(np.dot(nearest - foot, out)))
-        plan = foot + out * (proud + sign.off_wall_m + 0.5 * sign.depth_m)
-        report.exit_signs[ON_WALL] = report.exit_signs.get(ON_WALL, 0) + 1
-        report.exit_wall_m.append(distance)
-        return ExitStand(np.array([plan[0], middle_y, plan[1]]), out, ground_y, on_post=False)
-    under = ground.heights(float(at[0]), float(at[1]))
-    near = under[np.abs(under - road_y) <= sign.door_height_m]
-    ground_y = float(near.max()) if len(near) else road_y
-    report.exit_signs[ON_POST] = report.exit_signs.get(ON_POST, 0) + 1
-    middle = np.array([at[0], ground_y + sign.door_height_m + 0.5 * sign.fascia_m, at[1]])
-    return ExitStand(middle, toward, ground_y, on_post=True)
+    if not candidates:
+        under = ground.heights(float(at[0]), float(at[1]))
+        near = under[np.abs(under - road_y) <= sign.door_height_m]
+        ground_y = float(near.max()) if len(near) else road_y
+        middle = np.array([at[0], ground_y + sign.door_height_m + 0.5 * sign.fascia_m, at[1]])
+        return ExitStand(middle, toward, ground_y, on_post=True)
+    index, distance, foot = min(
+        candidates,
+        key=lambda entry: (
+            entry[1] + sign.facing_weight_m * (1.0 - float(np.dot(walls.normal[entry[0]], toward))),
+            entry[0],
+        ),
+    )
+    out = walls.normal[index]
+    foot = _clamped(sign, walls, index, foot)
+    ground_y = wall_ground_y(walls, ground, index, foot)
+    # Under the wall's top: a stair head the 3D map draws lower than the portal
+    # takes its fascia at its brow, the door shortened under it.
+    top = min(ground_y + sign.door_height_m + sign.fascia_m, float(walls.high[index]))
+    middle_y = max(top, ground_y + sign.fascia_m) - 0.5 * sign.fascia_m
+    plan = foot + out * (_proud_m(sign, walls, index, foot) + sign.off_wall_m + 0.5 * sign.depth_m)
+    return ExitStand(
+        np.array([plan[0], middle_y, plan[1]]), out, ground_y, on_post=False, wall_m=distance
+    )
 
 
 def _lettered(
@@ -487,13 +497,13 @@ def _names(
     """`灣仔站 Wan Chai Station` on one line (`fascia_zh`, `fascia_en`), the
     Chinese the taller, as an MTR fascia sets it, as large as fits `box_m` (across, up)."""
     lines = (sign.fascia_zh.format(station=station.zh), sign.fascia_en.format(station=station.en))
-    tall = (0.62 * box_m[1], 0.32 * box_m[1])
+    tall = (sign.zh_m, sign.en_m)
     natural = []
     for line, height in zip(lines, tall, strict=True):
         _, extent = face.block([line], 0.0)
         natural.append(height * (extent[2] - extent[0]) / (extent[3] - extent[1]))
     gap = 0.4 * tall[1]
-    shrink = min(1.0, box_m[0] / (sum(natural) + gap))
+    shrink = min(1.0, box_m[0] / (sum(natural) + gap), box_m[1] / sign.zh_m)
     u = -0.5 * shrink * (sum(natural) + gap)
     for line, height, wide in zip(lines, tall, natural, strict=True):
         across = wide * shrink
@@ -590,7 +600,7 @@ def exit_mesh(
                 plate - out * (half_d - 0.04 - sign.lift_m),
                 right,
                 out,
-                (0.7 * sign.letter_m, 0.7 * sign.letter_m),
+                (sign.letter_fill * sign.letter_m, sign.letter_fill * sign.letter_m),
                 colours[sign.letter_ink],
             )
     for facing in faces:
@@ -612,7 +622,7 @@ def exit_mesh(
                 at + o * sign.lift_m,
                 r,
                 o,
-                (0.7 * square, 0.7 * square),
+                (sign.letter_fill * square, sign.letter_fill * square),
                 colours[sign.letter_ink],
             )
             names_from += square + 0.15 * sign.fascia_m
@@ -625,7 +635,7 @@ def exit_mesh(
             front + r * (names_from + 0.5 * across),
             r,
             o,
-            (across, 0.8 * sign.fascia_m),
+            (across, sign.fascia_m - sign.trim_m),
             colours[sign.ink],
         )
     return _built(builder, name)
@@ -726,8 +736,12 @@ def build_region(city: Config, region_id: str, *, out_root: Path | None = None) 
                 )
             at = np.array([node["pos"][0], node["pos"][2]], dtype=float)
             stand = exit_stand(
-                sign, at, float(node["pos"][1]), road_point(by_id, node), walls, ground, report
+                sign, at, float(node["pos"][1]), road_point(by_id, node), walls, ground
             )
+            where = ON_POST if stand.on_post else ON_WALL
+            report.exit_signs[where] = report.exit_signs.get(where, 0) + 1
+            if stand.wall_m is not None:
+                report.exit_wall_m.append(stand.wall_m)
             name = f"exit_{node['id']}"
             meshes[name] = exit_mesh(
                 name, spec, sign, stand, station, published.get("letter"), face, colours

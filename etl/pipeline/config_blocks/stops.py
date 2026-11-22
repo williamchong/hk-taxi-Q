@@ -81,6 +81,12 @@ class ExitSign:
     depth_m: float
     letter_m: float
     letter_mount_m: float
+    # The letter's glyph against its plate; the fascia's two lines' heights;
+    # the trim's under the fascia.
+    letter_fill: float
+    zh_m: float
+    en_m: float
+    trim_m: float
     off_wall_m: float
     lift_m: float
     # The fascia's two lines, `{station}` the table's name: `{station}站`.
@@ -204,6 +210,10 @@ def _exit_sign(body: Any, where: str) -> ExitSign | None:
         depth_m=_positive(body, "depth_m", where, "a frame of no depth"),
         letter_m=_positive(body, "letter_m", where, "a letter plate of no size"),
         letter_mount_m=_positive(body, "letter_mount_m", where, "a letter plate on the ground"),
+        letter_fill=_positive(body, "letter_fill", where, "a letter of no size"),
+        zh_m=_positive(body, "zh_m", where, "a Chinese name of no height"),
+        en_m=_positive(body, "en_m", where, "an English name of no height"),
+        trim_m=_positive(body, "trim_m", where, "a trim of no height"),
         off_wall_m=float(_require(body, "off_wall_m", where)),
         lift_m=_positive(body, "lift_m", where, "lettering inside the fascia"),
         fascia_zh=str(_require(body, "fascia_zh", where)),
@@ -218,6 +228,8 @@ def _exit_sign(body: Any, where: str) -> ExitSign | None:
     for key in ("fascia_zh", "fascia_en"):
         if "{station}" not in getattr(sign, key):
             raise ValueError(f"{where}:{key} must name the {{station}}")
+    if sign.zh_m + sign.trim_m > sign.fascia_m:
+        raise ValueError(f"{where}: zh_m and trim_m overfill the fascia")
     if sign.off_wall_m < 0.0:
         raise ValueError(f"{where}: off_wall_m is a gap; a negative one buries the portal")
     if sign.letter_mount_m + 0.5 * sign.letter_m > sign.door_height_m:

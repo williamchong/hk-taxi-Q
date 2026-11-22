@@ -15,8 +15,6 @@ from pipeline.gltf import placed_positions
 from pipeline.railings import facing_away
 from pipeline.signboards import Walls
 from pipeline.stops import (
-    ON_POST,
-    ON_WALL,
     POLE_MESH_NAME,
     TRAM_MESH_NAME,
     StopReport,
@@ -75,6 +73,10 @@ BLOCK: dict[str, Any] = {
         "depth_m": 0.15,
         "letter_m": 0.45,
         "letter_mount_m": 1.7,
+        "letter_fill": 0.7,
+        "zh_m": 0.3,
+        "en_m": 0.15,
+        "trim_m": 0.08,
         "off_wall_m": 0.03,
         "lift_m": 0.006,
         "fascia_zh": "{station}",
@@ -279,11 +281,9 @@ STATION = Station(en="X", zh="O", lon=0.0, lat=0.0, colour="green")
 
 class TestTheExitSign:
     def test_it_hangs_on_the_wall_facing_the_road_inside_its_ends(self, spec):
-        sign, report = spec.station_exit, StopReport()
+        sign = spec.station_exit
         walls = walls_of(wall(0.0, 4.0, 0.0, 8.0, 1.0), wall(0.0, 4.0, 1.0, 8.0, -1.0))
-        stand = exit_stand(
-            sign, np.array([3.9, 0.6]), 0.0, np.array([3.9, 10.0]), walls, GROUND, report
-        )
+        stand = exit_stand(sign, np.array([3.9, 0.6]), 0.0, np.array([3.9, 10.0]), walls, GROUND)
         assert not stand.on_post
         assert stand.out == pytest.approx([0.0, 1.0])
         # Pulled in off the wall's end by half the portal's width.
@@ -291,23 +291,19 @@ class TestTheExitSign:
         # The nearer wall at z = 1 faces away from the road and loses.
         assert stand.middle[2] == pytest.approx(sign.off_wall_m + 0.5 * sign.depth_m)
         assert stand.middle[1] == pytest.approx(sign.door_height_m + 0.5 * sign.fascia_m)
-        assert report.exit_signs == {ON_WALL: 1}
+        assert stand.wall_m == pytest.approx(0.6)
 
     def test_a_low_stair_head_takes_the_fascia_at_its_brow(self, spec):
         sign = spec.station_exit
         walls = walls_of(wall(0.0, 4.0, 0.0, 2.8, 1.0))
-        stand = exit_stand(
-            sign, np.array([2.0, 0.5]), 0.0, np.array([2.0, 10.0]), walls, GROUND, StopReport()
-        )
+        stand = exit_stand(sign, np.array([2.0, 0.5]), 0.0, np.array([2.0, 10.0]), walls, GROUND)
         assert stand.middle[1] == pytest.approx(2.8 - 0.5 * sign.fascia_m)
 
     def test_with_no_wall_in_reach_the_fascia_tops_a_post_facing_the_road(self, spec, face):
-        sign, report = spec.station_exit, StopReport()
+        sign = spec.station_exit
         walls = walls_of(wall(0.0, 4.0, 0.0, 8.0, 1.0))
-        stand = exit_stand(
-            sign, np.array([20.0, 20.0]), 0.0, np.array([30.0, 20.0]), walls, GROUND, report
-        )
-        assert stand.on_post and report.exit_signs == {ON_POST: 1}
+        stand = exit_stand(sign, np.array([20.0, 20.0]), 0.0, np.array([30.0, 20.0]), walls, GROUND)
+        assert stand.on_post and stand.wall_m is None
         assert stand.out == pytest.approx([1.0, 0.0])
         mesh = exit_mesh("exit_f_001", spec, sign, stand, STATION, "O", face, COLOURS)
         low, high = mesh.aabb()
@@ -319,9 +315,7 @@ class TestTheExitSign:
     def test_a_wall_portal_reaches_the_ground_below_its_origin(self, spec, face):
         sign = spec.station_exit
         walls = walls_of(wall(0.0, 4.0, 0.0, 8.0, 1.0))
-        stand = exit_stand(
-            sign, np.array([2.0, 0.5]), 0.0, np.array([2.0, 10.0]), walls, GROUND, StopReport()
-        )
+        stand = exit_stand(sign, np.array([2.0, 0.5]), 0.0, np.array([2.0, 10.0]), walls, GROUND)
         lettered = exit_mesh("exit_f_001", spec, sign, stand, STATION, "O", face, COLOURS)
         plain = exit_mesh("exit_f_002", spec, sign, stand, STATION, None, face, COLOURS)
         assert facing_away(lettered) == 0
