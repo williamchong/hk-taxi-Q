@@ -34,7 +34,7 @@
 ## all time plates draws none and is correct to (`P3-16`). Lamps are the opposite: `UTILITYPOINTTYPE` **has** a published
 ## domain, so a region drawing none has declared no block or failed to find a
 ## kerb, never misread a vocabulary (`P3-26`). `verify_city.gd` carries the same
-## two notes at its guards.
+## two notes at its guard.
 ##
 ## ⚠️ **`is_present` and `load_layer` returning null answer different
 ## questions.** The first is "did the build ship this layer", which an optional

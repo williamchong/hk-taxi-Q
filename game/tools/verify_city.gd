@@ -160,19 +160,36 @@ func _check_documents(manifest: Manifest) -> PackedStringArray:
 	problems.append_array(
 		_check_document("basemap", manifest.basemap_path, GeneratedBasemap.path())
 	)
-	# ⚠️ **Guarded, because this one is optional and the others are not.** A city
-	# whose estate publishes no tramway names `null` and ships none (`P3-14`),
-	# so an empty path is the honest answer rather than a missing file. What the
-	# guard must not do is let a *named* tramway go unchecked: `verify_tramway.gd`
-	# treats an absent asset as a pass, so without this a manifest naming
-	# `tram.glb` with the file gone would pass every check in the repo.
-	if not manifest.tramway_path.is_empty():
-		problems.append_array(
-			_check_document(
-				"tramway", manifest.tramway_path, GeneratedLayer.path(GeneratedLayer.TRAMWAY)
+	# ⚠️ **Every layer guarded, because each is optional and the documents above
+	# are not.** A city whose estate publishes no such layer names `null` and
+	# ships none, so an empty path is the honest answer rather than a missing
+	# file. What the guard must not do is let a *named* asset go unchecked: each
+	# layer's verify tool treats an absent asset as a pass, so without this a
+	# manifest naming `tram.glb` with the file gone would pass every check in the
+	# repo. Two absences are more ordinary than the rest and the guard is why
+	# neither hides a loss: a null `signs` is a region whose signs are all
+	# text-faced (`P3-16`), while a null `lamps` is never a misread vocabulary —
+	# `UTILITYPOINTTYPE` has a published domain (`P3-26`). A prop layer's
+	# placements, on the library's own terms (`P5-2`): a bundle naming the
+	# library and not them stands nothing on it.
+	for layer: String in GeneratedLayer.ids():
+		# A layer with no key reads as never named, and would pass unchecked.
+		if layer not in Manifest.OPTIONAL_ASSET_KEYS:
+			problems.append("%s is a layer city.json has no key for" % layer)
+		var named: String = manifest.optional_path(layer)
+		if named.is_empty():
+			continue
+		var noun: String = GeneratedLayer.noun(layer)
+		problems.append_array(_check_document(noun, named, GeneratedLayer.path(layer)))
+		if GeneratedLayer.has_placements(layer):
+			problems.append_array(
+				_check_document(
+					noun + " placements",
+					manifest.optional_path(layer + "_placements"),
+					GeneratedLayer.placements_path(layer)
+				)
 			)
-		)
-	# Guarded on the same terms (`P3-71`): a city with no `parked:` block names
+	# Guarded on the layers' terms (`P3-71`): a city with no `parked:` block names
 	# none, and `verify_parked.gd` treats an absent document as a pass, so a
 	# manifest naming it with the file gone would otherwise pass every check.
 	if not manifest.parked_placements_path.is_empty():
@@ -181,189 +198,6 @@ func _check_documents(manifest: Manifest) -> PackedStringArray:
 				"parked placements",
 				manifest.parked_placements_path,
 				ParkedLayerScript.placements_path()
-			)
-		)
-	# Guarded for the same reason, and with the same thing the guard must not do:
-	# `verify_arrows.gd` treats an absent asset as a pass, so a manifest naming
-	# `arrows.glb` with the file gone would otherwise pass every check here.
-	if not manifest.arrows_path.is_empty():
-		problems.append_array(
-			_check_document(
-				"arrows", manifest.arrows_path, GeneratedLayer.path(GeneratedLayer.ARROWS)
-			)
-		)
-		problems.append_array(
-			_check_document(
-				"arrow placements",
-				manifest.arrows_placements_path,
-				GeneratedLayer.placements_path(GeneratedLayer.ARROWS)
-			)
-		)
-	# Guarded on the same terms again: `verify_boxjunctions.gd` treats an absent
-	# asset as a pass, so a manifest naming `boxjunctions.glb` with the file gone
-	# would otherwise pass every check here.
-	if not manifest.railings_path.is_empty():
-		problems.append_array(
-			_check_document(
-				"railings", manifest.railings_path, GeneratedLayer.path(GeneratedLayer.RAILINGS)
-			)
-		)
-		problems.append_array(
-			_check_document(
-				"railing placements",
-				manifest.railings_placements_path,
-				GeneratedLayer.placements_path(GeneratedLayer.RAILINGS)
-			)
-		)
-	# Guarded on the same terms: `verify_lamps.gd` treats an absent asset as a
-	# pass, so a manifest naming `lamps.glb` with the file gone would otherwise
-	# pass every check in the repo. ⚠️ **And a null `lamps` key is not an
-	# ordinary answer** — `UTILITYPOINTTYPE` has a
-	# published domain — so a bundle that names the
-	# asset really is expected to hold it.
-	if not manifest.lamps_path.is_empty():
-		problems.append_array(
-			_check_document("lamps", manifest.lamps_path, GeneratedLayer.path(GeneratedLayer.LAMPS))
-		)
-		problems.append_array(
-			_check_document(
-				"lamp placements",
-				manifest.lamps_placements_path,
-				GeneratedLayer.placements_path(GeneratedLayer.LAMPS)
-			)
-		)
-	# Guarded on the same terms (`P3-77`): a city with no `trees:` block names
-	# none, and `verify_trees.gd` treats an absent asset as a pass.
-	if not manifest.trees_path.is_empty():
-		problems.append_array(
-			_check_document("trees", manifest.trees_path, GeneratedLayer.path(GeneratedLayer.TREES))
-		)
-		problems.append_array(
-			_check_document(
-				"tree placements",
-				manifest.trees_placements_path,
-				GeneratedLayer.placements_path(GeneratedLayer.TREES)
-			)
-		)
-	# And the planters (`P3-98`): a region HyD draws no wall in names none.
-	if not manifest.planters_path.is_empty():
-		problems.append_array(
-			_check_document(
-				"planters", manifest.planters_path, GeneratedLayer.path(GeneratedLayer.PLANTERS)
-			)
-		)
-	# And the pedestrian lines (`P3-101`): a city with no `paths:` block names none.
-	if not manifest.paths_path.is_empty():
-		problems.append_array(
-			_check_document("paths", manifest.paths_path, GeneratedLayer.path(GeneratedLayer.PATHS))
-		)
-	# And the signboards (`P3-103`): a city with no `signboards:` block names none.
-	if not manifest.signboards_path.is_empty():
-		problems.append_array(
-			_check_document(
-				"signboards",
-				manifest.signboards_path,
-				GeneratedLayer.path(GeneratedLayer.SIGNBOARDS)
-			)
-		)
-	# And the gantry boards (`P3-105`): a city with no `direction_signs:` block
-	# names none.
-	if not manifest.direction_signs_path.is_empty():
-		problems.append_array(
-			_check_document(
-				"direction_signs",
-				manifest.direction_signs_path,
-				GeneratedLayer.path(GeneratedLayer.DIRECTION_SIGNS)
-			)
-		)
-	# And the far version (`P3-100`): a city with no `backdrop:` block names none.
-	if not manifest.backdrop_path.is_empty():
-		problems.append_array(
-			_check_document(
-				"backdrop", manifest.backdrop_path, GeneratedLayer.path(GeneratedLayer.BACKDROP)
-			)
-		)
-	if not manifest.boxjunctions_path.is_empty():
-		problems.append_array(
-			_check_document(
-				"box junctions",
-				manifest.boxjunctions_path,
-				GeneratedLayer.path(GeneratedLayer.BOXJUNCTIONS)
-			)
-		)
-	if not manifest.crossings_path.is_empty():
-		problems.append_array(
-			_check_document(
-				"pedestrian crossings",
-				manifest.crossings_path,
-				GeneratedLayer.path(GeneratedLayer.CROSSINGS)
-			)
-		)
-	if not manifest.stopmarks_path.is_empty():
-		problems.append_array(
-			_check_document(
-				"stop and stand markings",
-				manifest.stopmarks_path,
-				GeneratedLayer.path(GeneratedLayer.STOPMARKS)
-			)
-		)
-	if not manifest.roadtext_path.is_empty():
-		problems.append_array(
-			_check_document(
-				"road lettering",
-				manifest.roadtext_path,
-				GeneratedLayer.path(GeneratedLayer.ROADTEXT)
-			)
-		)
-	if not manifest.stops_path.is_empty():
-		problems.append_array(
-			_check_document(
-				"stop furniture", manifest.stops_path, GeneratedLayer.path(GeneratedLayer.STOPS)
-			)
-		)
-		problems.append_array(
-			_check_document(
-				"stop furniture placements",
-				manifest.stops_placements_path,
-				GeneratedLayer.placements_path(GeneratedLayer.STOPS)
-			)
-		)
-	# Guarded on the same terms once more, and this is the guard that matters
-	# most: `verify_signs.gd` treats an absent asset as a pass *and* a null
-	# `signs` key is an ordinary answer for a region whose signs are all
-	# text-faced — so without this a manifest naming `signs.glb` with the file
-	# gone would pass every check in the repo.
-	if not manifest.signs_path.is_empty():
-		problems.append_array(
-			_check_document("signs", manifest.signs_path, GeneratedLayer.path(GeneratedLayer.SIGNS))
-		)
-		# The library's placements, on the library's own terms (`P5-2`): a
-		# bundle naming `signs.glb` and not this stands nothing on it.
-		problems.append_array(
-			_check_document(
-				"sign placements",
-				manifest.signs_placements_path,
-				GeneratedLayer.placements_path(GeneratedLayer.SIGNS)
-			)
-		)
-	# Guarded on the same terms a sixth time: `verify_roadmarks.gd` treats an
-	# absent asset as a pass, so a manifest naming `roadmarks.glb` with the file
-	# gone would otherwise pass every check here.
-	if not manifest.roadmarks_path.is_empty():
-		problems.append_array(
-			_check_document(
-				"road markings",
-				manifest.roadmarks_path,
-				GeneratedLayer.path(GeneratedLayer.ROADMARKS)
-			)
-		)
-	# Guarded on the same terms: `verify_water.gd` treats an absent asset as a
-	# pass, so a manifest naming `water.glb` with the file gone would otherwise
-	# pass every check here.
-	if not manifest.water_path.is_empty():
-		problems.append_array(
-			_check_document(
-				"harbour water", manifest.water_path, GeneratedLayer.path(GeneratedLayer.WATER)
 			)
 		)
 	return problems

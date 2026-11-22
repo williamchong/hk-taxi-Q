@@ -384,13 +384,65 @@ var fence_path: String
 ## game plan metres. Required: the stage writes it on every run.
 var basemap_path: String
 
+## Every optional key `city.json` may name, in `OPTIONAL_ASSET_KEYS`' order in
+## `etl/pipeline/export.py` — the same names in the same order, held equal by
+## `etl/tests/test_export.py`. A new optional asset is a row here and a getter
+## below; `shipped()` and the loader read this list, never a copy.
+const OPTIONAL_ASSET_KEYS: PackedStringArray = [
+	"tramway",
+	"arrows",
+	"arrows_placements",
+	"boxjunctions",
+	"crossings",
+	"stopmarks",
+	"roadtext",
+	"stops",
+	"stops_placements",
+	"planters",
+	"paths",
+	"signboards",
+	"signboards_text_atlas",
+	"direction_signs",
+	"direction_signs_text_atlas",
+	"backdrop",
+	"lamps",
+	"lamps_placements",
+	"railings",
+	"railings_placements",
+	"signs",
+	"signs_text_atlas",
+	"signs_placements",
+	"roadmarks",
+	"water",
+	"parked_placements",
+	"trees",
+	"trees_placements",
+	"signals_plan",
+	"signal_heads_placements",
+	"tram_lines",
+	"bus_routes",
+]
+
+## Each optional key's resolved path, empty where `city.json` names none.
+var _optional: Dictionary[String, String] = {}
+
+
+## The resolved path `city.json` names under an optional key, or empty where it
+## names none — the region ships none, never a build failure.
+func optional_path(key: String) -> String:
+	return _optional.get(key, "")
+
+
 ## The tramway mesh (`P3-14`), or **empty** where the region ships none.
 ##
-## Unlike the four above this one is genuinely optional: `Q58` draws it from
-## iB1000's `CartoTransLine` tramway code, and a city whose estate publishes no
-## such layer declares no `tramway:` block and exports a null. Callers must
+## Unlike the five required paths above `OPTIONAL_ASSET_KEYS`, this one is
+## genuinely optional: `Q58` draws it from iB1000's `CartoTransLine` tramway
+## code, and a city whose estate publishes no such layer declares no `tramway:`
+## block and exports a null. Callers must
 ## treat empty as "this region has no tramway", never as a build failure.
-var tramway_path: String
+var tramway_path: String:
+	get:
+		return optional_path("tramway")
 
 ## The turn arrows mesh (`P3-15`), or **empty** where the region ships none.
 ##
@@ -400,7 +452,9 @@ var tramway_path: String
 ## declared and **every** symbol failed the join — the stage names its asset from
 ## what it drew, not from a constant — so empty means "no arrows in this
 ## bundle", never "no arrows block".
-var arrows_path: String
+var arrows_path: String:
+	get:
+		return optional_path("arrows")
 
 ## The yellow box junctions mesh (`P3-18`), or **empty** where the region ships
 ## none.
@@ -411,27 +465,39 @@ var arrows_path: String
 ## block is declared and **every** box failed the join — the stage names its
 ## asset from what it drew, not from a constant — so empty means "no box
 ## junctions in this bundle", never "no boxjunctions block".
-var boxjunctions_path: String
+var boxjunctions_path: String:
+	get:
+		return optional_path("boxjunctions")
 
 ## The pedestrian-crossing stripes mesh (`P3-35g2`), or **empty** where the
 ## region ships none.
 ##
 ## Optional on the same terms as `boxjunctions_path`: drawn from TD's published
 ## `DTAD_CROSSING_LINE`, named from what the stage drew and never from a constant.
-var crossings_path: String
+var crossings_path: String:
+	get:
+		return optional_path("crossings")
 
 ## The bus stop, stand and tram stop paint (`P3-89`), or **empty** where the
 ## region ships none. Optional on `crossings_path`'s terms.
-var stopmarks_path: String
+var stopmarks_path: String:
+	get:
+		return optional_path("stopmarks")
 
 ## The road lettering (`P3-21`, `Q262`), or **empty** where the region ships
 ## none. Optional on `crossings_path`'s terms.
-var roadtext_path: String
+var roadtext_path: String:
+	get:
+		return optional_path("roadtext")
 
 ## The stop furniture library and where it stands (`P3-94`), or **empty** where
 ## the region ships none. Optional on `lamps_path`'s terms.
-var stops_path: String
-var stops_placements_path: String
+var stops_path: String:
+	get:
+		return optional_path("stops")
+var stops_placements_path: String:
+	get:
+		return optional_path("stops_placements")
 
 ## The pedestrian railings mesh (`P3-19`), or **empty** where the region ships
 ## none.
@@ -442,7 +508,9 @@ var stops_placements_path: String
 ## declared and no run survived the join — the stage names its asset from what
 ## it drew — so empty means "no railings in this bundle", never "no railings
 ## block".
-var railings_path: String
+var railings_path: String:
+	get:
+		return optional_path("railings")
 
 ## The lamp-post mesh (`P3-26`), or **empty** where the region ships none.
 ##
@@ -456,7 +524,9 @@ var railings_path: String
 ## difference is the point. `UTILITYPOINTTYPE` **has** a
 ## published domain, stored inside the geodatabase, so a region drawing no lamps
 ## has declared no block or found no kerb — it has not misread a vocabulary.
-var lamps_path: String
+var lamps_path: String:
+	get:
+		return optional_path("lamps")
 
 ## The traffic-sign mesh (`P3-16`), or **empty** where the region ships none.
 ##
@@ -465,7 +535,9 @@ var lamps_path: String
 ## whose meaning is their *shape*, and 2,364 of Wan Chai's 3,276 are text-faced
 ## and refused on the no-texture contract. A region whose signs are all time plates and parking
 ## legends draws none and is correct to.
-var signs_path: String
+var signs_path: String:
+	get:
+		return optional_path("signs")
 
 ## The stop and give-way line mesh (`P3-23`), or **empty** where the region ships
 ## none.
@@ -476,12 +548,16 @@ var signs_path: String
 ## the block is declared and every marking failed the *transverse* join — the
 ## stage names its asset from what it drew, not from a constant — so empty means
 ## "no stop lines in this bundle", never "no road_marks block".
-var roadmarks_path: String
+var roadmarks_path: String:
+	get:
+		return optional_path("roadmarks")
 
 ## The harbour's water plane (`water.glb`, 2026-09-25), or **empty** where the
 ## region's frame holds no sea. Optional on `tramway_path`'s terms: named from
 ## what `pipeline/basemap.py` drew, never from a constant.
-var water_path: String
+var water_path: String:
+	get:
+		return optional_path("water")
 
 ## 🔴 **The one image in the bundle** (`Q70`, `Q63`, `P3-20`) — the sign
 ## lettering's atlas — or **empty** where the region baked none.
@@ -499,80 +575,118 @@ var water_path: String
 ## ships no signs at all, *and* for one whose drawn faces carry no lettering —
 ## which is the state `Texture memory: 0` describes and the default `Q63`
 ## insisted stay the default.
-var signs_text_atlas_path: String
+var signs_text_atlas_path: String:
+	get:
+		return optional_path("signs_text_atlas")
 
 ## Where the sign library stands (`P5-2`): `signs.glb` is one mesh per face
 ## variant plus a unit pole, and this document is the list of transforms each
 ## one is drawn at. Empty on exactly `signs_path`'s terms — the two are written
 ## together — and `verify_city.gd` holds the pair against the locator.
-var signs_placements_path: String
+var signs_placements_path: String:
+	get:
+		return optional_path("signs_placements")
 
 ## Where the lamp library stands (`P5-3`): `lamps.glb` is one mesh per kind,
 ## and this document is the list of transforms each one is drawn at. Empty on
 ## exactly `lamps_path`'s terms.
-var lamps_placements_path: String
+var lamps_placements_path: String:
+	get:
+		return optional_path("lamps_placements")
 
 ## Where the arrow library stands (`P5-4`): `arrows.glb` is one glyph per `RM`
 ## code, and this document is the list of transforms — position, bearing and
 ## pitch — each one is drawn at. Empty on exactly `arrows_path`'s terms.
-var arrows_placements_path: String
+var arrows_placements_path: String:
+	get:
+		return optional_path("arrows_placements")
 
 ## Where the railing library stands (`P5-5`): `railings.glb` is one panel per
 ## class, and this document is the list of transforms — position, bearing and
 ## pitch — each panel is stood at along its run. Empty on exactly
 ## `railings_path`'s terms.
-var railings_placements_path: String
+var railings_placements_path: String:
+	get:
+		return optional_path("railings_placements")
 
 ## Where the parked roster stands (`P3-71`, `Q161`): one placement per
 ## vehicle over the AUTHORED library `assets/authored/vehicles/parked.glb`,
 ## each with the hours it keeps and the chance it is there. Empty where the
 ## city declares no `parked:` block or placed nothing — the honest answer on
 ## `tramway_path`'s terms, and `ParkedLayer` says so rather than failing.
-var parked_placements_path: String
+var parked_placements_path: String:
+	get:
+		return optional_path("parked_placements")
 
 ## The published trees (`P3-77`, `Q171`): a library of kinds and the document
 ## that stands it, with each kind's trunk collider. Empty where the city
 ## declares no `trees:` block or stood none.
-var trees_path: String
-var trees_placements_path: String
+var trees_path: String:
+	get:
+		return optional_path("trees")
+var trees_placements_path: String:
+	get:
+		return optional_path("trees_placements")
 
 ## HyD's roadside planters (`P3-98`, `Q247`), or **empty** where the region
 ## ships none. Optional on `tramway_path`'s terms.
-var planters_path: String
+var planters_path: String:
+	get:
+		return optional_path("planters")
 
 ## The pedestrian lines (`P3-101`, `Q250`), or **empty** where the region ships
 ## none. Optional on `tramway_path`'s terms.
-var paths_path: String
+var paths_path: String:
+	get:
+		return optional_path("paths")
 
 ## The signboards (`P3-103`, `Q260`), or **empty** where the region ships none.
 ## Optional on `tramway_path`'s terms.
-var signboards_path: String
+var signboards_path: String:
+	get:
+		return optional_path("signboards")
 ## The signboards' lettering atlas (`P3-103` step 2), beside `signboards.glb`.
-var signboards_text_atlas_path: String
+var signboards_text_atlas_path: String:
+	get:
+		return optional_path("signboards_text_atlas")
 
 ## TD's gantry boards (`P3-105`, `Q265`), or **empty** where the region hangs
 ## none. Optional on `tramway_path`'s terms.
-var direction_signs_path: String
+var direction_signs_path: String:
+	get:
+		return optional_path("direction_signs")
 ## Their faces' atlas, beside `direction_signs.glb`.
-var direction_signs_text_atlas_path: String
+var direction_signs_text_atlas_path: String:
+	get:
+		return optional_path("direction_signs_text_atlas")
 
 ## The far shore (`P3-100`, `Q249`), or **empty** where the region ships none.
 ## Optional on `tramway_path`'s terms.
-var backdrop_path: String
+var backdrop_path: String:
+	get:
+		return optional_path("backdrop")
 
 ## The signalled junctions and their authored stages (`P3-3a`, `Q173`), read by
 ## `SignalPlan`. Empty where the city declares no `signals:` block or staged
 ## nothing: no car stops for a light.
-var signals_plan_path: String
+var signals_plan_path: String:
+	get:
+		return optional_path("signals_plan")
 ## Where the lit signal heads stand (`P3-3e`), from the authored `heads.glb`;
 ## empty where the region bound none.
-var signal_heads_placements_path: String
+var signal_heads_placements_path: String:
+	get:
+		return optional_path("signal_heads_placements")
 ## The directed tracks a tram runs (`P3-4`, `Q176`), read by `TramLines`. Empty
 ## where the city declares no tramway or nothing joined into a line.
-var tram_lines_path: String
+var tram_lines_path: String:
+	get:
+		return optional_path("tram_lines")
 ## The bus and green-minibus routes (`P3-78`, `Q182`), read by `BusRoutes`. Empty
 ## where the city declares no routes or none stops in the region.
-var bus_routes_path: String
+var bus_routes_path: String:
+	get:
+		return optional_path("bus_routes")
 ## Each taxi licence's share of the region's taxis (`Q183`), the library mesh's
 ## name to its share, read off the published stands. Empty where the region holds
 ## no stand: a moving taxi there wears the library's red urban one.
@@ -724,56 +838,12 @@ static func load_manifest(region: String = "") -> CityManifest:
 	manifest.landmarks_path = _resolve(document.get("landmarks", ""), manifest.directory)
 	manifest.fence_path = _resolve(document.get("fence", ""), manifest.directory)
 	manifest.basemap_path = _resolve(document.get("basemap", ""), manifest.directory)
-	# A **null** `tramway` is the "this region has no tramway" state, and
-	# `_resolve` maps it to empty. Not a branch here on purpose: `str(null)` is
-	# `"<null>"`, which would resolve to a plausible-looking path that loads
-	# nothing, so the guard belongs where every caller gets it.
-	manifest.tramway_path = _resolve(document.get("tramway"), manifest.directory)
-	# Null on the same terms, and `_resolve` maps it to empty for the same
-	# `str(null)` reason spelled out above.
-	manifest.arrows_path = _resolve(document.get("arrows"), manifest.directory)
-	manifest.boxjunctions_path = _resolve(document.get("boxjunctions"), manifest.directory)
-	manifest.crossings_path = _resolve(document.get("crossings"), manifest.directory)
-	manifest.stopmarks_path = _resolve(document.get("stopmarks"), manifest.directory)
-	manifest.roadtext_path = _resolve(document.get("roadtext"), manifest.directory)
-	manifest.stops_path = _resolve(document.get("stops"), manifest.directory)
-	manifest.stops_placements_path = _resolve(document.get("stops_placements"), manifest.directory)
-	manifest.lamps_path = _resolve(document.get("lamps"), manifest.directory)
-	manifest.railings_path = _resolve(document.get("railings"), manifest.directory)
-	manifest.signs_path = _resolve(document.get("signs"), manifest.directory)
-	manifest.roadmarks_path = _resolve(document.get("roadmarks"), manifest.directory)
-	manifest.water_path = _resolve(document.get("water"), manifest.directory)
-	manifest.signs_text_atlas_path = _resolve(document.get("signs_text_atlas"), manifest.directory)
-	manifest.signs_placements_path = _resolve(document.get("signs_placements"), manifest.directory)
-	manifest.lamps_placements_path = _resolve(document.get("lamps_placements"), manifest.directory)
-	manifest.arrows_placements_path = _resolve(
-		document.get("arrows_placements"), manifest.directory
-	)
-	manifest.railings_placements_path = _resolve(
-		document.get("railings_placements"), manifest.directory
-	)
-	manifest.parked_placements_path = _resolve(
-		document.get("parked_placements"), manifest.directory
-	)
-	manifest.trees_path = _resolve(document.get("trees"), manifest.directory)
-	manifest.trees_placements_path = _resolve(document.get("trees_placements"), manifest.directory)
-	manifest.planters_path = _resolve(document.get("planters"), manifest.directory)
-	manifest.paths_path = _resolve(document.get("paths"), manifest.directory)
-	manifest.signboards_path = _resolve(document.get("signboards"), manifest.directory)
-	manifest.signboards_text_atlas_path = _resolve(
-		document.get("signboards_text_atlas"), manifest.directory
-	)
-	manifest.direction_signs_path = _resolve(document.get("direction_signs"), manifest.directory)
-	manifest.direction_signs_text_atlas_path = _resolve(
-		document.get("direction_signs_text_atlas"), manifest.directory
-	)
-	manifest.backdrop_path = _resolve(document.get("backdrop"), manifest.directory)
-	manifest.signals_plan_path = _resolve(document.get("signals_plan"), manifest.directory)
-	manifest.signal_heads_placements_path = _resolve(
-		document.get("signal_heads_placements"), manifest.directory
-	)
-	manifest.tram_lines_path = _resolve(document.get("tram_lines"), manifest.directory)
-	manifest.bus_routes_path = _resolve(document.get("bus_routes"), manifest.directory)
+	# A **null** key is the "this region ships none" state, and `_resolve` maps it
+	# to empty. Not a branch here on purpose: `str(null)` is `"<null>"`, which
+	# would resolve to a plausible-looking path that loads nothing, so the guard
+	# belongs where every caller gets it.
+	for key: String in OPTIONAL_ASSET_KEYS:
+		manifest._optional[key] = _resolve(document.get(key), manifest.directory)
 	var licences: Variant = document.get("taxi_licences", {})
 	if licences is Dictionary:
 		for mesh: Variant in licences:
@@ -870,53 +940,19 @@ func shipped() -> PackedStringArray:
 	var paths: PackedStringArray = [
 		road_graph_path, fares_path, landmarks_path, fence_path, basemap_path
 	]
-	# ⚠️ **One list rather than seven `if`s, in `OPTIONAL_ASSET_KEYS`' order** —
-	# `etl/pipeline/export.py`'s `shipped()` holds the same names in the same
-	# order, so the two can be read side by side as the mirrors they are. It was
-	# seven hand-written copies on both sides until the seventh forced the issue.
+	# ⚠️ **`OPTIONAL_ASSET_KEYS`, never a list of its own** — the same list in
+	# the same order as `etl/pipeline/export.py`'s `shipped()`. It was a second
+	# hand-written copy here, and the two drifted in order before it was one.
 	#
-	# ⚠️ **`signs_text_atlas_path` stands on its own, not nested under
-	# `signs_path`.** The two are written together and a bundle with one and not
-	# the other is broken, but this function is the definition of what the bundle
-	# contains — folding the pair into one test would hide the asymmetric case
-	# from the only list that could show it.
-	var optional: Array[String] = [
-		tramway_path,
-		arrows_path,
-		arrows_placements_path,
-		boxjunctions_path,
-		crossings_path,
-		stopmarks_path,
-		roadtext_path,
-		stops_path,
-		stops_placements_path,
-		lamps_path,
-		lamps_placements_path,
-		railings_path,
-		railings_placements_path,
-		signs_path,
-		signs_text_atlas_path,
-		signs_placements_path,
-		roadmarks_path,
-		water_path,
-		parked_placements_path,
-		trees_path,
-		trees_placements_path,
-		planters_path,
-		paths_path,
-		signboards_path,
-		signboards_text_atlas_path,
-		direction_signs_path,
-		direction_signs_text_atlas_path,
-		backdrop_path,
-		signals_plan_path,
-		signal_heads_placements_path,
-		tram_lines_path,
-		bus_routes_path,
-	]
-	for asset_path: String in optional:
-		if not asset_path.is_empty():
-			paths.append(asset_path)
+	# ⚠️ **`signs_text_atlas` stands on its own, not nested under `signs`.** The
+	# two are written together and a bundle with one and not the other is broken,
+	# but this function is the definition of what the bundle contains — folding
+	# the pair into one test would hide the asymmetric case from the only list
+	# that could show it.
+	for key: String in OPTIONAL_ASSET_KEYS:
+		var named: String = optional_path(key)
+		if not named.is_empty():
+			paths.append(named)
 	for tile: Tile in tiles:
 		paths.append_array(tile.lods)
 	# One file per chunk (`P5-6`), after the tiles — `etl/pipeline/export.py`'s

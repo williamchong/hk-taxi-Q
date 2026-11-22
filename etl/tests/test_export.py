@@ -43,6 +43,7 @@ from pipeline.export import (
     CITY_SCHEMA,
     LANDMARKS_NAME,
     LANDMARKS_SCHEMA,
+    OPTIONAL_ASSET_KEYS,
     _is_stub,
     build_region,
     read_manifest,
@@ -1596,3 +1597,12 @@ class TestStub:
 
     def test_an_edge_the_graph_does_not_hold_is_not(self) -> None:
         assert not _is_stub(None, {1: 0})
+
+
+def test_the_game_reads_the_same_optional_keys_in_the_same_order() -> None:
+    """`CityManifest.OPTIONAL_ASSET_KEYS` mirrors `OPTIONAL_ASSET_KEYS`: a key one
+    side lacks is an asset the game never loads, or one it lists and never ships."""
+    source = (Path(__file__).parents[2] / "game/scripts/city/city_manifest.gd").read_text()
+    block = source.split("const OPTIONAL_ASSET_KEYS: PackedStringArray = [", 1)[1].split("]", 1)[0]
+    game = [line.strip().strip(",").strip('"') for line in block.splitlines() if line.strip()]
+    assert game == list(OPTIONAL_ASSET_KEYS)

@@ -377,8 +377,9 @@ DOCUMENT_KEYS = ("road_graph", "fares", "landmarks", "fence", "basemap")
 # ⚠️ **A tuple because this was seven hand-written copies of one `if`**, and the
 # repo's own trigger — `mesh_contract.gd`'s "a third copy should force it"
 # (`Q58`) — had been quoted in the commit that added the seventh. A new asset is
-# now one row here, and `game/scripts/city/city_manifest.gd`'s `shipped()` holds
-# the same list in the same order so the two can be read as mirrors.
+# now one row here and one in `game/scripts/city/city_manifest.gd`'s
+# `OPTIONAL_ASSET_KEYS`, which `test_export.py` holds to the same names in the
+# same order.
 OPTIONAL_ASSET_KEYS = (
     "tramway",
     "arrows",
