@@ -1443,12 +1443,10 @@ func _drive(system: TrafficSystem, at_signals: bool, routed: bool = false) -> vo
 						dwell_away += 1
 			if routed and car.kind == minibus:
 				minibus_looked += 1
-				var livery: PackedColorArray = (
-					system.profile.route_liveries[MINIBUS]
-					if car.routed
-					else system.profile.wander_liveries[MINIBUS]
+				var liveries: Dictionary[String, PackedColorArray] = (
+					system.profile.route_liveries if car.routed else system.profile.wander_liveries
 				)
-				if not car.livery.is_equal_approx(Color(livery[0], 1.0)):
+				if not _wears(car, minibus, liveries):
 					minibus_wrong += 1
 			if car.speed > car.cruise_mps + SPEED_SLACK_MPS:
 				too_fast += 1
@@ -1736,6 +1734,16 @@ func _drive(system: TrafficSystem, at_signals: bool, routed: bool = false) -> vo
 		system.step(TICK_S)
 	_check_near(system)
 	_check_horn(system)
+	if routed:
+		var staged: Vector2i = _stage_minibuses(system)
+		_expect(
+			staged == Vector2i.ONE,
+			"route",
+			(
+				"a minibus staged on a route wears green and one staged wandering red (routed %d, wandering %d)"
+				% [staged.x, staged.y]
+			)
+		)
 
 
 ## A honk's pattern (`P3-79`): every draw inside its reason's ranges, a cross
@@ -2157,15 +2165,70 @@ func _check_routed(
 		)
 	)
 	# Every tick of the drive, not its last: the census draws a wandering minibus
-	# rarely (`Q186`), so one may not be standing when the drive ends.
+	# rarely (`Q186`), and the six routed slots may all draw a bus (seed 23 once the
+	# MTR exits moved the parked fleet), so the drive may see none: `_stage_minibuses`
+	# spawns one of each after the staged checks (`Q270`).
 	_expect(
-		minibus_looked > 0 and minibus_wrong == 0,
+		minibus_wrong == 0,
 		"route",
 		(
-			"a routed minibus wears green and a wandering one red (%d car-ticks, %d wrong)"
+			"a routed minibus wears green and a wandering one red as driven (%d car-ticks, %d wrong)"
 			% [minibus_looked, minibus_wrong]
 		)
 	)
+
+
+## A minibus spawned on a route and one drawn wandering, each by the fleet's own
+## spawn: a routed slot retired and placed at a stop of a minibus route, a
+## wandering car retired and redrawn at the first life its mix draws a minibus.
+## 1 where each was drawn a minibus in its own livery, else 0. It leaves the fleet
+## changed: the drive's last step.
+static func _stage_minibuses(system: TrafficSystem) -> Vector2i:
+	var minibus: int = system._kinds.find(MINIBUS)
+	var found := Vector2i.ZERO
+	if minibus < 0:
+		return found
+	var fleet: TrafficRouted = system.route_fleet
+	var pool: Array[Vector2i] = []
+	for at: Vector2i in fleet._spawn_pool:
+		if system.bus_routes.routes[at.x].kind == MINIBUS:
+			pool.append(at)
+	# Mid-ring from each stop in turn: the one stop offered, so the draw is that stop.
+	var ring_m: float = (system.profile.spawn_min_m + system.profile.spawn_max_m) * 0.5
+	fleet._spawn_weights = PackedFloat32Array([1.0])
+	for car: TrafficSystem.Car in system.cars:
+		if not car.routed or pool.is_empty():
+			continue
+		system._retire(car)
+		for at: Vector2i in pool:
+			var stop: BusRoutes.Stop = system.bus_routes.routes[at.x].stops[at.y]
+			var length_m: float = system.graph.plan_length_of(stop.edge)
+			var pole: Vector3 = system.graph.lane_at(
+				stop.edge, TrafficSystem._edge_m(stop.travel_m, length_m, stop.along), stop.along
+			)
+			fleet._spawn_pool.assign([at])
+			fleet.try_spawn(car, pole + Vector3.RIGHT * ring_m)
+			if car.live:
+				break
+		found.x = int(car.live and _wears(car, minibus, system.profile.route_liveries))
+		break
+	for car: TrafficSystem.Car in system.cars:
+		if car.routed or car.kind == minibus:
+			continue
+		for lives: int in 64:
+			if system.fleet_mix.kind_for(car.id, lives) == minibus:
+				system._retire(car)
+				system._redraw(car, lives)
+				found.y = int(_wears(car, minibus, system.profile.wander_liveries))
+				return found
+	return found
+
+
+## Whether `car` is a `minibus` in `liveries`' minibus colour.
+static func _wears(
+	car: TrafficSystem.Car, minibus: int, liveries: Dictionary[String, PackedColorArray]
+) -> bool:
+	return car.kind == minibus and car.livery.is_equal_approx(Color(liveries[MINIBUS][0], 1.0))
 
 
 ## A box's plan rectangle: its centre, then its two half-axes.

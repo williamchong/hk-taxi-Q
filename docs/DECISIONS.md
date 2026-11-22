@@ -3947,3 +3947,25 @@ theme colors according to model", reshaped the same day after three street entra
   game; a frame at a station may add 3–8. Split into a plate a station and a glyph a letter if a
   measurement there says so.
 - Owed: the user's look and the colours' correction; the handset's frame time at a station.
+
+## `Q270` — A car stopped part way across lanes keeps only straight on
+
+**Status.** Decided 2026-11-22, on `P3-106`'s rebuilt bundle breaking `verify_traffic` drive3 and
+drive4.
+
+- drive3 (seed 7, Wan Chai): a car making for lane 0 and a left turn off e72 was blocked by the car
+  beside it at lane 0.248, stood there 26 m, and on the replan kept its turn: `_replan_for_lane`
+  took "already in the move's lane" as `same_lane` (under `SAME_LANE` 0.75), so a quarter-lane
+  short counted as in lane 0. The turn swung its tail into the straight-on car in lane 1, 0.752
+  lanes away (12 car-ticks, one meeting). The replan now keeps a move only when the car stands
+  exactly in its lane, so a car stopped between lanes takes straight on from where it is: the
+  missed turn the code's own comment promised. drive3 0 meetings after.
+- drive4 (seed 23, routed, 08:00) drew no minibus at all: six routed buses for the whole 58 s and
+  no wandering minibus at the census's 08:00 share. The livery line rested on a seed's luck, so a
+  routed minibus (each minibus stop offered in turn, through `TrafficRouted.try_spawn`) and a
+  wandering one (`_redraw` at the first life `kind_for` draws a minibus) are staged after the
+  drive. Mutation-checked: each palette swapped fails its own half only.
+- The whole `verify_traffic` output before and after the replan, every part in both regions: 12 of
+  16 parts move (a replan's rolls move every later car); signalled meetings Wan Chai drive3 1 → 0,
+  drive4 (printed, not gated, `Q182`) 2 → 3, every other drive 0 both sides; no other check fails.
+- Not a seed swap, and no tuning moved (`signals.md`: never retune to clear an overlap).

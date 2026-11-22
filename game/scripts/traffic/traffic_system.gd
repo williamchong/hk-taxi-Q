@@ -1667,7 +1667,10 @@ func _join_blocked(car: Car, from: float, to: float) -> bool:
 
 
 ## Up to `REPLAN_TRIES` other moves, the first whose lane the car is already in
-## kept; where none is, the first plan stands.
+## kept; where none is, the first plan stands. A car stopped part way across is in
+## no lane, so only straight on from where it stands is kept: under `SAME_LANE` a
+## quarter-lane short of a left turn's lane counted as in it, and the turn swung
+## its tail into the car beside (seed 7, Wan Chai's e72).
 func _replan_for_lane(car: Car) -> void:
 	var kept: Array = [
 		car.next_edge,
@@ -1683,8 +1686,7 @@ func _replan_for_lane(car: Car) -> void:
 	]
 	for _try: int in REPLAN_TRIES:
 		_plan_move(car)
-		if car.next_edge >= 0 and same_lane(car.lane, car.lane_out):
-			car.lane_out = car.lane
+		if car.next_edge >= 0 and is_equal_approx(car.lane, car.lane_out):
 			return
 	car.next_edge = kept[0]
 	car.next_along = kept[1]

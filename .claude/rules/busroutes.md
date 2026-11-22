@@ -40,7 +40,8 @@ game drives the legs on the legal router, and `tools/bus_legs.py` grades them.
 - `TrafficRouted.aim` runs one uncached `goal_tree` (~0.7 ms) per stop tried, on a departure only;
   cache by stop only if `stops_unreachable` rises.
 - **The colour is the licence** (`Q167`): a wandering minibus wears `wander_liveries` (red), a
-  routed one `route_liveries` (green), the bus none. `route:` livery line.
+  routed one `route_liveries` (green), the bus none. `route:` livery line: the drive's car-ticks
+  plus one of each staged (`_stage_minibuses`, `Q270`), since a seed can draw neither.
 - A knocked bus leaves its route and wanders (`TrafficRouted.leave_route`); its mass is
   `parked.tres` `masses_kg["bus"]`.
 - **A bus parks only at a terminus** (`Q187`): `parked.terminals` reads this stage's

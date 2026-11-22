@@ -108,6 +108,7 @@ By `verify_traffic` line:
 - `queue:` — the lane is the turn's (left nearside, right offside); a lane change needs room to
   stop from the closing speed (`_lane_blocked`, `_moving_onto`); a car ahead on its own edge is as
   far as the road says (`_leads_on_edge`).
+  A replan keeps a move only from exactly its lane (`Q270`): never `same_lane` there.
 - `parked:` — a parked vehicle is a car ahead that never moves, read off `ParkedLayer.is_standing`.
 - `near:` — `near_cars` is what the near miss reads (`Q175`). `FareSystem` finds the system by
   `GROUP`, so `--traffic=off` leaves none.
