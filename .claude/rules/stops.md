@@ -36,3 +36,11 @@ and `signs.py` TD's own `TS324` taxi stand plate.
   wide. Moving `trams.tres`' body or `tramway.lines` owes a frame of a tram at a stop.
 - The material is the signs' (`SIGNS_MATERIAL`, `signs.tres`); `STOPS_MATERIAL` in
   `verify_stops.gd` moves with it.
+- **A station exit's portal** (`P3-107`, `Q269`): one library mesh an exit (`exit_<node id>`),
+  drawn on the shipped tile wall nearest `fares.json`'s `station_exit` within `wall_reach_m`, the
+  wall facing its road preferred. A frame of one from its road after any change to `walls` /
+  `exit_stand` / the block, and `stops.json`'s `exit_signs` (`on_wall` / `on_post`) and
+  `exit_wall_m`. The stage now reads the tiles, so it needs `carve`. The station's colour is its
+  `fares.stations.table` row's, a NAME in `signs.colours`; the lettering is `roadtext.Face` set by
+  `fascia_zh` / `fascia_en`, and a character the font lacks stops the build. On a wall the mesh's
+  foot is below its origin, so `post_of` stands no collider across the door; keep it so.

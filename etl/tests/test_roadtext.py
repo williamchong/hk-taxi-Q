@@ -8,8 +8,6 @@ import numpy as np
 import pytest
 import shapely
 import yaml
-from fontTools.fontBuilder import FontBuilder
-from fontTools.pens.ttGlyphPen import TTGlyphPen
 
 from pipeline.config import load_config
 from pipeline.drawnsurface import DrawnSurface
@@ -27,7 +25,7 @@ from pipeline.roadtext import (
     legend_lines,
 )
 from pipeline.surface import downward_facing
-from tests.helpers import CITY_YAML, ribbon_of
+from tests.helpers import CITY_YAML, ribbon_of, three_glyph_face
 
 # The block as `hong_kong.yaml` declares it, held here because the block is
 # optional by contract (`test_stopmarks.py`'s reason).
@@ -58,8 +56,6 @@ ROAD = {
     "elevation_level": 0,
 }
 
-EM = 1000
-
 
 def city_with(tmp_path, block: dict[str, Any] | None):
     document = yaml.safe_load(CITY_YAML)
@@ -76,48 +72,9 @@ def spec(tmp_path):
     return city_with(tmp_path, BLOCK).road_text
 
 
-def _square(pen: TTGlyphPen, x0: float, y0: float, x1: float, y1: float, *, clockwise: bool):
-    corners = [(x0, y0), (x0, y1), (x1, y1), (x1, y0)]
-    if not clockwise:
-        corners.reverse()
-    pen.moveTo(corners[0])
-    for corner in corners[1:]:
-        pen.lineTo(corner)
-    pen.closePath()
-
-
 @pytest.fixture(scope="module")
 def face(tmp_path_factory) -> Face:
-    """A three-glyph TrueType face: `O` a 500 x 700 box with a 200 x 300 hole,
-    `X` two boxes overlapping wound the same way — a variable font's strokes —
-    and a space. TrueType winds an outer contour clockwise."""
-    glyphs = {}
-    pen = TTGlyphPen(None)
-    glyphs[".notdef"] = pen.glyph()
-    pen = TTGlyphPen(None)
-    _square(pen, 0, 0, 500, 700, clockwise=True)
-    _square(pen, 150, 200, 350, 500, clockwise=False)
-    glyphs["O"] = pen.glyph()
-    pen = TTGlyphPen(None)
-    _square(pen, 0, 0, 400, 700, clockwise=True)
-    _square(pen, 200, 0, 600, 700, clockwise=True)
-    glyphs["X"] = pen.glyph()
-    glyphs["space"] = TTGlyphPen(None).glyph()
-
-    builder = FontBuilder(EM, isTTF=True)
-    builder.setupGlyphOrder(list(glyphs))
-    builder.setupCharacterMap({ord("O"): "O", ord("X"): "X", ord(" "): "space"})
-    builder.setupGlyf(glyphs)
-    builder.setupHorizontalMetrics(
-        {".notdef": (500, 0), "O": (600, 0), "X": (700, 0), "space": (250, 0)}
-    )
-    builder.setupHorizontalHeader(ascent=800, descent=-200)
-    builder.setupNameTable({"familyName": "Test", "styleName": "Regular"})
-    builder.setupOS2()
-    builder.setupPost()
-    path = tmp_path_factory.mktemp("face") / "test.ttf"
-    builder.save(str(path))
-    return Face(path, 700.0, 0.02)
+    return three_glyph_face(tmp_path_factory.mktemp("face") / "test.ttf")
 
 
 def area(triangles: np.ndarray) -> float:

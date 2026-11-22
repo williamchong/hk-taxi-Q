@@ -866,6 +866,10 @@ class TestStationExits:
         assert east["name"] == {"en": "East Station", "zh": "東站"}
         # The passenger names the exit, not a building.
         assert west["place"] == west["name"]
+        # What `stops.py` letters the sign from; nothing else carries the key.
+        assert west["exit"] == {"station": "West", "letter": "A1"}
+        assert east["exit"] == {"station": "East", "letter": None}
+        assert "exit" not in nodes[0]
         assert (west["pickup"], west["dropoff"], west["stand_category"]) == (False, True, None)
         assert west["nearest_edge"] == _FIRST_EDGE_ID
         assert report.exits_by_station == {"West": 1, "East": 1}

@@ -127,6 +127,12 @@ Phase 3 — `B2` and the road
   Times Square) on a generic animated shader; a neon tube round every board's face but a screen's at night
   in the board's own hue (+4,874 triangles in Wan Chai, 2026-11-22) — owed: the user's look, the
   handset, the screens' heights.
+- `P3-107` 🟡 MTR exit portals (`Q269`): each `station_exit` is drawn as a street entrance on the
+  shipped wall nearest it facing its road — a black fascia `灣仔站 Wan Chai Station`, jambs in the
+  station's colour round a dark doorway, the exit letter white on blue beside it, no logo; Wan
+  Chai 17 and Causeway Bay 3, all on a wall (max 4.4 m), ~13,300 triangles in Wan Chai — owed:
+  the user's look and the nine station colours (guesses but Mong Kok's and Wan Chai's), the
+  handset's frame time at a station.
 - `P3-106` 🟡 MTR exits as destinations (`Q268`): iB1000's `RailwayEntrance` exits, each named by
   the one station of `fares.stations.table` within 250 m ("Causeway Bay Station Exit F1" /
   "銅鑼灣站F1出口"), drop-off only, within 25 m of a road; Wan Chai 17 of 20, Causeway Bay 3, Mong Kok 14, Sha Tin 4 of 5 —

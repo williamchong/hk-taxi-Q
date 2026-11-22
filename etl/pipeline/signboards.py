@@ -451,11 +451,7 @@ def snap(
     report.snap_m.append(distance)
     normal = walls.normal[index]
     tangent = np.array([-normal[1], normal[0]])
-    outside = foot + normal * 1.0
-    under = ground.heights(float(outside[0]), float(outside[1]))
-    low = float(walls.low[index])
-    below = under[under <= low + 1.0]
-    ground_y = float(below.max()) if len(below) else low
+    ground_y = wall_ground_y(walls, ground, index, foot)
     return Placed(
         board=board,
         foot=foot,
@@ -464,6 +460,16 @@ def snap(
         ground_y=ground_y,
         wall_top_y=float(walls.high[index]),
     )
+
+
+def wall_ground_y(walls: Walls, ground: Faces, index: int, foot: np.ndarray) -> float:
+    """The ground a metre out from wall `index` at `foot`: the highest the tiles
+    draw no more than a metre over the wall's own foot, else that foot."""
+    outside = foot + walls.normal[index] * 1.0
+    under = ground.heights(float(outside[0]), float(outside[1]))
+    low = float(walls.low[index])
+    below = under[under <= low + 1.0]
+    return float(below.max()) if len(below) else low
 
 
 def _overlaps(spec: Signboards, one: Placed, other: Placed) -> bool:

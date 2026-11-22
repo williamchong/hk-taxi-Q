@@ -476,6 +476,8 @@ spot is `{id, pos, kind: "street", nearest_edge, edge_t, side, pickup, dropoff, 
 - `poi` is TD's tram stops: `name` null in both languages, `pickup` and `dropoff` both false.
 - `station_exit` (`Q268`) is an MTR exit, named by its station and letter; `place` is the same
   name, and it is a drop-off only. Appended after the published points.
+  It alone carries `exit: {station, letter}` (`Q269`): the table row's `en` and the publisher's
+  letter or null, which `stops.py` letters the exit's sign from.
 - Honour `pickup`: a quarter of published PUDO points are drop-off only.
 - `street`: a kerb a passenger flags a cab at, every `fares.street.spacing_m` along a level-0 edge
   clear of junctions, no-stopping runs and bus lanes, beside a named building (`place` never null).

@@ -2176,6 +2176,20 @@ signs:
     # plotter's pen; this is the plate's own darker green at the livery's
     # saturation. Authored — the user's to move.
     green: "#1f8a4c"
+    # Each station's colour on its exit signs (`P3-107`), named in
+    # `fares.stations.table`. ⚠️ AUTHORED ESTIMATES, the user's to correct: no
+    # dataset publishes a station's colour. Mong Kok's red is the one a source
+    # states (SCMP 2016); Wan Chai's olive is zh.wikipedia's 橄欖綠; every other
+    # is read off memory of the platform walls and is a guess.
+    mtr_wan_chai: "#7a8b2f"
+    mtr_exhibition_centre: "#3b8fb0"
+    mtr_causeway_bay: "#7a4b9a"
+    mtr_tin_hau: "#d9822b"
+    mtr_mong_kok: "#c8302f"
+    mtr_yau_ma_tei: "#7d7f85"
+    mtr_mong_kok_east: "#9aa0a6"
+    mtr_sha_tin: "#4f9ac8"
+    mtr_sha_tin_wai: "#8c6d3f"
 
   # ---- dimensions, every one of them authored ----
   # ⚠️ **NO SIGN DIMENSION IS PUBLISHED.** Every TS index sheet is stamped "NOT
@@ -3296,6 +3310,48 @@ stops:
     roof_m: 0.12
     colour: green
     roof: green
+  # A station exit's portal (`P3-107`), after the street entrances the user
+  # sent (Central D1, Jordan, HKU): a dark fascia over the door lettered
+  # `灣仔站 Wan Chai Station` in white, a jamb of the station's colour each side
+  # (its `colour` in `fares.stations.table`), a steel trim under the fascia, the
+  # doorway dark as the stairwell, and the exit's letter white on blue on a
+  # plate beside the door. No logo and no word mark: the user's call,
+  # 2026-11-22. It is drawn on the wall the tiles already stand at the exit -
+  # 19 of the 42 exits are their own small block in iB1000 (12-161 m2, 2-6 m
+  # tall: a stair head) and 21 open from a larger building - and its fascia
+  # tops a post where no wall is in reach.
+  station_exit:
+    font_source: noto_sans_hk
+    font_weight: 700
+    # Coarser than the road lettering's 0.02: a fascia's name is a hand's
+    # height, and every curve is triangles on a mobile budget.
+    flatten_em: 0.05
+    # Wan Chai A3 is surveyed 4.4 m behind the wall facing its road, which a
+    # post at its point stood behind; every other exit is within 2.6 m of one.
+    wall_reach_m: 5.0
+    # Metres of distance traded for a wall facing straight away from the road:
+    # past `wall_reach_m`, so a wall in reach facing the road always wins.
+    facing_weight_m: 6.0
+    # A stair head's opening, two abreast; a wall too low for the door and its
+    # fascia takes the fascia at its brow and a shorter door.
+    door_width_m: 2.4
+    door_height_m: 2.5
+    jamb_m: 0.3
+    fascia_m: 0.6
+    depth_m: 0.15
+    letter_m: 0.45
+    letter_mount_m: 1.7
+    # Off the most proud wall facing its way across its width.
+    off_wall_m: 0.03
+    lift_m: 0.006
+    fascia_zh: "{station}站"
+    fascia_en: "{station} Station"
+    fascia: black
+    opening: black
+    trim: grey
+    ink: white
+    letter_ground: blue
+    letter_ink: white
 
 # Pedestrian railings, drawn as their own geometry (P3-19, Q60).
 #
@@ -5225,15 +5281,15 @@ fares:
     pickup: false
     dropoff: true
     table:
-      - {en: Wan Chai, zh: 灣仔, at: [114.1731, 22.2775]}
-      - {en: Exhibition Centre, zh: 會展, at: [114.1755, 22.2814]}
-      - {en: Causeway Bay, zh: 銅鑼灣, at: [114.1840, 22.2803]}
-      - {en: Tin Hau, zh: 天后, at: [114.1919, 22.2827]}
-      - {en: Mong Kok, zh: 旺角, at: [114.1694, 22.3196]}
-      - {en: Yau Ma Tei, zh: 油麻地, at: [114.1705, 22.3131]}
-      - {en: Mong Kok East, zh: 旺角東, at: [114.1725, 22.3221]}
-      - {en: Sha Tin, zh: 沙田, at: [114.1876, 22.3827]}
-      - {en: Sha Tin Wai, zh: 沙田圍, at: [114.1950, 22.3771]}
+      - {en: Wan Chai, zh: 灣仔, at: [114.1731, 22.2775], colour: mtr_wan_chai}
+      - {en: Exhibition Centre, zh: 會展, at: [114.1755, 22.2814], colour: mtr_exhibition_centre}
+      - {en: Causeway Bay, zh: 銅鑼灣, at: [114.1840, 22.2803], colour: mtr_causeway_bay}
+      - {en: Tin Hau, zh: 天后, at: [114.1919, 22.2827], colour: mtr_tin_hau}
+      - {en: Mong Kok, zh: 旺角, at: [114.1694, 22.3196], colour: mtr_mong_kok}
+      - {en: Yau Ma Tei, zh: 油麻地, at: [114.1705, 22.3131], colour: mtr_yau_ma_tei}
+      - {en: Mong Kok East, zh: 旺角東, at: [114.1725, 22.3221], colour: mtr_mong_kok_east}
+      - {en: Sha Tin, zh: 沙田, at: [114.1876, 22.3827], colour: mtr_sha_tin}
+      - {en: Sha Tin Wai, zh: 沙田圍, at: [114.1950, 22.3771], colour: mtr_sha_tin_wai}
 
   # Street hails (the user's ask, 2026-11-12): a passenger at any kerb no
   # restriction covers, beside a named building, on a road with no bus lane.

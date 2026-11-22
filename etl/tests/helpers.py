@@ -16,6 +16,8 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
+from fontTools.fontBuilder import FontBuilder
+from fontTools.pens.ttGlyphPen import TTGlyphPen
 from pyogrio.raw import write as _ogr_write
 
 from pipeline.basemap import BASEMAP_NAME, BASEMAP_SCHEMA
@@ -24,6 +26,7 @@ from pipeline.crs import GameTransform
 from pipeline.documents import write_document
 from pipeline.gltf import MeshData
 from pipeline.podiums import PODIUMS_NAME, PODIUMS_SCHEMA
+from pipeline.roadtext import Face
 from pipeline.terrain import HeightField
 
 # The six faces of an axis-aligned box, over corners ordered x-outer, y-middle,
@@ -559,3 +562,49 @@ def write_basemap(
         },
     )
     return out_dir
+
+
+# The glyph face `test_roadtext` and `test_stops` letter with: font units an em.
+EM = 1000
+
+
+def _square(pen: TTGlyphPen, x0: float, y0: float, x1: float, y1: float, *, clockwise: bool):
+    corners = [(x0, y0), (x0, y1), (x1, y1), (x1, y0)]
+    if not clockwise:
+        corners.reverse()
+    pen.moveTo(corners[0])
+    for corner in corners[1:]:
+        pen.lineTo(corner)
+    pen.closePath()
+
+
+def three_glyph_face(path: Path) -> Face:
+    """A three-glyph TrueType face: `O` a 500 x 700 box with a 200 x 300 hole,
+    `X` two boxes overlapping wound the same way — a variable font's strokes —
+    and a space. TrueType winds an outer contour clockwise."""
+    glyphs = {}
+    pen = TTGlyphPen(None)
+    glyphs[".notdef"] = pen.glyph()
+    pen = TTGlyphPen(None)
+    _square(pen, 0, 0, 500, 700, clockwise=True)
+    _square(pen, 150, 200, 350, 500, clockwise=False)
+    glyphs["O"] = pen.glyph()
+    pen = TTGlyphPen(None)
+    _square(pen, 0, 0, 400, 700, clockwise=True)
+    _square(pen, 200, 0, 600, 700, clockwise=True)
+    glyphs["X"] = pen.glyph()
+    glyphs["space"] = TTGlyphPen(None).glyph()
+
+    builder = FontBuilder(EM, isTTF=True)
+    builder.setupGlyphOrder(list(glyphs))
+    builder.setupCharacterMap({ord("O"): "O", ord("X"): "X", ord(" "): "space"})
+    builder.setupGlyf(glyphs)
+    builder.setupHorizontalMetrics(
+        {".notdef": (500, 0), "O": (600, 0), "X": (700, 0), "space": (250, 0)}
+    )
+    builder.setupHorizontalHeader(ascent=800, descent=-200)
+    builder.setupNameTable({"familyName": "Test", "styleName": "Regular"})
+    builder.setupOS2()
+    builder.setupPost()
+    builder.save(str(path))
+    return Face(path, 700.0, 0.02)

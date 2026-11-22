@@ -221,6 +221,10 @@ class Station:
     zh: str
     lon: float
     lat: float
+    # The station's colour on its exit signs (`P3-107`): a NAME in
+    # `signs.colours`, which `stops.py` resolves. None where the table gives none,
+    # and then `stops.py` refuses to draw that station's signs.
+    colour: str | None = None
 
 
 @dataclass(frozen=True)
@@ -390,6 +394,7 @@ def _station(row: dict[str, Any], where: str) -> Station:
         zh=str(_require(row, "zh", where)),
         lon=float(lon),
         lat=float(lat),
+        colour=None if row.get("colour") is None else str(row["colour"]),
     )
 
 

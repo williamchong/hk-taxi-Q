@@ -3916,3 +3916,34 @@ routable level. Nothing was left to build. What was missing was a witness: `veri
   3 (Tin Hau), Mong Kok 14, Sha Tin 4 of 5. The existing 48 / 7 / 28 / 4 nodes and every street
   spot are byte-identical to `HEAD`'s.
 - Owed: the user's fares driven to an exit.
+
+## `Q269` — An MTR exit wears a portal in its station's colour on the wall the 3D map draws there
+
+**Status.** Built 2026-11-22 (`P3-107`) on the user's ask, "draw mtr exits with signs and station
+theme colors according to model", reshaped the same day after three street entrances the user sent
+(Central D1, Jordan, HKU); the colours are open for the user to correct.
+
+- The model already draws the exit. Against iB1000's footprints, 19 of the four regions' 42 exits
+  are their own small block (12–161 m², 2–6 m tall: a stair head), 21 open from a larger
+  building and 2 stand beside a podium. So no block is stood: the portal is drawn on the shipped
+  tile wall nearest the surveyed exit within `wall_reach_m` 5 m, a wall facing the exit's road
+  winning (`facing_weight_m` 6 m > the reach), inside the wall's ends, its fascia under the
+  wall's brow, and out past any wall facing its way across its width (a recess the 3D map draws
+  out of plane buried Causeway Bay F1 flush). Where no wall is in reach the fascia tops a post;
+  none does in the two driven regions (20 of 20 on a wall, the furthest 4.4 m: Wan Chai A3 behind
+  its podium's face).
+- The portal, after the photos: a black fascia lettered `灣仔站 Wan Chai Station` in white, a grey
+  trim under it, a jamb of the station's colour each side of a 2.4 x 2.5 m doorway dark as the
+  stairwell, and the exit letter white on blue on a plate beside the door. No MTR logo and no
+  word mark: the user's call. The lettering is Noto Sans HK outlines as triangles
+  (`roadtext.Face`) on the signs' material: no atlas, no new material, no `city.json` field.
+  ~13,300 triangles for Wan Chai's 17.
+- The colour is the station table row's `colour`, a name in `signs.colours`. ⚠️ Authored
+  estimates: no dataset publishes a station's colour. Mong Kok red is SCMP's (2016), Wan Chai olive
+  zh.wikipedia's 橄欖綠; the other seven are guesses.
+- `fares.json` gains `exit: {station, letter}` on `station_exit` nodes only, so every other node's
+  bytes are unchanged and the schema stays 1: a reader that ignores it is not wrong.
+- One library mesh an exit (its letter and station are its own), so one draw call each in the
+  game; a frame at a station may add 3–8. Split into a plate a station and a glyph a letter if a
+  measurement there says so.
+- Owed: the user's look and the colours' correction; the handset's frame time at a station.

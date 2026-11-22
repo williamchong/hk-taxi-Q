@@ -267,7 +267,7 @@ NEEDS: dict[str, tuple[str, ...]] = {
     "tramlines": ("tramway", "fares", "signals", "railings", "signs", "lamps", "trees"),
     "busroutes": ("surface",),
     "parked": ("surface", "fares", "tramlines", "fence", "busroutes"),
-    "stops": ("surface", "fares", "tramlines", "busroutes"),
+    "stops": ("carve", "surface", "fares", "tramlines", "busroutes"),
     "planters": ("carve", "surface"),
     "paths": ("carve", "surface"),
     "signboards": ("carve", "surface"),

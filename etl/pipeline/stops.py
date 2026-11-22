@@ -16,6 +16,13 @@ draws the paint TD surveyed; this stands what nothing publishes.
 - **A shelter stands on the left of its track**, the side a tram's doors open
   on. Its roof hangs and its two posts are their own mesh, so the engine stands
   a collider under each post and none under the roof (the user's call).
+- **A station exit's sign** (`P3-107`) hangs on the wall the shipped tiles
+  draw nearest the exit's surveyed point — the stair head the 3D map already
+  models, or the building the exit opens from — the wall facing the exit's road
+  preferred; where no wall is in reach it tops a post. The plate is the
+  station's colour (`fares.stations.table`'s `colour`), its lettering Noto Sans
+  HK as geometry, so it rides the signs' material and needs no atlas. No
+  operator's logo or word mark.
 - The library is `signs.glb`'s shape (`placements.Library`): a mesh a kind, a
   unit `pole` scaled to its height. `region.tscn` stands a collider on every
   `pole` and every shelter post, the two meshes drawn standing on their origin.
@@ -39,10 +46,21 @@ from pipeline.busroutes import (
     BUSROUTES_MANIFEST_SCHEMA,
 )
 from pipeline.config import Config, Stops, load_config
-from pipeline.config_blocks.stops import BUS, MINIBUS, POLE_KINDS, TAXI, StopFlag, TramShelter
+from pipeline.config_blocks.fares import Station
+from pipeline.config_blocks.stops import (
+    BUS,
+    MINIBUS,
+    POLE_KINDS,
+    TAXI,
+    ExitSign,
+    StopFlag,
+    TramShelter,
+)
+from pipeline.direction_signs import box
 from pipeline.documents import read_document, write_document
 from pipeline.drawnroad import Ribbon, drawn_carriageway, kerbed_ribbons
-from pipeline.fares import FARES_NAME, FARES_SCHEMA
+from pipeline.fares import FARES_NAME, FARES_SCHEMA, STATION_EXIT
+from pipeline.fetch import cached_source
 from pipeline.gltf import MeshData
 from pipeline.meshbuild import ColouredBuilder
 from pipeline.placements import Placement, placement, stand_library
@@ -50,6 +68,8 @@ from pipeline.polyline import Segments, Snap, bearing_deg, frame, plan_lengths
 from pipeline.railings import facing_away
 from pipeline.report import tail_of
 from pipeline.roads import ROADGRAPH_NAME, read_graph
+from pipeline.roadtext import Face
+from pipeline.signboards import Walls, shipped_walls, wall_ground_y
 from pipeline.signs import SIGNS_MATERIAL, facing_from_side
 from pipeline.surface import SURFACE_MANIFEST_NAME, SURFACE_MANIFEST_SCHEMA
 from pipeline.tramlines import (
@@ -57,6 +77,7 @@ from pipeline.tramlines import (
     TRAMLINES_MANIFEST_NAME,
     TRAMLINES_MANIFEST_SCHEMA,
 )
+from pipeline.trees import Faces
 
 log = logging.getLogger(__name__)
 
@@ -83,6 +104,14 @@ NO_RIBBON = "no_ribbon"
 OVER_SHIFT = "over_shift"
 IN_CARRIAGEWAY = "in_carriageway"
 NO_TRACK = "no_track"
+NO_STATION = "no_station"
+NO_COLOUR = "no_colour"
+
+# A station exit's sign, by where it hangs: counted in `stops.json`.
+ON_WALL = "on_wall"
+ON_POST = "on_post"
+
+_UP = np.array([0.0, 1.0, 0.0])
 
 
 @dataclass
@@ -98,6 +127,9 @@ class StopReport:
     stood: dict[str, int] = field(default_factory=dict)
     refused: dict[str, dict[str, int]] = field(default_factory=dict)
     posts_kept_as_surveyed: int = 0
+    # Each station exit's sign by where it hangs, and how far its wall is.
+    exit_signs: dict[str, int] = field(default_factory=dict)
+    exit_wall_m: list[float] = field(default_factory=list)
     shift_m: list[float] = field(default_factory=list)
     facing_away: int = 0
 
@@ -207,12 +239,29 @@ def tram_stands(
 Rgb = tuple[int, int, int]
 
 
+def station_table(city: Config) -> tuple[Station, ...]:
+    """`fares.stations.table`, or none where the city reads no stations."""
+    stations = city.fares.stations
+    return stations.table if stations is not None else ()
+
+
 def liveries(city: Config, spec: Stops) -> dict[str, Rgb]:
     """`signs.colours`, once every name the `stops:` block uses is found in it."""
     table = city.signs.colours if city.signs is not None else {}
     used = {spec.pole} | {c for flag in spec.flags.values() for c in (flag.colour, flag.band)}
     if spec.tram is not None:
         used |= {spec.tram.colour, spec.tram.roof}
+    sign = spec.station_exit
+    if sign is not None:
+        used |= {
+            sign.fascia,
+            sign.opening,
+            sign.trim,
+            sign.ink,
+            sign.letter_ground,
+            sign.letter_ink,
+        }
+        used |= {s.colour for s in station_table(city) if s.colour is not None}
     missing = sorted(used - set(table))
     if missing:
         raise ValueError(f"stops: {missing} are not colours in signs.colours ({', '.join(table)})")
@@ -309,6 +358,279 @@ def shelter_posts(
     return [foot - step, foot + step]
 
 
+@dataclass(frozen=True)
+class ExitStand:
+    """Where one station exit's portal stands: its fascia's middle `(x, y, z)`
+    in the frame's plane, its outward plan normal, the ground under it, and whether it tops a post
+    (both faces lettered) or hangs on a wall (the face away from it only)."""
+
+    middle: np.ndarray
+    out: np.ndarray
+    ground_y: float
+    on_post: bool
+
+
+def road_point(edges: dict[int, dict[str, Any]], node: dict[str, Any]) -> np.ndarray:
+    """The plan point on the node's road where the taxi stops for it."""
+    plan = [(point[0], point[2]) for point in edges[int(node["nearest_edge"])]["polyline"]]
+    line = shapely.LineString(plan)
+    stop = line.interpolate(float(node["edge_t"]), normalized=True)
+    return np.array([stop.x, stop.y])
+
+
+def exit_stand(
+    sign: ExitSign,
+    at: np.ndarray,
+    road_y: float,
+    road: np.ndarray,
+    walls: Walls,
+    ground: Faces,
+    report: StopReport,
+) -> ExitStand:
+    """The wall the exit's sign hangs on, or the post it tops.
+
+    A wall within `wall_reach_m` whose foot is near the road's height, the one
+    facing the road preferred by `facing_weight_m`; none, and a post stands at
+    the surveyed point facing the road."""
+    toward = road - at
+    length = float(np.linalg.norm(toward))
+    toward = toward / length if length > 1e-6 else np.array([0.0, -1.0])
+    candidates = [
+        entry
+        for entry in walls.near(float(at[0]), float(at[1]), sign.wall_reach_m)
+        if walls.low[entry[0]] <= road_y + sign.door_height_m
+    ]
+    if candidates:
+
+        def cost(entry: tuple[int, float, np.ndarray]) -> float:
+            index, distance, _ = entry
+            return distance + sign.facing_weight_m * (
+                1.0 - float(np.dot(walls.normal[index], toward))
+            )
+
+        index, distance, foot = min(candidates, key=lambda entry: (cost(entry), entry[0]))
+        out = walls.normal[index]
+        # Along the wall, inside its ends: a plate past them runs into the
+        # return of a recess the 3D map models round a doorway.
+        a, b = walls.a[index], walls.b[index]
+        span = float(np.linalg.norm(b - a))
+        along = (b - a) / span
+        reach = 0.5 * span - 0.5 * sign.width_m
+        share = float(np.dot(foot - a, along)) - 0.5 * span
+        foot = a + along * (
+            0.5 * span + (float(np.clip(share, -reach, reach)) if reach > 0 else 0.0)
+        )
+        ground_y = wall_ground_y(walls, ground, index, foot)
+        # Under the wall's top: a stair head the 3D map draws lower than the
+        # portal takes its fascia at its brow, the door shortened under it.
+        top = min(ground_y + sign.door_height_m + sign.fascia_m, float(walls.high[index]))
+        middle_y = max(top, ground_y + sign.fascia_m) - 0.5 * sign.fascia_m
+        # Out past every wall facing its way across its width: the 3D map draws
+        # some facades out of plane, and a plate laid on one triangle is
+        # buried by the next.
+        proud = 0.0
+        for end in (-0.5 * sign.width_m, 0.0, 0.5 * sign.width_m):
+            probe = foot + along * end
+            for other, _, nearest in walls.near(float(probe[0]), float(probe[1]), 1.0):
+                if float(np.dot(walls.normal[other], out)) > 0.9:
+                    proud = max(proud, float(np.dot(nearest - foot, out)))
+        plan = foot + out * (proud + sign.off_wall_m + 0.5 * sign.depth_m)
+        report.exit_signs[ON_WALL] = report.exit_signs.get(ON_WALL, 0) + 1
+        report.exit_wall_m.append(distance)
+        return ExitStand(np.array([plan[0], middle_y, plan[1]]), out, ground_y, on_post=False)
+    under = ground.heights(float(at[0]), float(at[1]))
+    near = under[np.abs(under - road_y) <= sign.door_height_m]
+    ground_y = float(near.max()) if len(near) else road_y
+    report.exit_signs[ON_POST] = report.exit_signs.get(ON_POST, 0) + 1
+    middle = np.array([at[0], ground_y + sign.door_height_m + 0.5 * sign.fascia_m, at[1]])
+    return ExitStand(middle, toward, ground_y, on_post=True)
+
+
+def _lettered(
+    builder: ColouredBuilder,
+    face: Face,
+    line: str,
+    middle: np.ndarray,
+    right: np.ndarray,
+    out: np.ndarray,
+    box: tuple[float, float],
+    colour: Rgb,
+) -> None:
+    """`line` set in `face`, as large as fits `box` (across, up), centred on
+    `middle` and facing `out`."""
+    triangles, extent = face.block([line], 0.0)
+    wide, tall = extent[2] - extent[0], extent[3] - extent[1]
+    if not len(triangles) or wide <= 0.0 or tall <= 0.0:
+        return
+    scale = min(box[0] / wide, box[1] / tall)
+    centre = np.array([0.5 * (extent[0] + extent[2]), 0.5 * (extent[1] + extent[3])])
+    for triangle in triangles:
+        local = (triangle - centre) * scale
+        points = middle + np.outer(local[:, 0], right) + np.outer(local[:, 1], _UP)
+        turn = np.dot(np.cross(points[1] - points[0], points[2] - points[0]), out)
+        if abs(turn) < 1e-12:
+            continue
+        builder.polygon(points if turn > 0.0 else points[::-1], out, colour)
+
+
+def _names(
+    builder: ColouredBuilder,
+    sign: ExitSign,
+    face: Face,
+    station: Station,
+    middle: np.ndarray,
+    right: np.ndarray,
+    out: np.ndarray,
+    box_m: tuple[float, float],
+    colour: Rgb,
+) -> None:
+    """`灣仔站 Wan Chai Station` on one line (`fascia_zh`, `fascia_en`), the
+    Chinese the taller, as an MTR fascia sets it, as large as fits `box_m` (across, up)."""
+    lines = (sign.fascia_zh.format(station=station.zh), sign.fascia_en.format(station=station.en))
+    tall = (0.62 * box_m[1], 0.32 * box_m[1])
+    natural = []
+    for line, height in zip(lines, tall, strict=True):
+        _, extent = face.block([line], 0.0)
+        natural.append(height * (extent[2] - extent[0]) / (extent[3] - extent[1]))
+    gap = 0.4 * tall[1]
+    shrink = min(1.0, box_m[0] / (sum(natural) + gap))
+    u = -0.5 * shrink * (sum(natural) + gap)
+    for line, height, wide in zip(lines, tall, natural, strict=True):
+        across = wide * shrink
+        _lettered(
+            builder,
+            face,
+            line,
+            middle + right * (u + 0.5 * across),
+            right,
+            out,
+            (across, height * shrink),
+            colour,
+        )
+        u += across + gap * shrink
+
+
+def exit_mesh(
+    name: str,
+    spec: Stops,
+    sign: ExitSign,
+    stand: ExitStand,
+    station: Station,
+    letter: str | None,
+    face: Face,
+    colours: dict[str, Rgb],
+) -> MeshData:
+    """One exit's portal in the library's frame: world axes, the origin at
+    the fascia's middle. On a wall the jambs reach down to the ground, and the
+    mesh's foot is below its origin, so the engine stands no collider across
+    the door (`PropBatch.post_of`); on a post the fascia tops the post and the
+    origin is the post's foot, which takes one."""
+    assert station.colour is not None  # `build_region` refuses a station with none
+    builder = ColouredBuilder(SIGNS_MATERIAL)
+    out = np.array([stand.out[0], 0.0, stand.out[1]])
+    right = np.cross(_UP, out)
+    half_w, half_f, half_d = 0.5 * sign.width_m, 0.5 * sign.fascia_m, 0.5 * sign.depth_m
+    lintel = stand.middle[1] - half_f - stand.ground_y
+    fascia = np.zeros(3)
+    if stand.on_post:
+        fascia = np.array([0.0, stand.middle[1] - stand.ground_y, 0.0])
+        post = 2.0 * spec.pole_radius_m
+        _box(
+            builder,
+            np.array([-post, 0.0, -post]),
+            np.array([post, fascia[1] - half_f, post]),
+            colours[sign.trim],
+        )
+    box(builder, fascia, (right * half_w, _UP * half_f, out * half_d), colours[sign.fascia])
+    faces = (1.0, -1.0) if stand.on_post else (1.0,)
+    if not stand.on_post:
+        # The jambs, the trim under the fascia and the dark doorway between.
+        half_door = 0.5 * sign.door_width_m
+        floor = fascia - _UP * (half_f + lintel)
+        for side in (-1.0, 1.0):
+            jamb = floor + right * side * (half_door + 0.5 * sign.jamb_m) + _UP * 0.5 * lintel
+            box(
+                builder,
+                jamb,
+                (right * 0.5 * sign.jamb_m, _UP * 0.5 * lintel, out * half_d),
+                colours[station.colour],
+            )
+        trim = fascia - _UP * (half_f - 0.04)
+        box(
+            builder,
+            trim + out * 0.01,
+            (right * half_w, _UP * 0.04, out * half_d),
+            colours[sign.trim],
+        )
+        door = floor + _UP * 0.5 * lintel - out * (half_d - 0.01)
+        box(
+            builder,
+            door,
+            (right * half_door, _UP * 0.5 * lintel, out * 0.01),
+            colours[sign.opening],
+        )
+        if letter:
+            # Beside the door on the wall, at eye height, as the street plates hang.
+            plate = (
+                floor
+                + right * -(half_w + 0.1 + 0.5 * sign.letter_m)
+                + _UP * min(sign.letter_mount_m, lintel - 0.5 * sign.letter_m)
+            )
+            half_l = 0.5 * sign.letter_m
+            box(
+                builder,
+                plate - out * (half_d - 0.02),
+                (right * half_l, _UP * half_l, out * 0.02),
+                colours[sign.letter_ground],
+            )
+            _lettered(
+                builder,
+                face,
+                letter,
+                plate - out * (half_d - 0.04 - sign.lift_m),
+                right,
+                out,
+                (0.7 * sign.letter_m, 0.7 * sign.letter_m),
+                colours[sign.letter_ink],
+            )
+    for facing in faces:
+        o, r = out * facing, right * facing
+        front = fascia + o * (half_d + sign.lift_m)
+        names_from = -half_w + 0.15 * sign.fascia_m
+        if letter and stand.on_post:
+            square = 0.8 * sign.fascia_m
+            at = front + r * (names_from + 0.5 * square)
+            corners = [
+                at + r * du * 0.5 * square + _UP * dv * 0.5 * square
+                for du, dv in ((-1, -1), (1, -1), (1, 1), (-1, 1))
+            ]
+            builder.polygon(np.array(corners), o, colours[sign.letter_ground])
+            _lettered(
+                builder,
+                face,
+                letter,
+                at + o * sign.lift_m,
+                r,
+                o,
+                (0.7 * square, 0.7 * square),
+                colours[sign.letter_ink],
+            )
+            names_from += square + 0.15 * sign.fascia_m
+        across = half_w - 0.15 * sign.fascia_m - names_from
+        _names(
+            builder,
+            sign,
+            face,
+            station,
+            front + r * (names_from + 0.5 * across),
+            r,
+            o,
+            (across, 0.8 * sign.fascia_m),
+            colours[sign.ink],
+        )
+    return _built(builder, name)
+
+
 def _built(builder: ColouredBuilder, name: str) -> MeshData:
     mesh = builder.build(name)
     assert mesh is not None  # a box of positive extent, by the config's own bars
@@ -375,6 +697,45 @@ def build_region(city: Config, region_id: str, *, out_root: Path | None = None) 
             report.stood[kind] = report.stood.get(kind, 0) + 1
         assert report.closes(kind), kind
 
+    sign = spec.station_exit
+    exits = [node for node in fares.get("nodes", []) if node["kind"] == STATION_EXIT]
+    if sign is not None and exits:
+        stations = {station.en: station for station in station_table(city)}
+        face = Face(cached_source(city, sign.font_source), sign.font_weight, sign.flatten_em)
+        walls, ground = shipped_walls(city, region_id, out_dir)
+        by_id = {int(edge["id"]): edge for edge in graph["edges"]}
+        for node in exits:
+            report.read[STATION_EXIT] = report.read.get(STATION_EXIT, 0) + 1
+            published = node.get("exit") or {}
+            station = stations.get(str(published.get("station")))
+            if station is None:
+                report.refuse(STATION_EXIT, NO_STATION)
+                continue
+            if station.colour is None:
+                report.refuse(STATION_EXIT, NO_COLOUR)
+                continue
+            lacking = face.lacks(
+                sign.fascia_zh.format(station=station.zh)
+                + sign.fascia_en.format(station=station.en)
+                + str(published.get("letter") or "")
+            )
+            if lacking:
+                raise ValueError(
+                    f"stops: {sign.font_source} cannot letter {sorted(lacking)} on "
+                    f"{station.en}'s exit sign"
+                )
+            at = np.array([node["pos"][0], node["pos"][2]], dtype=float)
+            stand = exit_stand(
+                sign, at, float(node["pos"][1]), road_point(by_id, node), walls, ground, report
+            )
+            name = f"exit_{node['id']}"
+            meshes[name] = exit_mesh(
+                name, spec, sign, stand, station, published.get("letter"), face, colours
+            )
+            origin = [at[0], stand.ground_y, at[1]] if stand.on_post else stand.middle
+            stands.append(placement(name, origin, 0.0))
+            report.stood[STATION_EXIT] = report.stood.get(STATION_EXIT, 0) + 1
+
     if spec.tram is not None:
         tracks = _published(
             out_dir,
@@ -397,10 +758,11 @@ def build_region(city: Config, region_id: str, *, out_root: Path | None = None) 
         report.facing_away = sum(facing_away(mesh) for mesh in library.meshes)
         library.publish(report)
         poles = sum(report.stood.get(kind, 0) for kind in POLE_KINDS)
+        signs = report.stood.get(STATION_EXIT, 0)
         library.require_every_stand(
-            2 * poles + 3 * report.stood.get(TRAM_MESH_NAME, 0),
-            f"{poles} flags on their poles and {report.stood.get(TRAM_MESH_NAME, 0)} shelters "
-            f"on two posts each",
+            2 * poles + 3 * report.stood.get(TRAM_MESH_NAME, 0) + signs,
+            f"{poles} flags on their poles, {report.stood.get(TRAM_MESH_NAME, 0)} shelters "
+            f"on two posts each and {signs} station exit signs",
         )
         report.bytes = library.write(out_dir, STOPS_NAME, STOPS_PLACEMENTS_NAME, city.id, region_id)
 
@@ -435,6 +797,8 @@ def _write_manifest(out_dir: Path, city: Config, region_id: str, report: StopRep
                 kind: dict(sorted(why.items())) for kind, why in sorted(report.refused.items())
             },
             "posts_kept_as_surveyed": report.posts_kept_as_surveyed,
+            "exit_signs": dict(sorted(report.exit_signs.items())),
+            "exit_wall_m": tail_of(report.exit_wall_m),
             "shift_m": tail_of(report.shift_m),
             "facing_away": report.facing_away,
             "placements": report.placements,

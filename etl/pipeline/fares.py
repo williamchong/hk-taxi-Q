@@ -113,6 +113,10 @@ class FareNode:
     # `places.max_distance_m` of `pos`, or None. What a passenger says —
     # "新鴻基中心" — where `name` is what the publisher wrote about the kerb.
     place: dict[str, str | None] | None
+    # A station exit's own station (its `en` in `fares.stations.table`) and
+    # letter (`P3-107`): what `stops.py` letters its sign from. Written only on
+    # a `station_exit` node, so every other node's bytes are unchanged.
+    exit: dict[str, str | None] | None = None
 
 
 @dataclass(frozen=True)
@@ -474,6 +478,7 @@ def _add_station_exits(
             dropoff=category.dropoff,
             # A passenger names the exit, not the building over it (`Q268`).
             place=dict(name),
+            exit={"station": station.en, "letter": found.letter},
         )
         report.add(node, category, snap.distance_m)
 
@@ -812,6 +817,7 @@ def _write(out_dir: Path, city: Config, region_id: str, report: FareReport) -> i
                 "pickup": node.pickup,
                 "dropoff": node.dropoff,
                 "place": node.place,
+                **({} if node.exit is None else {"exit": node.exit}),
             }
             for node in report.nodes
         ],
