@@ -332,7 +332,7 @@ Budget
 | Draw calls | < 150 | throttle route 116–122 with traffic, HUD off (`Q214`); `P2-6` measures properly |
 | Resident triangles, worst camera | < 300k | 128% / 82%; with paint 178% / 108% (the pedestrian lines are 5 and 14 points of it, `Q250`); buildings alone 110% / 73% (`tools/resident_budget.py`, 2026-11-18). `mong_kok` 184%, `sha_tin` 47% (2026-09) |
 | Texture memory | < 128 MB | one 1536 x 256 atlas, 119,611 B (`signs_text.png`) |
-| Bundle size (PCK) | < 200 MB | web 107,482,328 B (`build/web/index.pck`, 2026-11-18, a clean worktree); iOS app 116,032,712 B (`build/ios/app`, 2026-11-17). Re-export before quoting |
+| Bundle size (PCK) | < 200 MB | web 100,260,504 B (`build/web/index.pck`, 2026-11-22), from 110,760,456 B before the 2026-11-22 size pass: shadow meshes dropped on non-casting layers −5.73 MB (`Q271`), synced JSON compacted −4.70 MB (`Q272`), the road, lettering and stop furniture welded −0.32 MB, planters cut into cells, the glyph atlases lossless +0.25 MB (`Q273`); iOS app 116,032,712 B (`build/ios/app`, 2026-11-17). Re-export before quoting |
 | First load, web, cold shader cache | — | 14.0–14.8 s boot, then the cover ~6 s (`Q184`) |
 | First frame, iOS fresh install | — | ~12 s with baked shaders; relaunch ~4 s (`Q207`) |
 | Traffic tick, 60 cars | — | 1.67 ms bench, 2.59 ms p50 in game (`Q219`) |
