@@ -19,6 +19,8 @@ APP_IDENTIFIER = "cloud.williamchong.hktaxiq"
 # The version the listing belongs to: the one Godot stamps on the build,
 # project.godot's config/version.
 APP_VERSION = "1.0.1"
+# App Store states a version that went live can be in.
+RELEASED_STATES = %w[READY_FOR_SALE REPLACED_WITH_NEW_VERSION DEVELOPER_REMOVED_FROM_SALE REMOVED_FROM_SALE].freeze
 
 def review_information
   contact = %w[FIRST_NAME LAST_NAME PHONE EMAIL].map { |k| ENV["APP_REVIEW_#{k}"] }
@@ -80,5 +82,32 @@ platform :ios do
       # none to check.
       precheck_include_in_app_purchases: false
     )
+  end
+
+  desc "Tag each version live on the App Store v<version>, on the commit its build's testflight/<version>-<build> tag (tools/ios.sh) names, and push the new tags"
+  lane :tag_released do
+    # Spaceship is called directly, so the token is set here: the action
+    # reads the .p8 and its IDs, not the .json key deliver takes.
+    if ENV["APP_STORE_CONNECT_API_KEY_PATH"]
+      Spaceship::ConnectAPI.token = Spaceship::ConnectAPI::Token.from_json_file(ENV["APP_STORE_CONNECT_API_KEY_PATH"])
+    else
+      app_store_connect_api_key
+    end
+    app = Spaceship::ConnectAPI::App.find(APP_IDENTIFIER)
+    versions = app.get_app_store_versions(includes: "build", filter: { appStoreState: RELEASED_STATES.join(",") })
+    versions.each do |version|
+      tag = "v#{version.version_string}"
+      next if git_tag_exists(tag: tag)
+
+      build = version.build&.version
+      # The name tools/ios.sh gives an upload's tag.
+      source = "testflight/#{version.version_string}-#{build}"
+      unless build && git_tag_exists(tag: source)
+        UI.important("#{tag}: no #{source} tag to put it on; skipped")
+        next
+      end
+      add_git_tag(tag: tag, message: "#{version.version_string} on the App Store, build #{build}", commit: "#{source}^{commit}")
+      push_git_tags(tag: tag)
+    end
   end
 end

@@ -17,7 +17,10 @@
 #             takes $IOS_DEVICE, else the one physical device devicectl knows.
 # testflight  archives and uploads to App Store Connect, signed by the Apple ID
 #             signed in to Xcode. The build number defaults to a UTC timestamp,
-#             which only ever rises; the version is the project's.
+#             which only ever rises; the version is the project's. An upload
+#             is tagged testflight/<version>-<build> on the commit the export
+#             began from, and the tag pushed; `fastlane tag_released` tags a
+#             published version v<version> on its build's commit.
 
 set -euo pipefail
 
@@ -164,6 +167,14 @@ case "$MODE" in
 		;;
 	testflight)
 		BUILD_NUMBER="${2:-$(date -u +%y%m%d%H%M)}"
+		# Taken before the export: a build runs for minutes and HEAD can move under it.
+		HEAD_AT_START="$(git -C "$ROOT" rev-parse HEAD)"
+		DIRTY_AT_START="$(git -C "$ROOT" status --porcelain --untracked-files=no | wc -l | tr -d ' ')"
+		VERSION="$(sed -n 's|^config/version="\(.*\)"|\1|p' "$ROOT/game/project.godot")"
+		if [[ -z "$VERSION" ]]; then
+			echo "game/project.godot names no config/version" >&2
+			exit 1
+		fi
 		export_project
 		flatten_icons
 		echo "==> archive build $BUILD_NUMBER"
@@ -188,5 +199,18 @@ EOF
 			-exportOptionsPlist "$OUT/upload_options.plist" -exportPath "$OUT/upload" \
 			-allowProvisioningUpdates
 		echo "    build $BUILD_NUMBER is with App Store Connect, processing"
+		TAG="testflight/$VERSION-$BUILD_NUMBER"
+		MESSAGE="TestFlight build $BUILD_NUMBER of $VERSION"
+		if [[ "$DIRTY_AT_START" -gt 0 ]]; then
+			MESSAGE+=$'\n\n'"Built with $DIRTY_AT_START tracked paths uncommitted."
+		fi
+		echo "==> tag $TAG"
+		# The upload has gone through: a refused tag is reported, not fatal.
+		if git -C "$ROOT" tag -a "$TAG" -m "$MESSAGE" "$HEAD_AT_START"; then
+			git -C "$ROOT" push -q origin "refs/tags/$TAG" ||
+				echo "    $TAG not pushed: git push origin refs/tags/$TAG" >&2
+		else
+			echo "    $TAG not made: tag $HEAD_AT_START by hand" >&2
+		fi
 		;;
 esac

@@ -806,7 +806,10 @@ tools/export.sh [macos|web|android|ios]             # default: macos + web
   `backdrop` only.
 - `IOS_TEAM_ID=<team> tools/ios.sh device` puts a Release build on a handset; `… testflight
   [<build number>]` archives and uploads. It exports with a window, refuses an unbaked PCK, and
-  flattens the icon's alpha in the build copy.
+  flattens the icon's alpha in the build copy. An upload is tagged `testflight/<version>-<build>` on
+  the commit the export began from, and pushed; `fastlane tag_released` tags each version live on
+  the App Store `v<version>` on its build's commit. Builds before the script tagged were tagged by
+  hand, each message saying how its commit was picked.
 - `fastlane/` is the App Store listing: `fastlane metadata` uploads the per-locale text and the
   screenshots `tools/store_screenshots.sh` takes; `fastlane submit` sends the version to review.
   Both want an App Store Connect API key in the environment (the `Fastfile`'s header). The
