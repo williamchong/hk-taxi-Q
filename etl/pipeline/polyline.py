@@ -1,7 +1,7 @@
-"""Measuring along, and snapping to, the road graph's polylines.
+"""Measuring along, snapping to and offsetting the road graph's polylines.
 
-A leaf: numpy only. That is the whole reason this module exists rather than the
-pieces living where they grew up.
+A leaf: numpy, and `gltf.normalise`, itself a leaf. That is the whole reason
+this module exists rather than the pieces living where they grew up.
 
 `plan_lengths` and its neighbours were in `roads.py`, and `Snap`/`Segments` were
 in `fares.py` — which imports `roads`. `roads` imports `carriageway`, so
@@ -34,6 +34,17 @@ from dataclasses import dataclass
 from typing import Any
 
 import numpy as np
+
+from pipeline.gltf import normalise
+
+# Ceiling on how far a mitred outside corner may be pushed from the centreline,
+# as a multiple of the half-width. A degeneracy guard, not a tuning value: it
+# only binds past a 151-degree turn, and the sharpest in this region is 92.
+_MITRE_LIMIT = 4.0
+
+# Below this, two consecutive polyline vertices are the same point and the
+# segment between them has no direction to offset along.
+MIN_SEGMENT_M = 1e-6
 
 
 def true_runs(flags: np.ndarray) -> list[tuple[int, int]]:
@@ -387,3 +398,108 @@ def axis_residual_deg(a: float, b: float) -> float:
     """
     gap = directed_residual_deg(a, b)
     return min(gap, 180.0 - gap)
+
+
+# --------------------------------------------------------------------------
+# Ribbon geometry, `surface.py`'s until 2026-11-22
+# --------------------------------------------------------------------------
+
+
+def dedupe(points: np.ndarray) -> np.ndarray:
+    """Drop vertices that repeat the previous one in plan.
+
+    A repeated vertex has no direction, so it produces a zero normal and takes
+    the whole ribbon with it. Legal in the graph — clipping can land a cut
+    exactly on an existing vertex.
+    """
+    if len(points) < 2:
+        return points
+    return points[np.concatenate([[True], plan_steps(points) > MIN_SEGMENT_M])]
+
+
+def trim(points: np.ndarray, start_m: float, end_m: float) -> np.ndarray:
+    """The polyline with `start_m` cut off the front and `end_m` off the back.
+
+    Cut points are interpolated, including in Y, so a trimmed ramp keeps its
+    gradient. Returns fewer than two vertices if the trims meet, which the
+    caller treats as an edge too short to draw.
+    """
+    along = plan_lengths(points)
+    low, high = start_m, along[-1] - end_m
+    if high - low <= MIN_SEGMENT_M:
+        return points[:0]
+
+    inner = points[(along > low) & (along < high)]
+    return np.vstack([point_at(points, along, low), inner, point_at(points, along, high)])
+
+
+def point_at(points: np.ndarray, along: np.ndarray, distance: float) -> np.ndarray:
+    """The point a given distance along the polyline, as a (1, N) row.
+
+    Every column, not the first three. The fourth is the station's half-width
+    (`surface._WIDTH`), and a trim that interpolated x/y/z but carried a neighbour's
+    width would put a step in the carriageway edge exactly where a ribbon meets
+    its junction cap — the one place a step is invisible in a wireframe and
+    obvious from the driver's seat.
+    """
+    return np.array([[np.interp(distance, along, column) for column in points.T]])
+
+
+def mitres(points: np.ndarray) -> np.ndarray:
+    """Per-vertex offset vector in plan, one half-width to the **left** of travel.
+
+    Interior vertices get the mitre — the intersection of the two neighbouring
+    offset lines — so consecutive quads share an edge exactly and the ribbon has
+    no notch on the outside of a bend. Its length exceeds one where the road
+    turns, by `1 / cos(half the turn)`, which is what makes the joint close.
+    """
+    direction = normalise(np.diff(points[:, [0, 2]], axis=0))
+    # Left of travel, which in a Y-up right-handed frame is `up x forward`: for
+    # travel along +X that is -Z. Not a free convention — `TEXCOORD_0` is a lane
+    # coordinate measured from the nearside kerb, and Hong Kong drives on the
+    # left, so getting this backwards mirrors every asymmetric road marking.
+    normal = np.column_stack([direction[:, 1], -direction[:, 0]])
+
+    offsets = np.empty((len(points), 2))
+    offsets[0], offsets[-1] = normal[0], normal[-1]
+    if len(points) > 2:
+        bisector = normal[:-1] + normal[1:]
+        length = np.hypot(*bisector.T)
+        # A zero bisector is a 180-degree reversal, which has no mitre. Keeping
+        # the incoming normal folds the ribbon back on itself rather than
+        # sending the corner to infinity.
+        reversal = length <= MIN_SEGMENT_M
+        unit = bisector / np.where(reversal, 1.0, length)[:, None]
+        bisector = np.where(reversal[:, None], normal[:-1], unit)
+        cosine = (bisector * normal[:-1]).sum(axis=1)
+        offsets[1:-1] = bisector * (1.0 / np.clip(cosine, 1.0 / _MITRE_LIMIT, 1.0))[:, None]
+    return offsets
+
+
+def boundary(points: np.ndarray, offsets: np.ndarray, across_m: np.ndarray | float) -> np.ndarray:
+    """One side of the ribbon in plan, stopped where it would run backwards.
+
+    A corner tighter than the road is wide has no offset curve on its inside:
+    the naive one crosses over itself, which renders as an inverted sliver and
+    leaves a notch in the collider. The region has such corners — a slip road
+    off Hung Hing Road loops at a 5 m radius, and the widened carriageway is
+    10.2 m across.
+
+    Holding the inner boundary still while the outer sweeps past is what the
+    offset of a too-tight corner actually is, and it is the only repair here
+    that touches neither the centreline nor the width: capping the width
+    instead pinches the carriageway to nothing at 24 places in the region, and
+    dropping the offending vertices cuts up to 17 m off that same loop.
+    """
+    rail = points[:, [0, 2]] + offsets * np.reshape(across_m, (-1, 1))
+    step = np.diff(points[:, [0, 2]], axis=0)
+    # Vectorised first because it is almost always clean: 74 of 797 edges have
+    # a corner tight enough to need the walk below.
+    if not ((np.diff(rail, axis=0) * step).sum(axis=1) <= 0.0).any():
+        return rail
+
+    rail = rail.copy()
+    for index in range(len(rail) - 1):
+        if np.dot(rail[index + 1] - rail[index], step[index]) <= 0.0:
+            rail[index + 1] = rail[index]
+    return rail

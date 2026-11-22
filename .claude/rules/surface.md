@@ -1,6 +1,7 @@
 ---
 paths:
   - "etl/pipeline/surface.py"
+  - "etl/pipeline/polyline.py"
   - "etl/tests/test_surface.py"
   - "tools/cap_pavement.py"
   - "tools/overhang.py"

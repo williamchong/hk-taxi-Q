@@ -399,3 +399,18 @@ def strut(
         )
     if cap_end:
         builder.polygon(np.vstack([end + o for o in offsets]), axis, colour)
+
+
+def downward_facing(mesh: MeshData) -> tuple[int, float]:
+    """How many triangles face downward, and how much ground they cover.
+
+    A road triangle that points at the sky's opposite is a fold: it renders as a
+    hole under back-face culling and it is invisible to a one-sided collider. A
+    kerb riser is vertical and legitimately faces sideways, which is why the
+    test is well below horizontal rather than at it.
+    """
+    cross = mesh.triangle_cross()
+    twice_area = np.linalg.norm(cross, axis=1)
+    facing = cross[:, 1] / np.where(twice_area > 0.0, twice_area, 1.0)
+    inverted = facing < -0.1
+    return int(inverted.sum()), float(0.5 * twice_area[inverted].sum())

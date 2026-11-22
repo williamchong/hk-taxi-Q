@@ -18,7 +18,7 @@ import numpy as np
 
 from pipeline.geometry import clip_half_plane
 from pipeline.meshbuild import MIN_TWICE_AREA_M2, thin_in_plan
-from pipeline.surface import _MIN_SEGMENT_M
+from pipeline.polyline import MIN_SEGMENT_M
 from pipeline.terrain import Prepared, covered_prepared, prepare
 
 # Plan grid `DrawnSurface` bins the drawn pieces — junction caps and carriageway
@@ -443,10 +443,10 @@ def _project_plan(
 ) -> tuple[np.ndarray, np.ndarray]:
     """Project one plan point onto every segment: the clamped parameter along
     each, and the plan distance to that foot. A segment shorter than
-    `_MIN_SEGMENT_M` has no direction, so its parameter is 0 and its distance
+    `MIN_SEGMENT_M` has no direction, so its parameter is 0 and its distance
     is to its start."""
     lengths = np.einsum("ij,ij->i", spans, spans)
-    lengths[lengths <= _MIN_SEGMENT_M**2] = np.inf
+    lengths[lengths <= MIN_SEGMENT_M**2] = np.inf
     along = np.clip(np.einsum("ij,ij->i", point - starts, spans) / lengths, 0.0, 1.0)
     feet = starts + along[:, None] * spans
     return along, np.hypot(*(feet - point).T)
@@ -542,7 +542,7 @@ def _crossing_interior(polygon: np.ndarray, segments: np.ndarray) -> tuple[np.nd
     if winding > 0.0:
         normals = -normals
     lengths = np.hypot(normals[:, 0], normals[:, 1])
-    lengths[lengths <= _MIN_SEGMENT_M] = np.inf
+    lengths[lengths <= MIN_SEGMENT_M] = np.inf
     normals = normals / lengths[:, None]
     bounds = np.einsum("ij,ij->i", normals, polygon)
 
@@ -620,7 +620,7 @@ def _without_repeats(polygon: np.ndarray) -> np.ndarray:
     if len(polygon) < 2:
         return polygon
     step = polygon - np.concatenate([polygon[-1:], polygon[:-1]])
-    return polygon[np.hypot(step[:, 0], step[:, 1]) > _MIN_SEGMENT_M]
+    return polygon[np.hypot(step[:, 0], step[:, 1]) > MIN_SEGMENT_M]
 
 
 def _bin_by_plan_box(plan: np.ndarray) -> dict[tuple[int, int], np.ndarray]:

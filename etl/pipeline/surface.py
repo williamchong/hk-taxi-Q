@@ -71,8 +71,25 @@ from pipeline.gltf import (
 )
 from pipeline.kerbside import NEARSIDE, OFFSIDE
 from pipeline.mesh import merge, select_triangles, weld
-from pipeline.meshbuild import MIN_TWICE_AREA_M2
-from pipeline.polyline import plan_lengths, plan_steps, true_runs
+from pipeline.meshbuild import MIN_TWICE_AREA_M2, downward_facing
+
+# `dedupe`, `trim`, `point_at` (here `_at`), `mitres`, `boundary` and
+# `MIN_SEGMENT_M` live in `polyline`, and `downward_facing` in `meshbuild`,
+# since 2026-11-22; imported here, so `surface.<name>` still answers every
+# caller that reads them from this module.
+from pipeline.polyline import (
+    MIN_SEGMENT_M as _MIN_SEGMENT_M,
+)
+from pipeline.polyline import (
+    boundary,
+    dedupe,
+    mitres,
+    plan_lengths,
+    plan_steps,
+    trim,
+    true_runs,
+)
+from pipeline.polyline import point_at as _at
 from pipeline.roads import ROADGRAPH_NAME, Ownership, read_graph
 
 # ⚠️ **The barycentric point-in-triangle test is `terrain`'s, not a fourth copy.**
@@ -324,14 +341,6 @@ MARKING_LANES_MAX = MARKING_DIRECTION // MARKING_LANES - 1
 # degrades to "absent" rather than to a wrong marking.
 MARKING_DIRECTIONS = {BOTH: 1, FORWARD: 2}
 
-# Ceiling on how far a mitred outside corner may be pushed from the centreline,
-# as a multiple of the half-width. A degeneracy guard, not a tuning value: it
-# only binds past a 151-degree turn, and the sharpest in this region is 92.
-_MITRE_LIMIT = 4.0
-
-# Below this, two consecutive polyline vertices are the same point and the
-# segment between them has no direction to offset along.
-_MIN_SEGMENT_M = 1e-6
 
 # How far a movement may deviate from straight and still be mitred through its
 # junction cap, in degrees. Two limits because the corner between two arms means
@@ -710,106 +719,6 @@ class SurfaceReport:
 # --------------------------------------------------------------------------
 
 
-def dedupe(points: np.ndarray) -> np.ndarray:
-    """Drop vertices that repeat the previous one in plan.
-
-    A repeated vertex has no direction, so it produces a zero normal and takes
-    the whole ribbon with it. Legal in the graph — clipping can land a cut
-    exactly on an existing vertex.
-    """
-    if len(points) < 2:
-        return points
-    return points[np.concatenate([[True], plan_steps(points) > _MIN_SEGMENT_M])]
-
-
-def trim(points: np.ndarray, start_m: float, end_m: float) -> np.ndarray:
-    """The polyline with `start_m` cut off the front and `end_m` off the back.
-
-    Cut points are interpolated, including in Y, so a trimmed ramp keeps its
-    gradient. Returns fewer than two vertices if the trims meet, which the
-    caller treats as an edge too short to draw.
-    """
-    along = plan_lengths(points)
-    low, high = start_m, along[-1] - end_m
-    if high - low <= _MIN_SEGMENT_M:
-        return points[:0]
-
-    inner = points[(along > low) & (along < high)]
-    return np.vstack([_at(points, along, low), inner, _at(points, along, high)])
-
-
-def _at(points: np.ndarray, along: np.ndarray, distance: float) -> np.ndarray:
-    """The point a given distance along the polyline, as a (1, N) row.
-
-    Every column, not the first three. The fourth is the station's half-width
-    (`_WIDTH`), and a trim that interpolated x/y/z but carried a neighbour's
-    width would put a step in the carriageway edge exactly where a ribbon meets
-    its junction cap — the one place a step is invisible in a wireframe and
-    obvious from the driver's seat.
-    """
-    return np.array([[np.interp(distance, along, column) for column in points.T]])
-
-
-def mitres(points: np.ndarray) -> np.ndarray:
-    """Per-vertex offset vector in plan, one half-width to the **left** of travel.
-
-    Interior vertices get the mitre — the intersection of the two neighbouring
-    offset lines — so consecutive quads share an edge exactly and the ribbon has
-    no notch on the outside of a bend. Its length exceeds one where the road
-    turns, by `1 / cos(half the turn)`, which is what makes the joint close.
-    """
-    direction = normalise(np.diff(points[:, [0, 2]], axis=0))
-    # Left of travel, which in a Y-up right-handed frame is `up x forward`: for
-    # travel along +X that is -Z. Not a free convention — `TEXCOORD_0` is a lane
-    # coordinate measured from the nearside kerb, and Hong Kong drives on the
-    # left, so getting this backwards mirrors every asymmetric road marking.
-    normal = np.column_stack([direction[:, 1], -direction[:, 0]])
-
-    offsets = np.empty((len(points), 2))
-    offsets[0], offsets[-1] = normal[0], normal[-1]
-    if len(points) > 2:
-        bisector = normal[:-1] + normal[1:]
-        length = np.hypot(*bisector.T)
-        # A zero bisector is a 180-degree reversal, which has no mitre. Keeping
-        # the incoming normal folds the ribbon back on itself rather than
-        # sending the corner to infinity.
-        reversal = length <= _MIN_SEGMENT_M
-        unit = bisector / np.where(reversal, 1.0, length)[:, None]
-        bisector = np.where(reversal[:, None], normal[:-1], unit)
-        cosine = (bisector * normal[:-1]).sum(axis=1)
-        offsets[1:-1] = bisector * (1.0 / np.clip(cosine, 1.0 / _MITRE_LIMIT, 1.0))[:, None]
-    return offsets
-
-
-def boundary(points: np.ndarray, offsets: np.ndarray, across_m: np.ndarray | float) -> np.ndarray:
-    """One side of the ribbon in plan, stopped where it would run backwards.
-
-    A corner tighter than the road is wide has no offset curve on its inside:
-    the naive one crosses over itself, which renders as an inverted sliver and
-    leaves a notch in the collider. The region has such corners — a slip road
-    off Hung Hing Road loops at a 5 m radius, and the widened carriageway is
-    10.2 m across.
-
-    Holding the inner boundary still while the outer sweeps past is what the
-    offset of a too-tight corner actually is, and it is the only repair here
-    that touches neither the centreline nor the width: capping the width
-    instead pinches the carriageway to nothing at 24 places in the region, and
-    dropping the offending vertices cuts up to 17 m off that same loop.
-    """
-    rail = points[:, [0, 2]] + offsets * np.reshape(across_m, (-1, 1))
-    step = np.diff(points[:, [0, 2]], axis=0)
-    # Vectorised first because it is almost always clean: 74 of 797 edges have
-    # a corner tight enough to need the walk below.
-    if not ((np.diff(rail, axis=0) * step).sum(axis=1) <= 0.0).any():
-        return rail
-
-    rail = rail.copy()
-    for index in range(len(rail) - 1):
-        if np.dot(rail[index + 1] - rail[index], step[index]) <= 0.0:
-            rail[index + 1] = rail[index]
-    return rail
-
-
 def _lift(plan: np.ndarray, points: np.ndarray, lift_m: float) -> np.ndarray:
     """A plan boundary put back on the ribbon's own heights."""
     return np.column_stack([plan[:, 0], points[:, 1] + lift_m, plan[:, 1]])
@@ -1124,21 +1033,6 @@ class _Builder:
         # ids are column-major, and the manifest's readers sort by id.
         pieces.sort(key=lambda piece: piece[0])
         return pieces
-
-
-def downward_facing(mesh: MeshData) -> tuple[int, float]:
-    """How many triangles face downward, and how much ground they cover.
-
-    A road triangle that points at the sky's opposite is a fold: it renders as a
-    hole under back-face culling and it is invisible to a one-sided collider. A
-    kerb riser is vertical and legitimately faces sideways, which is why the
-    test is well below horizontal rather than at it.
-    """
-    cross = mesh.triangle_cross()
-    twice_area = np.linalg.norm(cross, axis=1)
-    facing = cross[:, 1] / np.where(twice_area > 0.0, twice_area, 1.0)
-    inverted = facing < -0.1
-    return int(inverted.sum()), float(0.5 * twice_area[inverted].sum())
 
 
 def _rail_normals(left: np.ndarray, right: np.ndarray) -> np.ndarray:
@@ -3558,7 +3452,7 @@ def _through_corners(group: list[_End], edges: list[_Edge]) -> list[list[np.ndar
             # The joint is an interior vertex of a polyline that happens to span
             # two edges, so `mitres` computes it rather than this function
             # holding a second opinion about where a mitre goes — and, more to
-            # the point, a second copy of `_MITRE_LIMIT`.
+            # the point, a second copy of `polyline._MITRE_LIMIT`.
             apex = mitres(np.array([node + _out(first.away), node, node + _out(second.away)]))[1]
             # Both half-widths, because two arms of a movement may differ in
             # width and the mouth of each has to be reached.
