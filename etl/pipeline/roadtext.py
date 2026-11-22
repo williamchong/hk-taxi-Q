@@ -31,7 +31,7 @@ import argparse
 import logging
 import math
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from functools import cache
 from pathlib import Path
 
@@ -50,6 +50,7 @@ from pipeline.drawnsurface import DrawnSurface
 from pipeline.fetch import cached_source, source_reads
 from pipeline.geometry import twice_area, wound_up
 from pipeline.gltf import MeshData, write_glb
+from pipeline.mesh import weld
 from pipeline.meshbuild import CellBuilder, _Slivers, import_quantum_m
 from pipeline.polyline import (
     Segments,
@@ -607,7 +608,11 @@ def cell_meshes(builder: CellBuilder, thin_m: float, report: RoadTextReport) -> 
     report.slivers_dropped += slivers.slivers_dropped
     meshes = []
     for cell in sorted(cells):
+        # A letter's triangles each carry their own corners, which agree only
+        # to float64 round-off, so they are narrowed to the float32 `write_glb`
+        # stores first: the weld is then exact against the file.
         mesh = cells[cell]
+        mesh = weld(replace(mesh, positions=mesh.positions.astype(np.float32).astype(np.float64)))
         inverted, inverted_m2 = downward_facing(mesh)
         report.inverted += inverted
         report.inverted_area_m2 += inverted_m2

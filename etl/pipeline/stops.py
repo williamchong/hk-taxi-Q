@@ -62,6 +62,7 @@ from pipeline.drawnroad import Ribbon, drawn_carriageway, kerbed_ribbons
 from pipeline.fares import FARES_NAME, FARES_SCHEMA, STATION_EXIT
 from pipeline.fetch import cached_source
 from pipeline.gltf import MeshData
+from pipeline.mesh import weld
 from pipeline.meshbuild import ColouredBuilder
 from pipeline.placements import Placement, placement, stand_library
 from pipeline.polyline import Segments, Snap, bearing_deg, frame, plan_lengths
@@ -644,7 +645,10 @@ def exit_mesh(
 def _built(builder: ColouredBuilder, name: str) -> MeshData:
     mesh = builder.build(name)
     assert mesh is not None  # a box of positive extent, by the config's own bars
-    return mesh
+    # A builder lays each polygon with its own corners; a flag's or a
+    # shelter's boxes share them, and a portal's lettering shares thousands.
+    # Lossless.
+    return weld(mesh)
 
 
 def build_region(city: Config, region_id: str, *, out_root: Path | None = None) -> StopReport:
