@@ -70,7 +70,7 @@ from pipeline.gltf import (
     write_glb,
 )
 from pipeline.kerbside import NEARSIDE, OFFSIDE
-from pipeline.mesh import merge, select_triangles
+from pipeline.mesh import merge, select_triangles, weld
 from pipeline.meshbuild import MIN_TWICE_AREA_M2
 from pipeline.polyline import plan_lengths, plan_steps, true_runs
 from pipeline.roads import ROADGRAPH_NAME, Ownership, read_graph
@@ -1088,8 +1088,11 @@ class _Builder:
         kept = select_triangles(mesh, keep)
         if kept is None:
             raise ValueError(f"'{name}': every triangle collapsed")
-        # Aligned with `kept.triangles`: `select_triangles` keeps triangle order
-        # and drops nothing but the ones masked out.
+        # Each quad and fan is laid with its own corners; `weld` shares the
+        # ones that agree in every attribute, losslessly.
+        kept = weld(kept)
+        # Aligned with `kept.triangles`: `select_triangles` and `weld` keep
+        # triangle order, and only the first drops any, the ones masked out.
         self._built = (kept, np.concatenate(self._keys)[keep])
         return kept
 
