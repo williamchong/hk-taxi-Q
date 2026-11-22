@@ -265,6 +265,9 @@ change. Closed questions are not listed here: see the headings in `DECISIONS.md`
   `Q234` glazed or open upper tram leaves · `Q220` steering curve 2.0 against 1.5.
 - `Q237` leaves the signal heads untested against junction asphalt. `Q226` is unseen in a browser.
   `Q233`: a best set on the 5-minute shift still stands.
+- `Q115` was amended on 2026-11-22: the at-grade outward-only clamp is one `Ribbon.register` for signs,
+  stops, signal posts and lamps off a deck, with a byte-identical rebuild. Owed: the user's yes, or a
+  revert of `f34b6ec7`.
 
 ### Residue inside closed questions
 
