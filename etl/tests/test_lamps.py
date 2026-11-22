@@ -175,6 +175,7 @@ class _Ribbon:
     kerb_side = Ribbon.kerb_side
     kerb_target = Ribbon.kerb_target
     past_kerb_m = Ribbon.past_kerb_m
+    register = Ribbon.register
 
 
 class TestTheRegistrationRunsOutwardOnly:

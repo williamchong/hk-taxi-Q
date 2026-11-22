@@ -500,16 +500,11 @@ def bind_heads(
         if ribbon is None:
             report.bind_no_ribbon += 1
             continue
-        side, _, target_m, placed = ribbon.kerb_target(snap, spec.outset_m)
-        shift_m = 0.0
-        if ribbon.past_kerb_m(snap) > spec.outset_m:
-            # Already clear of the kerb: TD's point stands (`Q78`).
-            placed = np.array([post.x, post.z])
-        else:
-            shift_m = abs(target_m - snap.offset_m)
-            if shift_m > spec.max_shift_m:
-                report.bind_over_shift += 1
-                continue
+        stood = ribbon.register(snap, np.array([post.x, post.z]), spec.outset_m, spec.max_shift_m)
+        if stood.refused:
+            report.bind_over_shift += 1
+            continue
+        side, placed, shift_m = stood.side, stood.point, stood.shift_m
         settled = segments.nearest(float(placed[0]), float(placed[1]))
         settled_ribbon = drawn.get(settled.edge)
         if settled_ribbon is not None and settled_ribbon.past_kerb_m(settled) < 0.0:

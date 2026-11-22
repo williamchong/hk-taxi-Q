@@ -1,6 +1,7 @@
 ---
 paths:
   - "etl/pipeline/signals.py"
+  - "etl/pipeline/drawnroad.py"
   - "etl/pipeline/config_blocks/signals.py"
   - "etl/tests/test_signals.py"
   - "game/scripts/traffic/signal_plan.gd"

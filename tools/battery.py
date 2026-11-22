@@ -127,7 +127,7 @@ TRIGGERS: dict[str, Trigger] = {
         ),
     ),
     "signs": Trigger(
-        "`signs.outset_m`, `max_shift_m`, or `signs._register`",
+        "`signs.outset_m`, `max_shift_m`, `signs._register`, or `Ribbon.register`",
         (
             Report(
                 "signs.json",

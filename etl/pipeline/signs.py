@@ -1626,36 +1626,21 @@ def _register(
     Returns the placed point and the kerb side, or `None` where `max_shift_m`
     refuses the move. The caller owns the plate-level counter.
     """
-    side, _, target_m, placed = ribbon.kerb_target(snap, spec.outset_m)
-    past_kerb_m = ribbon.past_kerb_m(snap)
-    report.inside_ribbon_m.append(max(0.0, -past_kerb_m))
-
-    if past_kerb_m > spec.outset_m:
-        # ⚠️ **The published point, never a reconstruction.** The trap below
-        # applies here with nothing to catch it: `snap.offset_m` is the distance
-        # to the *clamped* projection, so rebuilding this position from the foot
-        # and the offset would move a post past an edge's end and then report
-        # the move it made as 0.0.
-        #
-        # A real zero rather than a skipped append, so the identity over
-        # `len(shift_m)` still closes; `posts_kept_as_surveyed` is how a reader
-        # tells how many of the distribution's zeros are these.
-        report.shift_m.append(0.0)
-        report.posts_kept_as_surveyed += 1
-        return published, side
-
-    shift_m = abs(target_m - snap.offset_m)
-    # Recorded **before** the refusal, so the distribution can read outside its
-    # own bar (`Q58`); `posts_over_shift` and `posts_in_carriageway` are what let
-    # a reader decompose `n`.
-    report.shift_m.append(shift_m)
-    if shift_m > spec.max_shift_m:
+    stood = ribbon.register(snap, published, spec.outset_m, spec.max_shift_m)
+    report.inside_ribbon_m.append(max(0.0, -stood.past_kerb_m))
+    # A real zero where kept rather than a skipped append, so the identity over
+    # `len(shift_m)` still closes; `posts_kept_as_surveyed` is how a reader tells
+    # how many of the distribution's zeros are these. Recorded **before** the
+    # refusal, so the distribution can read outside its own bar (`Q58`);
+    # `posts_over_shift` and `posts_in_carriageway` decompose `n`.
+    report.shift_m.append(stood.shift_m)
+    report.posts_kept_as_surveyed += stood.kept
+    if stood.refused:
         report.posts_over_shift += 1
         return None
-
     # The foot-off-the-polyline trap, and the 10.6 m move it published as
     # 0.6 m, are recorded on `Ribbon.kerb_target` and `Ribbon.foot_at`.
-    return placed, side
+    return stood.point, stood.side
 
 
 def _merge_placements(

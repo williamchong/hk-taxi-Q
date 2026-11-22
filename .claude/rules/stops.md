@@ -1,6 +1,7 @@
 ---
 paths:
   - "etl/pipeline/stops.py"
+  - "etl/pipeline/drawnroad.py"
   - "etl/pipeline/config_blocks/stops.py"
   - "etl/tests/test_stops.py"
   - "game/tools/verify_stops.gd"
@@ -24,7 +25,7 @@ and `signs.py` TD's own `TS324` taxi stand plate.
 - **What is authored**: every size, and the liveries by broad colour only — no operator's logo or
   wording. Colours are NAMES in `signs.colours`
   (`test_no_colour_escapes_the_materials_table`); a hex in the block fails that test.
-- **A pole is registered outward only** (`register`, `lamps._register`'s rule) and refused where
+- **A pole is registered outward only** (`register`, through `drawnroad.Ribbon.register`) and refused where
   it would still stand on the asphalt (`drawnroad.drawn_carriageway`, `Q237`). A widening moves
   every pole.
 - **Colliders** (`Q191`): `region.tscn`'s `posts` stands a cylinder under every library mesh whose

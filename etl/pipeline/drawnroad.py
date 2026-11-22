@@ -55,6 +55,22 @@ def nearside(heading_deg: float) -> np.ndarray:
 
 
 @dataclass(frozen=True)
+class Registration:
+    """Where `Ribbon.register` stands a post, and what the move cost."""
+
+    side: float
+    # The published point where `kept`, else the kerb target.
+    point: np.ndarray
+    # How far past the nearer kerb the post was surveyed; negative is in the road.
+    past_kerb_m: float
+    # The move across the edge: a real 0.0 where `kept`, so a distribution over
+    # every post still closes.
+    shift_m: float
+    kept: bool
+    refused: bool
+
+
+@dataclass(frozen=True)
 class Ribbon:
     """What `surface.py` drew for one edge, as a consumer needs to read it.
 
@@ -205,15 +221,43 @@ class Ribbon:
         `point - offset_m * nearside`** — `Snap.offset_m` is `±distance_m` to
         the *clamped* projection, so a post past an edge's end has an along-edge
         component in that vector and the subtraction lands off the centreline;
-        `foot_at` carries the measurement. Only the arithmetic is shared
-        (`Q100`): whether to move at all, `Q78`'s outward-only clamp and every
-        counter stay with each stage.
+        `foot_at` carries the measurement. `register` holds `Q78`'s
+        outward-only clamp over it for the stages that stand a post at grade;
+        every counter stays with each stage, and so do railings' unconditional
+        push and a lamp column's on a deck (`Q115`).
         """
         middle_m, half_width_m = self.kerb_at(snap.t)
         side = self.kerb_side(snap)
         target_m = middle_m + side * (half_width_m + outset_m)
         point = self.foot_at(snap.t) + target_m * nearside(snap.heading_deg)
         return side, half_width_m, target_m, point
+
+    def register(
+        self, snap: Snap, published: np.ndarray, outset_m: float, max_shift_m: float
+    ) -> Registration:
+        """Push a post out to `outset_m` past the drawn kerb, or leave it, or refuse.
+
+        🔴 **Outward only (`Q78`).** The reason to move a post at all is that the
+        ribbon is drawn past the real carriageway, so a post on the real kerb
+        lands in the drawn lane. That argument runs outward only: a post already
+        clear keeps its PUBLISHED point, never one rebuilt from the foot and
+        `snap.offset_m` — the offset is to the *clamped* projection, so a post
+        past an edge's end would move and report the move as 0.0. Assigning the
+        target unconditionally pulled 14.5% of signs inward, and no counter saw
+        it: `shift_m` is absolute, and a pull and a push are the same number.
+
+        Refused past `max_shift_m`, with `shift_m` still the move it would have
+        made, so a distribution can read outside its own bar (`Q58`). The signs,
+        stops, at-grade lamps and signal posts register here (`Q115`).
+        """
+        side, _, target_m, placed = self.kerb_target(snap, outset_m)
+        past_kerb_m = self.past_kerb_m(snap)
+        if past_kerb_m > outset_m:
+            return Registration(side, published, past_kerb_m, 0.0, kept=True, refused=False)
+        shift_m = abs(target_m - snap.offset_m)
+        return Registration(
+            side, placed, past_kerb_m, shift_m, kept=False, refused=shift_m > max_shift_m
+        )
 
 
 def kerbed_ribbons(

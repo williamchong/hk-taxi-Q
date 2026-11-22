@@ -10,7 +10,7 @@ draws the paint TD surveyed; this stands what nothing publishes.
   serves. A stop this stage draws is one a bus, a fare or a tram already uses.
 - **A taxi STAND takes no flag**: TD's own `TS324` plate stands there
   (`signs.py`), and a second post beside it would be ours contradicting theirs.
-- **A pole is registered to the drawn kerb**, `lamps._register`'s rule: pushed
+- **A pole is registered to the drawn kerb**, `drawnroad.Ribbon.register`: pushed
   out to `outset_m` past it, never pulled in, refused past `max_shift_m` or
   where it would still stand on the asphalt.
 - **A shelter stands on the left of its track**, the side a tram's doors open
@@ -190,16 +190,12 @@ def merged(points: list[np.ndarray], merge_m: float) -> tuple[list[np.ndarray], 
 def register(
     spec: Stops, snap: Snap, ribbon: Ribbon, published: np.ndarray, report: StopReport
 ) -> tuple[np.ndarray, float] | None:
-    """The point a pole stands at and its kerb side: `lamps._register`'s rule,
-    outward only, `None` past `max_shift_m`."""
-    side, _, target_m, placed = ribbon.kerb_target(snap, spec.outset_m)
-    if ribbon.past_kerb_m(snap) > spec.outset_m:
-        report.shift_m.append(0.0)
-        report.posts_kept_as_surveyed += 1
-        return published, side
-    shift_m = abs(target_m - snap.offset_m)
-    report.shift_m.append(shift_m)
-    return None if shift_m > spec.max_shift_m else (placed, side)
+    """The point a pole stands at and its kerb side: `Ribbon.register`, `None`
+    past `max_shift_m`."""
+    stood = ribbon.register(snap, published, spec.outset_m, spec.max_shift_m)
+    report.shift_m.append(stood.shift_m)
+    report.posts_kept_as_surveyed += stood.kept
+    return None if stood.refused else (stood.point, stood.side)
 
 
 def tram_stands(

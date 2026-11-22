@@ -1495,7 +1495,7 @@ became a 165° spin).
 
 Refused:
 - A road kit: of 737 level-0 edges 418 bow over 0.5 m off a straight piece, with 88 distinct widths; 301 of 380 junctions are 3-way. A kit moves streets by metres between surveyed footprints.
-- One shared `_register` across `signs`, `lamps`, `railings`: each difference prevents a recorded defect (`Q78`, `P3-26`, `Q95`).
+- One shared `_register` across `signs`, `lamps`, `railings`: each difference prevents a recorded defect (`Q78`, `P3-26`, `Q95`). Since 2026-11-22 the at-grade outward-only clamp is one `drawnroad.Ribbon.register` for signs, stops, signal posts and lamps off a deck; railings' unconditional push, a deck column's pull and every counter stay with their stage.
 
 ## `Q116` — Two regions meet at a hard edge, and the join decides where the cut is, not the unit
 
@@ -1703,7 +1703,7 @@ No rewrite and no new source: the code records defects that render as a plausibl
 (HyD is silent on ~2% of level-0 length; no lane-count attribute exists, `Q57`).
 
 - Refused: OpenStreetMap (unevaluated; ODbL share-alike meets hard rule 7; the user's decision
-  only); a schema library for `config.py`; merging the four `_register`s (`Q78`, `Q115`); moving the
+  only); a schema library for `config.py`; merging the four `_register`s whole (`Q78`, `Q115`; their shared clamp is `Ribbon.register` since 2026-11-22); moving the
   YAML's prose to sidecars.
 - `P3-35b` — `tools/battery.py`; its contract is in the root `CLAUDE.md`.
 - `P3-35c` — `tests/test_surface_on_region.py` drives the shipped (region) path end to end and

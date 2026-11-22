@@ -805,7 +805,7 @@ def _register(
     signs, and for its reason: **64.1%** of this region's lamp posts are
     surveyed inside the drawn 1.6x ribbon, a median 1.46 m past the drawn kerb.
 
-    🔴 **Clamped to one direction, `signs.py`'s shape since `Q78`.** The reason to
+    🔴 **Clamped to one direction, `Ribbon.register` (`Q78`).** The reason to
     move a column at all is that the carriageway floor draws the ribbon past the real
     carriageway, so a column on the real kerb lands in the drawn lane. That
     argument runs **outward only**. Assigning the target unconditionally also
@@ -826,28 +826,23 @@ def _register(
     Returns the placed point and the kerb side, or `None` where `max_shift_m`
     refuses the move.
     """
-    outset_m = spec.deck_outset_m if on_deck else spec.outset_m
-    side, _, target_m, placed = ribbon.kerb_target(snap, outset_m)
+    if not on_deck:
+        stood = ribbon.register(snap, published, spec.outset_m, spec.max_shift_m)
+        # A real zero where kept rather than a skipped append, so the identity
+        # over `len(shift_m)` still closes; `posts_kept_as_surveyed` is how a
+        # reader tells how many of the distribution's zeros are these. Recorded
+        # **before** the refusal, so the distribution can read outside its own
+        # bar (`Q58`); `over_shift` and `in_carriageway` decompose `n`.
+        report.shift_m.append(stood.shift_m)
+        report.posts_kept_as_surveyed += stood.kept
+        return None if stood.refused else (stood.point, stood.side)
 
-    if not on_deck and ribbon.past_kerb_m(snap) > spec.outset_m:
-        # ⚠️ **The published point, never a reconstruction** — see the foot note
-        # below, which applies here with nothing to catch it.
-        #
-        # A real zero rather than a skipped append, so the identity over
-        # `len(shift_m)` still closes; `posts_kept_as_surveyed` is how a reader
-        # tells how many of the distribution's zeros are these.
-        report.shift_m.append(0.0)
-        report.posts_kept_as_surveyed += 1
-        return published, side
-
+    side, _, target_m, placed = ribbon.kerb_target(snap, spec.deck_outset_m)
     shift_m = abs(target_m - snap.offset_m)
-    # Recorded **before** the refusal, so the distribution can read outside its
-    # own bar (`Q58`); `over_shift` and `in_carriageway` are what let a reader
-    # decompose `n`.
+    # Recorded before the refusal, as at grade (`Q58`).
     report.shift_m.append(shift_m)
     if shift_m > spec.max_shift_m:
         return None
-
     # The foot-off-the-polyline trap, and the 10.6 m move it published as
     # 0.6 m, are recorded on `Ribbon.kerb_target`; here
     # `min_kerb_clearance_m` is what would catch it.

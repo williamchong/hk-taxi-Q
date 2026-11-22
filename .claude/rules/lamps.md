@@ -2,6 +2,7 @@
 paths:
   - "etl/pipeline/config_blocks/lamps.py"
   - "etl/pipeline/lamps.py"
+  - "etl/pipeline/drawnroad.py"
   - "etl/tests/test_lamps.py"
   - "game/tools/verify_lamps.gd"
   - "game/tuning/lamps.{tres,md}"
