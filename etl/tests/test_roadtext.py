@@ -14,10 +14,12 @@ from pipeline.drawnsurface import DrawnSurface
 from pipeline.mesh import merge
 from pipeline.polyline import frame
 from pipeline.roadtext import (
+    KIND,
     Face,
     Legend,
     RoadTextReport,
     _host,
+    _stored_welded,
     cell_meshes,
     draw,
     facing,
@@ -210,7 +212,7 @@ class TestWhatIsDrawn:
     def drawn(self, spec, face, legends, decks=None):
         report = RoadTextReport()
         builder, thin = draw(spec, legends, face, street(), decks, report)
-        return report, cell_meshes(builder, thin, report)
+        return report, cell_meshes({KIND: builder}, thin, report, _stored_welded)
 
     def test_a_legend_on_the_road_is_drawn_facing_up_and_lifted(self, spec, face):
         report, meshes = self.drawn(spec, face, [legend_at(10.0, -3.0)])

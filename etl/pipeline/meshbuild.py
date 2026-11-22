@@ -18,7 +18,8 @@ here is only the accumulation arithmetic.
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
+from dataclasses import dataclass
 from typing import Protocol
 
 import numpy as np
@@ -124,6 +125,41 @@ class _Slivers:
     """A `SliverReport` of one cell's own, for `CellBuilder.build` to sum."""
 
     slivers_dropped: int = 0
+
+
+@dataclass
+class PaintMeshReport:
+    """The mesh half of a painted stage's report, which `cell_meshes` fills and
+    `mesh_tail` writes — stopmarks, roadtext and crossings, each of which held a
+    copy of both until 2026-11-22. `roadmarks` and `boxjunctions` count the same
+    names off builders of their own and stay out."""
+
+    slivers_dropped: int = 0
+    import_quantum_m: float = 0.0
+    # ⚠️ Must be 0 — `marking_paint.gdshader` is `cull_back`.
+    inverted: int = 0
+    inverted_area_m2: float = 0.0
+    triangles: int = 0
+    vertices: int = 0
+    # The meshes the layer's `.glb` carries, one a kind a plan cell (`P3-42`),
+    # and the largest of them.
+    cells: int = 0
+    cell_triangles_max: int = 0
+    bytes: int = 0
+
+    def mesh_tail(self) -> dict[str, int | float]:
+        """The manifest's closing keys, in the order every painted stage writes."""
+        return {
+            "slivers_dropped": self.slivers_dropped,
+            "import_quantum_m": self.import_quantum_m,
+            "inverted": self.inverted,
+            "inverted_area_m2": round(self.inverted_area_m2, 4),
+            "triangles": self.triangles,
+            "vertices": self.vertices,
+            "cells": self.cells,
+            "cell_triangles_max": self.cell_triangles_max,
+            "bytes": self.bytes,
+        }
 
 
 class CellBuilder:
@@ -414,3 +450,37 @@ def downward_facing(mesh: MeshData) -> tuple[int, float]:
     facing = cross[:, 1] / np.where(twice_area > 0.0, twice_area, 1.0)
     inverted = facing < -0.1
     return int(inverted.sum()), float(0.5 * twice_area[inverted].sum())
+
+
+def cell_meshes(
+    builders: Mapping[str, CellBuilder],
+    thin_m: float,
+    report: PaintMeshReport,
+    finish: Callable[[MeshData], MeshData] | None = None,
+) -> list[MeshData]:
+    """What a painted layer's `.glb` carries: a mesh a kind a plan cell, so the
+    engine can cull it (`P3-42`, `Q135`), kinds in `builders`' order and cells
+    sorted, with the report's mesh half summed over them. `finish`, where given,
+    is applied to each mesh before it is counted.
+
+    🔴 **Each kind's slivers are built into a report of its own and summed**:
+    `CellBuilder.build` ASSIGNS `slivers_dropped`, as `FlatBuilder.build` does,
+    so handed the stage's report the second kind overwrites the first's.
+    """
+    meshes = []
+    for kind, builder in builders.items():
+        slivers = _Slivers()
+        cells = builder.build(kind, thin_m, slivers)
+        report.slivers_dropped += slivers.slivers_dropped
+        for cell in sorted(cells):
+            mesh = cells[cell] if finish is None else finish(cells[cell])
+            inverted, inverted_m2 = downward_facing(mesh)
+            report.inverted += inverted
+            report.inverted_area_m2 += inverted_m2
+            report.triangles += mesh.triangle_count
+            report.vertices += len(mesh.positions)
+            meshes.append(mesh)
+    if meshes:
+        report.cells = len(meshes)
+        report.cell_triangles_max = max(mesh.triangle_count for mesh in meshes)
+    return meshes

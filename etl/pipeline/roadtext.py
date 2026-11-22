@@ -51,7 +51,12 @@ from pipeline.fetch import cached_source, source_reads
 from pipeline.geometry import twice_area, wound_up
 from pipeline.gltf import MeshData, write_glb
 from pipeline.mesh import weld
-from pipeline.meshbuild import CellBuilder, _Slivers, import_quantum_m
+from pipeline.meshbuild import (
+    CellBuilder,
+    PaintMeshReport,
+    cell_meshes,
+    import_quantum_m,
+)
 from pipeline.polyline import (
     Segments,
     axis_residual_deg,
@@ -63,7 +68,7 @@ from pipeline.railings import AT_GRADE
 from pipeline.report import tail_of
 from pipeline.roads import ROADGRAPH_NAME, read_graph
 from pipeline.stopmarks import _bearing
-from pipeline.surface import SURFACE_MANIFEST_NAME, SURFACE_MANIFEST_SCHEMA, downward_facing
+from pipeline.surface import SURFACE_MANIFEST_NAME, SURFACE_MANIFEST_SCHEMA
 
 log = logging.getLogger(__name__)
 
@@ -81,7 +86,7 @@ _MARKUP = re.compile(r"<[^>]*>")
 
 
 @dataclass
-class RoadTextReport:
+class RoadTextReport(PaintMeshReport):
     """What the stage read and drew.
 
     The partitions, asserted where they are complete:
@@ -131,17 +136,6 @@ class RoadTextReport:
     polygons_placed: int = 0
     polygons_split: int = 0
     pieces_placed: int = 0
-
-    slivers_dropped: int = 0
-    import_quantum_m: float = 0.0
-    # ⚠️ Must be 0 — `marking_paint.gdshader` is `cull_back`.
-    inverted: int = 0
-    inverted_area_m2: float = 0.0
-    triangles: int = 0
-    vertices: int = 0
-    cells: int = 0
-    cell_triangles_max: int = 0
-    bytes: int = 0
 
     measured = staticmethod(tail_of)
 
@@ -593,7 +587,7 @@ def build_region(
     decks = _host(graph["edges"], DrawnSurface.decks(surface))
 
     builder, thinness_bar_m = draw(spec, legends, face, street, decks, report)
-    meshes = cell_meshes(builder, thinness_bar_m, report)
+    meshes = cell_meshes({KIND: builder}, thinness_bar_m, report, _stored_welded)
     if meshes:
         report.bytes = write_glb(out_dir / ROADTEXT_NAME, meshes)
 
@@ -601,28 +595,11 @@ def build_region(
     return report
 
 
-def cell_meshes(builder: CellBuilder, thin_m: float, report: RoadTextReport) -> list[MeshData]:
-    """What `roadtext.glb` carries: a mesh a plan cell (`Q135`)."""
-    slivers = _Slivers()
-    cells = builder.build(KIND, thin_m, slivers)
-    report.slivers_dropped += slivers.slivers_dropped
-    meshes = []
-    for cell in sorted(cells):
-        # A letter's triangles each carry their own corners, which agree only
-        # to float64 round-off, so they are narrowed to the float32 `write_glb`
-        # stores first: the weld is then exact against the file.
-        mesh = cells[cell]
-        mesh = weld(replace(mesh, positions=mesh.positions.astype(np.float32).astype(np.float64)))
-        inverted, inverted_m2 = downward_facing(mesh)
-        report.inverted += inverted
-        report.inverted_area_m2 += inverted_m2
-        report.triangles += mesh.triangle_count
-        report.vertices += len(mesh.positions)
-        meshes.append(mesh)
-    if meshes:
-        report.cells = len(meshes)
-        report.cell_triangles_max = max(mesh.triangle_count for mesh in meshes)
-    return meshes
+def _stored_welded(mesh: MeshData) -> MeshData:
+    """A letter's triangles each carry their own corners, which agree only to
+    float64 round-off, so they are narrowed to the float32 `write_glb` stores
+    first: the weld is then exact against the file."""
+    return weld(replace(mesh, positions=mesh.positions.astype(np.float32).astype(np.float64)))
 
 
 def _write_manifest(out_dir: Path, city: Config, region_id: str, report: RoadTextReport) -> int:
@@ -665,15 +642,7 @@ def _write_manifest(out_dir: Path, city: Config, region_id: str, report: RoadTex
         "polygons_placed": report.polygons_placed,
         "polygons_split": report.polygons_split,
         "pieces_placed": report.pieces_placed,
-        "slivers_dropped": report.slivers_dropped,
-        "import_quantum_m": report.import_quantum_m,
-        "inverted": report.inverted,
-        "inverted_area_m2": round(report.inverted_area_m2, 4),
-        "triangles": report.triangles,
-        "vertices": report.vertices,
-        "cells": report.cells,
-        "cell_triangles_max": report.cell_triangles_max,
-        "bytes": report.bytes,
+        **report.mesh_tail(),
     }
     return write_document(out_dir / ROADTEXT_MANIFEST_NAME, document)
 

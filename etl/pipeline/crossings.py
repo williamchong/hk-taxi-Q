@@ -50,14 +50,19 @@ from pipeline.documents import read_document, write_document
 from pipeline.drawnsurface import DrawnSurface
 from pipeline.fetch import source_reads
 from pipeline.geometry import orient, twice_area, wound_up
-from pipeline.gltf import MeshData, write_glb
-from pipeline.meshbuild import CellBuilder, _Slivers, import_quantum_m
+from pipeline.gltf import write_glb
+from pipeline.meshbuild import (
+    CellBuilder,
+    PaintMeshReport,
+    cell_meshes,
+    import_quantum_m,
+)
 from pipeline.polyline import Segments, plan_lengths_2d
 from pipeline.railings import AT_GRADE
 from pipeline.region import _box_sides
 from pipeline.report import tail_of
 from pipeline.roads import ROADGRAPH_NAME, read_graph
-from pipeline.surface import SURFACE_MANIFEST_NAME, SURFACE_MANIFEST_SCHEMA, downward_facing
+from pipeline.surface import SURFACE_MANIFEST_NAME, SURFACE_MANIFEST_SCHEMA
 
 log = logging.getLogger(__name__)
 
@@ -81,7 +86,7 @@ _NODE_M = 0.001
 
 
 @dataclass
-class CrossingReport:
+class CrossingReport(PaintMeshReport):
     """What the stage read, closed and drew.
 
     The partitions, asserted where they are complete:
@@ -144,19 +149,6 @@ class CrossingReport:
     polygons_placed: int = 0
     polygons_split: int = 0
     pieces_placed: int = 0
-
-    slivers_dropped: int = 0
-    import_quantum_m: float = 0.0
-    # ⚠️ Must be 0 — `marking_paint.gdshader` is `cull_back`.
-    inverted: int = 0
-    inverted_area_m2: float = 0.0
-    triangles: int = 0
-    vertices: int = 0
-    # The meshes `crossings.glb` carries, one a kind a plan cell of `cell_m`
-    # (`P3-42`), and the largest of them.
-    cells: int = 0
-    cell_triangles_max: int = 0
-    bytes: int = 0
 
     measured = staticmethod(tail_of)
 
@@ -422,35 +414,6 @@ def build_region(
     return report
 
 
-def cell_meshes(
-    builders: dict[str, CellBuilder], thin_m: float, report: CrossingReport
-) -> list[MeshData]:
-    """What `crossings.glb` carries: a mesh a kind a plan cell, so the engine can
-    cull the layer (`P3-42`, `Q135`), with the report's mesh half summed over them.
-
-    🔴 **Each kind's slivers are built into a report of its own and summed**:
-    `CellBuilder.build` ASSIGNS `slivers_dropped`, as `FlatBuilder.build` does,
-    so handed the stage's report the second kind overwrites the first's.
-    """
-    meshes = []
-    for kind in KINDS:
-        slivers = _Slivers()
-        cells = builders[kind].build(kind, thin_m, slivers)
-        report.slivers_dropped += slivers.slivers_dropped
-        for cell in sorted(cells):
-            mesh = cells[cell]
-            inverted, inverted_m2 = downward_facing(mesh)
-            report.inverted += inverted
-            report.inverted_area_m2 += inverted_m2
-            report.triangles += mesh.triangle_count
-            report.vertices += len(mesh.positions)
-            meshes.append(mesh)
-    if meshes:
-        report.cells = len(meshes)
-        report.cell_triangles_max = max(mesh.triangle_count for mesh in meshes)
-    return meshes
-
-
 def _write_manifest(out_dir: Path, city: Config, region_id: str, report: CrossingReport) -> int:
     def rounded(values: dict[str, float]) -> dict[str, float]:
         return {key: round(value, 2) for key, value in sorted(values.items())}
@@ -508,15 +471,7 @@ def _write_manifest(out_dir: Path, city: Config, region_id: str, report: Crossin
         "polygons_placed": report.polygons_placed,
         "polygons_split": report.polygons_split,
         "pieces_placed": report.pieces_placed,
-        "slivers_dropped": report.slivers_dropped,
-        "import_quantum_m": report.import_quantum_m,
-        "inverted": report.inverted,
-        "inverted_area_m2": round(report.inverted_area_m2, 4),
-        "triangles": report.triangles,
-        "vertices": report.vertices,
-        "cells": report.cells,
-        "cell_triangles_max": report.cell_triangles_max,
-        "bytes": report.bytes,
+        **report.mesh_tail(),
     }
     return write_document(out_dir / CROSSINGS_MANIFEST_NAME, document)
 
