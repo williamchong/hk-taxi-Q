@@ -65,6 +65,11 @@ scene={
 "meshes/force_disable_compression": true,
 "meshes/generate_lods": false
 }
+texture={
+"compress/mode": 0,
+"detect_3d/compress_to": 0,
+"mipmaps/generate": true
+}
 
 [input]
 

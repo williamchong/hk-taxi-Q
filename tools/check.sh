@@ -394,8 +394,9 @@ run_godot "verify_settings" --headless --path "$ROOT/game" --script "res://tools
 # sidecar; and a sidecar from before P5-13 imports the importer's own LODs on
 # top of the ETL's tiers, with check.sh green.
 #
-# This reads the pinned scene keys out of the project and asserts every scene
-# sidecar present — under generated/ AND authored/ — carries them verbatim.
+# This reads each importer's pinned keys out of the project and asserts every
+# sidecar of it present carries them verbatim — scenes under generated/ AND
+# authored/, textures under generated/ alone.
 # Over whatever is there, deliberately: a clone with no city has no generated
 # sidecars, and this must not become the step that makes check.sh need a built
 # region — so an empty tree reports 0 checked and passes, while verify_settings
@@ -413,38 +414,53 @@ run_godot "verify_settings" --headless --path "$ROOT/game" --script "res://tools
 # count of keys is asserted, because a project.godot that had lost the block
 # would otherwise make this pass on every sidecar with nothing to compare.
 echo "==> sidecars"
-pinned="$(sed -n 's/^"\(meshes\/[a-z_]*\)": \([a-z0-9.]*\),*$/\1=\2/p' "$ROOT/game/project.godot")"
-pinned_count="$(grep -c . <<<"$pinned")"
-sidecars="$(find "$ROOT/game/assets/generated" "$ROOT/game/assets/authored" -type f -name '*.glb.import' 2>/dev/null | sort)"
-sidecar_count="$(grep -c . <<<"$sidecars")"
-if ((pinned_count < 2)); then
-	echo "  FAIL  sidecars — read $pinned_count meshes/* keys out of [importer_defaults]," >&2
-	echo "        so there is nothing to hold the sidecars to. See verify_settings above." >&2
-	failed=1
-elif [[ -z "$sidecars" ]]; then
-	echo "  ok    sidecars — 0 checked (no scene sidecars present; the"
-	echo "        importer defaults are still pinned by verify_settings above)"
-else
-	stale_sidecars="$(
-		while IFS= read -r sidecar; do
-			while IFS= read -r line; do
-				if ! grep -qxF "$line" "$sidecar"; then
-					echo "  ${sidecar#"$ROOT/"} — lacks $line"
-				fi
-			done <<<"$pinned"
-		done <<<"$sidecars"
-	)"
-	if [[ -n "$stale_sidecars" ]]; then
-		echo "$stale_sidecars"
-		echo "  FAIL  sidecars — the sidecars above import under a value project.godot" >&2
-		echo "        no longer pins. [importer_defaults] seeds a NEW sidecar only:" >&2
-		echo "        delete them and re-import (godot --headless --path game --import)," >&2
-		echo "        and commit the reseeded ones under assets/authored/." >&2
+# The key=value lines one importer's block in [importer_defaults] pins. A
+# quoted value (the import script's path) is left out: no sidecar spells it so.
+pins_of() {
+	sed -n "/^$1={\$/,/^}\$/s/^\"\([a-z0-9_]*\/[a-z0-9_]*\)\": \([a-z0-9.]*\),*\$/\1=\2/p" \
+		"$ROOT/game/project.godot"
+}
+# check_sidecars <importer> <least keys> <sidecars, one a line>
+check_sidecars() {
+	local pinned pinned_count sidecar_count stale_sidecars
+	pinned="$(pins_of "$1")"
+	pinned_count="$(grep -c . <<<"$pinned")"
+	sidecar_count="$(grep -c . <<<"$3")"
+	if ((pinned_count < $2)); then
+		echo "  FAIL  sidecars — read $pinned_count $1 keys out of [importer_defaults]," >&2
+		echo "        so there is nothing to hold the sidecars to. See verify_settings above." >&2
 		failed=1
+	elif [[ -z "$3" ]]; then
+		echo "  ok    sidecars — 0 $1 sidecars checked (none present; the"
+		echo "        importer defaults are still pinned by verify_settings above)"
 	else
-		echo "  ok    sidecars — $sidecar_count checked against $pinned_count pinned keys"
+		stale_sidecars="$(
+			while IFS= read -r sidecar; do
+				while IFS= read -r line; do
+					if ! grep -qxF "$line" "$sidecar"; then
+						echo "  ${sidecar#"$ROOT/"} — lacks $line"
+					fi
+				done <<<"$pinned"
+			done <<<"$3"
+		)"
+		if [[ -n "$stale_sidecars" ]]; then
+			echo "$stale_sidecars"
+			echo "  FAIL  sidecars — the sidecars above import under a value project.godot" >&2
+			echo "        no longer pins. [importer_defaults] seeds a NEW sidecar only:" >&2
+			echo "        delete them and re-import (godot --headless --path game --import)," >&2
+			echo "        and commit any reseeded under assets/authored/." >&2
+			failed=1
+		else
+			echo "  ok    sidecars — $sidecar_count $1 sidecars checked against $pinned_count pinned keys"
+		fi
 	fi
-fi
+}
+check_sidecars scene 2 "$(find "$ROOT/game/assets/generated" "$ROOT/game/assets/authored" \
+	-type f -name '*.glb.import' 2>/dev/null | sort)"
+# Textures under generated/ only (Q273): the glyph atlases. The authored splash
+# and icon are 2D and keep their committed sidecars, mipmaps off.
+check_sidecars texture 3 "$(find "$ROOT/game/assets/generated" -type f -name '*.png.import' \
+	2>/dev/null | sort)"
 
 # The GDScript lint pass. --import alone is not it: measured, it compiles
 # autoloads and what they reach, so an untyped variable planted in

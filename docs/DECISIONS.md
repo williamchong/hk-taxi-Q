@@ -3996,3 +3996,18 @@ drive4.
   100,337,144 (−4,697,840). A zipped download gains little — the saving is installed size.
 - Every reader parses and none compares bytes; all 37 synced documents load equal to their
   `etl/out/` source.
+
+## `Q273` — The generated atlases import lossless, with mipmaps and no 3D detection
+
+**Status.** Built 2026-11-22; closes `Q260`'s owed mipmaps.
+
+- `[importer_defaults] texture` pins `compress/mode` 0, `mipmaps/generate` true and
+  `detect_3d/compress_to` 0. The shaders already sampled `filter_linear_mipmap_anisotropic`; the
+  atlases shipped without the chain. Detection off because its default turns a texture seen in 3D
+  into VRAM compression on the next import, so the format hung on the machine's import history.
+- Reaches the generated atlases only: all three authored textures carry committed sidecars, and
+  the splash and icon are 2D and keep mipmaps off. `check.sh`'s `sidecars` step holds the
+  generated texture sidecars to the pins (it failed all three stale ones before they were
+  reseeded); `verify_settings` pins the values.
+- Web PCK 100,016,056 → 100,270,872 bytes (+254,816). Hennessy Road on Mobile: one pixel moves, at
+  the far end where the signs are smallest.

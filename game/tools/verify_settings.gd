@@ -91,10 +91,19 @@ const SHADER_GLOBALS: Dictionary = {
 
 ## `[importer_defaults]` seeds every NEW `.import`; `Q82` and the importer
 ## default row record why each key is load-bearing.
-const IMPORTER_SCENE: Dictionary = {
-	"import_script/path": "res://tools/generated_scene_import.gd",
-	"meshes/force_disable_compression": true,
-	"meshes/generate_lods": false,
+const IMPORTER_DEFAULTS: Dictionary = {
+	"scene":
+	{
+		"import_script/path": "res://tools/generated_scene_import.gd",
+		"meshes/force_disable_compression": true,
+		"meshes/generate_lods": false,
+	},
+	"texture":
+	{
+		"compress/mode": 0,
+		"detect_3d/compress_to": 0,
+		"mipmaps/generate": true,
+	},
 }
 
 var _failed: int = 0
@@ -123,10 +132,14 @@ func _init() -> void:
 			if not got.has(key) or got[key] != want[key]:
 				_fail("shader_globals/%s.%s is %s, want %s" % [name, key, got.get(key), want[key]])
 
-	var scene: Dictionary = ProjectSettings.get_setting("importer_defaults/scene", {})
-	for key: String in IMPORTER_SCENE:
-		if not scene.has(key) or scene[key] != IMPORTER_SCENE[key]:
-			_fail("importer_defaults/scene lacks %s = %s" % [key, IMPORTER_SCENE[key]])
+	var importer_keys: int = 0
+	for importer: String in IMPORTER_DEFAULTS:
+		var want: Dictionary = IMPORTER_DEFAULTS[importer]
+		var got: Dictionary = ProjectSettings.get_setting("importer_defaults/%s" % importer, {})
+		importer_keys += want.size()
+		for key: String in want:
+			if not got.has(key) or got[key] != want[key]:
+				_fail("importer_defaults/%s lacks %s = %s" % [importer, key, want[key]])
 
 	if _failed > 0:
 		printerr("  FAIL  verify_settings: %d setting(s) off — see docs/ARCHITECTURE.md" % _failed)
@@ -139,7 +152,7 @@ func _init() -> void:
 				"  ok    verify_settings — %d warnings promoted, %d values pinned, "
 				+ "%d importer defaults, %d shader globals"
 			)
-			% [PROMOTED.size(), PINNED.size(), IMPORTER_SCENE.size(), SHADER_GLOBALS.size()]
+			% [PROMOTED.size(), PINNED.size(), importer_keys, SHADER_GLOBALS.size()]
 		)
 	)
 	quit(0)

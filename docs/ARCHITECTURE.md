@@ -55,6 +55,9 @@ any key equal to its default; such a key stays in force.
 | `[importer_defaults] scene.import_script/path` | `res://tools/generated_scene_import.gd` | Dispatches materials by name; glTF cannot express them. A default because generated `.import` files are gitignored |
 | `[importer_defaults] scene.meshes/force_disable_compression` | `true` | Godot quantises positions over the mesh's AABB: 0.025 m steps on `lamps.glb` against a 0.06 m arm (`Q82`). +2.0% PCK. The taxi body, tyre and `central_plaza.glb` imports keep `false` deliberately |
 | `[importer_defaults] scene.meshes/generate_lods` | `false` | The ETL ships the tiers; −8.6% PCK (`Q120`) |
+| `[importer_defaults] texture.mipmaps/generate` | `true` | The glyph atlases are sampled `filter_linear_mipmap_anisotropic`, and without mipmaps a far glyph shimmers (`Q260`'s debt, `Q273`). The texture defaults reach only the gitignored generated atlases: the three authored textures keep their committed sidecars, and the splash and icon want none |
+| `[importer_defaults] texture.compress/mode` | `0` (lossless) | A glyph's edge is its coverage; a lossy block format smears it |
+| `[importer_defaults] texture.detect_3d/compress_to` | `0` (off) | The importer's default switches a texture it sees used in 3D to VRAM compression on the next import, so the atlases' format depended on the machine's import history |
 | `[shader_globals] exposure_anchor` | `float` `1.0` | The rig's exposure (`Q38`, `Q33`), set by `LightingRig`. Applied after `vertex_srgb_to_linear`, never to a `.tres` colour. Type pinned: an undeclared global resolves to zero (black city, green checks), an `int` truncates |
 | `[shader_globals] outline_speed` | `float` `0.0` | Car speed as a share of `car_outline.tres`'s `full_speed_kph` (`Q158`). One writer: `car_outline.gd` on the player's car |
 | `[shader_globals] sky_light`, `night_lights` | `vec3 (1,1,1)`, `float 0.0` | The rig's hour (`Q160`): reflected sky, and the scale of every lit layer. Defaults are noon |
@@ -133,7 +136,7 @@ the cache the import writes.
 | `gdformat` | `gdformat --check game/`; 0 files checked is a failure | yes |
 | `tuning` | Every `game/tuning/**/*.tres` and `game/scenes/**/*.tscn` has a non-empty sidecar `.md` unless `UNDOCUMENTED_OK` names it; no `;` line in a resource; no orphan sidecar or stale exemption | yes |
 | `import` | `--headless --import`; builds `game/.godot/` | yes |
-| `settings` | `verify_settings.gd`: the 21 warning promotions, pinned values, shader globals, the three `[importer_defaults]` keys | yes |
+| `settings` | `verify_settings.gd`: the 21 warning promotions, pinned values, shader globals, the six `[importer_defaults]` keys | yes |
 | `sidecars` | Every `*.glb.import` under `assets/generated/` and `assets/authored/` carries the pinned `meshes/*` keys. 0 sidecars passes (a clone has no city) | yes |
 | `warnings` | `--check-only` per script, grepping `treated as error\|Parse Error`; the swept count must equal the script count | yes |
 | Always tools | `verify_beam_budget`, `verify_vehicle`, `verify_mesh_contract`, `verify_hud`, `verify_input`, `verify_authored`, `verify_menu`, `verify_day_cycle`, `verify_perf_recorder`. No built region needed | yes |
