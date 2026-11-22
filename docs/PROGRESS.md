@@ -283,6 +283,11 @@ change. Closed questions are not listed here: see the headings in `DECISIONS.md`
 
 ## Risk register
 
+- **`verify_traffic` drive3 / drive4 fail on a bundle rebuilt 2026-11-22** — Medium. drive3: "no two
+  cars met in a signalled junction (12 car-ticks)"; drive4: "a routed minibus wears green …
+  (0 car-ticks)". Identical with the `station_exit` nodes and portals off and with the game at
+  `db7a3a65`, so the data moved (sources refetched 04:46, after `P4-4`), not the code; the drives'
+  seeds were measured on the earlier bundle. Owed: find which document moved, then the seeds.
 - **Doesn't read as HK to locals** — High until `P3-9`: different drivers, handset, arrow off.
 - **Building meshes blow the triangle budget** — High. `wan_chai` 128%, `mong_kok` 184% of 300k;
   LOD0 carries 84–91%. The lever is LOD0's cell and radius (`P4-5`), not the LOD1 ratio.
