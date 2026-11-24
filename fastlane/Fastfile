@@ -18,7 +18,7 @@ default_platform(:ios)
 APP_IDENTIFIER = "cloud.williamchong.hktaxiq"
 # The version the listing belongs to: the one Godot stamps on the build,
 # project.godot's config/version.
-APP_VERSION = "1.0.1"
+APP_VERSION = "1.0.2"
 # App Store states a version that went live can be in.
 RELEASED_STATES = %w[READY_FOR_SALE REPLACED_WITH_NEW_VERSION DEVELOPER_REMOVED_FROM_SALE REMOVED_FROM_SALE].freeze
 
